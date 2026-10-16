@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# SPIKE (#8, #9). Generate with `xcodegen generate --spec app/project.yml`; the .xcodeproj
+# is a build artifact (git-ignored). The kernel XPC service links OpenCASCADE from
+# third_party/install (third_party/build-occt.sh).
+
+name: Nightfall
+options:
+  bundleIdPrefix: dev.nightfall
+  deploymentTarget:
+    macOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    ENABLE_HARDENED_RUNTIME: NO
+    ARCHS: arm64
+    OCCT_ROOT: $(SRCROOT)/../third_party/install/occt-7.9.3
+targets:
+  Nightfall:
+    type: application
+    platform: macOS
+    sources:
+      - path: Nightfall
+      - path: Shared
+    dependencies:
+      - target: NightfallKernel
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nightfall.Nightfall
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Nightfall
+  NightfallKernel:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - path: ../services/NightfallKernel
+        excludes: ["Info.plist"]
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nightfall.Nightfall.Kernel
+        PRODUCT_NAME: NightfallKernel
+        INFOPLIST_FILE: ../services/NightfallKernel/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: ../services/NightfallKernel/NightfallKernel-Bridging-Header.h
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        HEADER_SEARCH_PATHS: $(OCCT_ROOT)/include/opencascade
+        LIBRARY_SEARCH_PATHS: $(OCCT_ROOT)/lib
+        LD_RUNPATH_SEARCH_PATHS: $(OCCT_ROOT)/lib
+        OTHER_LDFLAGS: >-
+          -lTKernel -lTKMath -lTKG2d -lTKG3d -lTKGeomBase -lTKBRep -lTKGeomAlgo -lTKTopAlgo
+          -lTKPrim -lTKBO -lTKBool -lTKFillet -lTKMesh -lTKShHealing -lc++
