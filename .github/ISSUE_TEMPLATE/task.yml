@@ -13,7 +13,7 @@ body:
     id: scope
     attributes:
       label: Scope
-      description: "math, svg, ir, kernel, usd, script, app, viewport, sketch, agent, cli, evals, third_party, process"
+      description: "One of: math, svg, ir, kernel, usd, script, app, viewport, sketch, agent, cli, evals, third_party, process, ci, build"
     validations:
       required: true
   - type: textarea

@@ -32,11 +32,16 @@ Build plan (phases + gates)
   `<type>(<scope>): <summary>`.
   - **types:** `feat` `fix` `perf` `refactor` `test` `docs` `build` `ci` `chore` `rfc`
   - **scopes:** `math` `svg` `ir` `kernel` `usd` `script` `app` `viewport` `sketch`
-    `agent` `cli` `evals` `third_party` `process`
+    `agent` `cli` `evals` `third_party` `process` `ci` `build` (exactly one per title;
+    pick the area most affected)
   - Breaking change to the IR, file format or a public API: `!` after the scope, plus a
     `BREAKING CHANGE:` footer with the migration.
 - Every commit carries a DCO sign-off (`git commit -s`).
 - Branches live for days, not weeks. Rebase on `main` and do not merge `main` into a branch.
+- **Stacked PRs** (a PR based on another PR's branch) are allowed for dependent work. Because
+  `main` only takes squash merges, after the lower PR merges, rebase the next branch onto
+  `main` with `git rebase --onto main <old-base-branch> <branch>` and force-push it
+  (`--force-with-lease`). GitHub retargets the PR automatically.
 
 ## 3. What needs an RFC
 
