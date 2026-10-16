@@ -68,3 +68,14 @@ TEST_CASE("SMLib fillet and shell leave their input untouched", "[smlib]") {
   CHECK_THAT(m.volume, WithinRel(6000.0, kRelativeTolerance));
   CHECK(m.faces == 6);
 }
+
+TEST_CASE("SMLib rotate is right-handed", "[smlib]") {
+  // A unit cube at x ∈ [1, 2] turned +90° about +Z must land at x ∈ [-1, 0], y ∈ [1, 2].
+  const auto kernel = make_smlib_kernel();
+  const Body cube = kernel->box({1, 0, 0}, {1, 1, 1});
+  const Body turned = kernel->rotate(cube, {0, 0, 0}, {0, 0, 1}, 90.0);
+  const Body target = kernel->box({-1, 1, 0}, {1, 1, 1});
+  const Measures overlap =
+      kernel->measure(kernel->boolean(BooleanOp::kIntersection, turned, target));
+  CHECK_THAT(overlap.volume, WithinRel(1.0, kRelativeTolerance));
+}

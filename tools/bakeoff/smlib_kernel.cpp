@@ -8,6 +8,7 @@
 // as the Kernel interface requires.
 
 #include <SmApiBrep.h>
+#include <SmApiGeneral.h>
 #include <SmApiPrimitives.h>
 #include <SmApiQueries.h>
 #include <SmBrep.h>
@@ -68,6 +69,12 @@ class SmlibKernel final : public Kernel {
     SmBrep* raw = nullptr;
     const SmApiStatus status = SmApiCreateSphere(to_sm(center), radius, raw);
     return adopt(raw, status, "SmApiCreateSphere");
+  }
+
+  Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) override {
+    BrepPtr work = copy(body);  // SmApiRotate transforms in place
+    check(SmApiRotate(work.get(), to_sm(point), to_sm(axis), degrees), "SmApiRotate");
+    return store(std::move(work));
   }
 
   Body boolean(BooleanOp op, Body a, Body b) override {

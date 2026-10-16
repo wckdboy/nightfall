@@ -8,6 +8,7 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBndLib.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
@@ -25,10 +26,14 @@
 #include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Trsf.hxx>
 
 #include <memory>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -74,6 +79,15 @@ class OcctKernel final : public Kernel {
 
   Body sphere(Vec3 center, double radius) override {
     return guarded([&] { return BRepPrimAPI_MakeSphere(to_pnt(center), radius).Shape(); });
+  }
+
+  Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) override {
+    return guarded([&] {
+      gp_Trsf rotation;
+      rotation.SetRotation(gp_Ax1(to_pnt(point), gp_Dir(axis.x, axis.y, axis.z)),
+                           degrees * std::numbers::pi / 180.0);
+      return BRepBuilderAPI_Transform(get(body), rotation, /*copy=*/true).Shape();
+    });
   }
 
   Body boolean(BooleanOp op, Body a, Body b) override {

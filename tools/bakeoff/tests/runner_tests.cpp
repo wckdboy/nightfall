@@ -26,6 +26,7 @@ class FakeKernel final : public Kernel {
   Body box(Vec3, Vec3) override { return op("box"); }
   Body cylinder(Vec3, double, double) override { return op("cylinder"); }
   Body sphere(Vec3, double) override { return op("sphere"); }
+  Body rotate(Body, Vec3, Vec3, double) override { return op("rotate"); }
   Body boolean(BooleanOp, Body, Body) override { return op("boolean"); }
   Body fillet(Body, Region, double, FilletKind) override { return op("fillet"); }
   Body shell(Body, Region, double) override { return op("shell"); }
