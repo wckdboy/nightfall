@@ -1,0 +1,39 @@
+name: Task
+description: One reviewable unit of planned work (becomes one PR)
+labels: ["type: task"]
+body:
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      options: ["Phase 0", "Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"]
+    validations:
+      required: true
+  - type: input
+    id: scope
+    attributes:
+      label: Scope
+      description: "math, svg, ir, kernel, usd, script, app, viewport, sketch, agent, cli, evals, third_party, process"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What exists when this is done, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable statements, with numbers where possible.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: input
+    id: rfc
+    attributes:
+      label: RFC
+      description: Required for WORKFLOW.md §3 areas (e.g. 0001). Leave blank if none applies.

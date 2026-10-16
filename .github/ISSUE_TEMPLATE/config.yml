@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Propose an architectural change (RFC)
+    url: https://github.com/wckdboy/nightfall/blob/main/docs/rfcs/README.md
+    about: Architecture, file formats, APIs and dependencies start as an RFC pull request.
+  - name: Report a security vulnerability
+    url: https://github.com/wckdboy/nightfall/security/advisories/new
+    about: Please report privately, not as a public issue.
