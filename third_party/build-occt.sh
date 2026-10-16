@@ -20,7 +20,11 @@ readonly VERSION="7.9.3"
 jobs="$(sysctl -n hw.ncpu)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --jobs) jobs="$2"; shift 2 ;;
+    --jobs)
+      if [[ $# -lt 2 || ! "$2" =~ ^[1-9][0-9]*$ ]]; then
+        echo "--jobs needs a positive integer" >&2; exit 2
+      fi
+      jobs="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -28,7 +32,8 @@ done
 root="$(cd "$(dirname "$0")/.." && pwd)"
 src="${NF_OCCT_SOURCE_DIR:-$root/third_party/src/occt}"
 prefix="${NF_OCCT_INSTALL_DIR:-$root/third_party/install/occt-$VERSION}"
-build="$root/build/third_party/occt-$VERSION"
+# Keyed on the source path so a different NF_OCCT_SOURCE_DIR never reuses a CMake cache.
+build="$root/build/third_party/occt-$VERSION-$(printf %s "$src" | shasum -a 256 | cut -c1-8)"
 
 if [[ -f "$prefix/.nf-occt-commit" && "$(cat "$prefix/.nf-occt-commit")" == "$COMMIT" ]]; then
   echo "OCCT $VERSION already installed in $prefix"

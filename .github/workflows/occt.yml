@@ -11,6 +11,8 @@ on:
   pull_request:
     paths:
       - "third_party/occt/**"
+      - "tools/bakeoff/**"
+      - "core/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
@@ -32,9 +34,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: brew install ninja
 
+      # Restore and save are separate steps so a slow OCCT build is cached even when a later
+      # test step fails (actions/cache's combined form saves only when the whole job passes).
       - name: Restore OCCT install
         id: cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: third_party/install
           key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh') }}
@@ -42,5 +46,12 @@ jobs:
       - name: Build OCCT
         if: steps.cache.outputs.cache-hit != 'true'
         run: third_party/build-occt.sh
+
+      - name: Save OCCT install
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install
+          key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - run: tools/check.sh --preset occt --skip-format

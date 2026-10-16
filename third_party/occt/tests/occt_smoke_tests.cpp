@@ -96,8 +96,10 @@ TEST_CASE("a through-hole removes pi r^2 h", "[occt]") {
 
 TEST_CASE("STEP round-trip preserves a filleted solid", "[occt][step]") {
   const TopoDS_Shape box = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape();
+  const auto edge = z_edge_at_origin(box);
+  REQUIRE(edge.has_value());
   BRepFilletAPI_MakeFillet fillet(box);
-  fillet.Add(2.0, *z_edge_at_origin(box));
+  fillet.Add(2.0, *edge);
   const TopoDS_Shape original = fillet.Shape();
 
   STEPControl_Writer writer;

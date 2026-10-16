@@ -8,6 +8,10 @@
 set(NF_OCCT_INSTALL_DIR "${PROJECT_SOURCE_DIR}/third_party/install/occt-7.9.3"
     CACHE PATH "OCCT install prefix (see third_party/build-occt.sh)")
 
+if(NOT EXISTS "${NF_OCCT_INSTALL_DIR}/lib/cmake/opencascade")
+  message(FATAL_ERROR
+    "OpenCASCADE not found at ${NF_OCCT_INSTALL_DIR}. Run third_party/build-occt.sh first.")
+endif()
 find_package(OpenCASCADE 7.9.3 EXACT CONFIG REQUIRED
   PATHS "${NF_OCCT_INSTALL_DIR}" NO_DEFAULT_PATH)
 message(STATUS "OpenCASCADE ${OpenCASCADE_VERSION} from ${NF_OCCT_INSTALL_DIR}")
