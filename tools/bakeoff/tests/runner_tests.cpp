@@ -27,6 +27,11 @@ class FakeKernel final : public Kernel {
   Body cylinder(Vec3, double, double) override { return op("cylinder"); }
   Body sphere(Vec3, double) override { return op("sphere"); }
   Body rotate(Body, Vec3, Vec3, double) override { return op("rotate"); }
+  Body cone(Vec3, double, double, double) override { return op("cone"); }
+  Body torus(Vec3, double, double) override { return op("torus"); }
+  Body extrude(const std::vector<Vec2>&, double, double) override { return op("extrude"); }
+  Body helix_pipe(double, double, double, double) override { return op("helix_pipe"); }
+  Body variable_fillet(Body, Region, double, double) override { return op("variable_fillet"); }
   Body boolean(BooleanOp, Body, Body) override { return op("boolean"); }
   Body fillet(Body, Region, double, FilletKind) override { return op("fillet"); }
   Body shell(Body, Region, double) override { return op("shell"); }
@@ -96,9 +101,11 @@ TEST_CASE("reference parts have unique names and analytic expectations", "[parts
   std::set<std::string> names;
   for (const Part& part : reference_parts()) {
     CHECK(names.insert(part.name).second);
-    CHECK(part.expect.volume.has_value());
+    INFO(part.name);
+    // Every part is judged analytically, or says why it relies on cross-kernel consensus.
+    CHECK((part.expect.volume.has_value() || !part.expect.consensus_reason.empty()));
   }
-  CHECK(names.size() >= 6);
+  CHECK(names.size() >= 20);
 }
 
 TEST_CASE("JSON keeps valid UTF-8 and replaces invalid bytes", "[runner]") {

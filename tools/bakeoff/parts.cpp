@@ -3,6 +3,7 @@
 
 #include "parts.hpp"
 
+#include <cmath>
 #include <numbers>
 
 namespace nf::bakeoff {
@@ -15,6 +16,62 @@ constexpr double kPad = 0.01;
 
 Region around(Vec3 a, Vec3 b) {
   return {{a.x - kPad, a.y - kPad, a.z - kPad}, {b.x + kPad, b.y + kPad, b.z + kPad}};
+}
+
+// Polygon area (shoelace; positive for counter-clockwise) and perimeter.
+double polygon_area(const std::vector<Vec2>& p) {
+  double twice = 0.0;
+  for (std::size_t i = 0; i < p.size(); ++i) twice += math::cross(p[i], p[(i + 1) % p.size()]);
+  return twice / 2.0;
+}
+
+double polygon_perimeter(const std::vector<Vec2>& p) {
+  double sum = 0.0;
+  for (std::size_t i = 0; i < p.size(); ++i) sum += math::length(p[(i + 1) % p.size()] - p[i]);
+  return sum;
+}
+
+// Counter-clockwise outline of an involute spur gear (standard full-depth teeth: addendum
+// m, dedendum 1.25 m), sampled into a polygon. Flanks are sampled involutes from the base
+// circle to the tip; root and tip lands are sampled arcs; below the base circle the flank
+// runs radially to the root circle.
+std::vector<Vec2> spur_gear(int teeth, double module, double pressure_deg) {
+  constexpr int kFlank = 12, kArc = 4;
+  const double alpha = pressure_deg * kPi / 180.0;
+  const double rp = module * teeth / 2.0, rb = rp * std::cos(alpha);
+  const double ra = rp + module, rf = rp - 1.25 * module;
+  const auto involute = [](double a) { return std::tan(a) - a; };
+  // Angular offset of the flank from the tooth centre line at radius r (r >= rb).
+  const auto offset = [&](double r) {
+    return kPi / (2.0 * teeth) + involute(alpha) - involute(std::acos(rb / r));
+  };
+  const auto at = [](double r, double angle) {
+    return Vec2{r * std::cos(angle), r * std::sin(angle)};
+  };
+  std::vector<Vec2> out;
+  for (int k = 0; k < teeth; ++k) {
+    const double centre = 2.0 * kPi * k / teeth;
+    const double next = 2.0 * kPi * (k + 1) / teeth;
+    out.push_back(at(rf, centre - offset(rb)));
+    for (int i = 0; i <= kFlank; ++i) {  // right flank, base -> tip
+      const double r = rb + (ra - rb) * i / kFlank;
+      out.push_back(at(r, centre - offset(r)));
+    }
+    for (int i = 1; i < kArc; ++i) {  // tip land
+      const double a = centre - offset(ra) + 2.0 * offset(ra) * i / kArc;
+      out.push_back(at(ra, a));
+    }
+    for (int i = kFlank; i >= 0; --i) {  // left flank, tip -> base
+      const double r = rb + (ra - rb) * i / kFlank;
+      out.push_back(at(r, centre + offset(r)));
+    }
+    out.push_back(at(rf, centre + offset(rb)));
+    for (int i = 1; i < kArc; ++i) {  // root land to the next tooth
+      const double from = centre + offset(rb), to = next - offset(rb);
+      out.push_back(at(rf, from + (to - from) * i / kArc));
+    }
+  }
+  return out;
 }
 
 }  // namespace
@@ -185,6 +242,69 @@ std::vector<Part> reference_parts() {
                      return k.boolean(BooleanOp::kDifference, rounded, hole);
                    },
                    {.volume = 2730.0 - 58.5 * kPi, .area = 1886.0 + 16.5 * kPi}});
+
+  // Frustum R = 10 → r = 6, h = 8.  V = πh(R² + Rr + r²)/3;  A = π(R² + r²) + π(R + r)·√(h² + (R −
+  // r)²)
+  parts.push_back(
+      {"frustum",
+       "primitive",
+       [](Kernel& k) { return k.cone({0, 0, 0}, 10.0, 6.0, 8.0); },
+       {.volume = kPi * 8.0 * 196.0 / 3.0, .area = 136.0 * kPi + 16.0 * kPi * std::sqrt(80.0)}});
+
+  // Torus R = 10, r = 3.  V = 2π² R r²;  A = 4π² R r
+  parts.push_back({"torus",
+                   "primitive",
+                   [](Kernel& k) { return k.torus({0, 0, 0}, 10.0, 3.0); },
+                   {.volume = 2.0 * kPi * kPi * 10.0 * 9.0, .area = 4.0 * kPi * kPi * 30.0}});
+
+  // Spur gear, 12 teeth, module 2, 20° pressure angle, 8 mm thick: a 408-sided prism.
+  // V = A_profile·h;  A = 2·A_profile + perimeter·h (exact for the sampled polygon).
+  {
+    const std::vector<Vec2> gear = spur_gear(12, 2.0, 20.0);
+    const double a = polygon_area(gear), p = polygon_perimeter(gear);
+    parts.push_back({"spur_gear",
+                     "extrude",
+                     [gear](Kernel& k) { return k.extrude(gear, 0.0, 8.0); },
+                     {.volume = a * 8.0, .area = 2.0 * a + p * 8.0}});
+  }
+
+  // Helical spring: r = 1 tube on a R = 10 helix, 30 mm tall, 5 turns (pitch 6 > 2r).
+  // Tube formulas are exact while r < 1/κ = (R² + c²)/R ≈ 10.09, c = pitch/2π:
+  // L = turns·√((2πR)² + pitch²);  V = π r² L;  A = 2π r L + 2π r² (end caps)
+  {
+    const double length = 5.0 * std::hypot(2.0 * kPi * 10.0, 6.0);
+    parts.push_back({"helical_spring",
+                     "sweep",
+                     [](Kernel& k) { return k.helix_pipe(10.0, 30.0, 5.0, 1.0); },
+                     {.volume = kPi * length, .area = 2.0 * kPi * length + 2.0 * kPi}});
+  }
+
+  // Knob: r = 10, h = 5 cylinder, a frustum (10 → 6, h = 4) on top sharing its top circle,
+  // and an r = 2 hole through both.
+  // V = 500π + 784π/3 − 36π = 2176π/3
+  // A = (100 − 4)π + 100π + 16π√32 + (36 − 4)π + 36π = 264π + 16π√32
+  parts.push_back(
+      {"knob",
+       "boolean",
+       [](Kernel& k) {
+         const Body body = k.cylinder({0, 0, 0}, 10.0, 5.0);
+         const Body top = k.cone({0, 0, 5}, 10.0, 6.0, 4.0);
+         const Body hole = k.cylinder({0, 0, -1}, 2.0, 11.0);
+         return k.boolean(BooleanOp::kDifference, k.boolean(BooleanOp::kUnion, body, top), hole);
+       },
+       {.volume = 2176.0 * kPi / 3.0, .area = 264.0 * kPi + 16.0 * kPi * std::sqrt(32.0)}});
+
+  // Block with its 30 mm Z edge filleted, radius varying linearly 1 → 3. A variable-radius
+  // rolling-ball fillet has no closed-form volume (its cross-sections are not exact quarter
+  // circles normal to the edge); the quarter-circle estimate 6000 − (1 − π/4)·L·(r1² + r1r2 +
+  // r2²)/3 is only good to ~1e-5, so this part is judged by cross-kernel consensus.
+  parts.push_back({"variable_fillet",
+                   "fillet",
+                   [](Kernel& k) {
+                     const Body block = k.box({0, 0, 0}, {10, 20, 30});
+                     return k.variable_fillet(block, around({0, 0, 0}, {0, 0, 30}), 1.0, 3.0);
+                   },
+                   {.consensus_reason = "variable-radius fillet has no closed-form volume"}});
 
   return parts;
 }
