@@ -8,6 +8,19 @@
 name: occt
 
 on:
+  # Runs on main too, so the OCCT install cache is saved where every PR can restore it
+  # (caches saved on a PR ref are visible only to that PR).
+  push:
+    branches: [main]
+    paths:
+      - "third_party/occt/**"
+      - "tools/bakeoff/**"
+      - "core/**"
+      - "third_party/build-occt.sh"
+      - "tools/check.sh"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/workflows/occt.yml"
   pull_request:
     paths:
       - "third_party/occt/**"
@@ -24,6 +37,11 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: occt-${{ github.ref }}
+  # Superseded PR runs are cancelled; main runs always finish (they save the cache).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   occt:

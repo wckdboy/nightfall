@@ -23,6 +23,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: smlib-${{ github.ref }}
+  # Superseded PR runs are cancelled; main runs always finish (they save the cache).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   smlib:
     name: smlib build + SM_API tests (macOS arm64)
