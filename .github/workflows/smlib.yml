@@ -32,4 +32,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: brew install ninja
       - run: third_party/fetch-smlib.sh
-      - run: tools/check.sh --preset bakeoff --skip-format
+      - run: tools/check.sh --preset smlib --skip-format

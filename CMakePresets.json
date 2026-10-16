@@ -31,16 +31,30 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NF_SANITIZE": "ON" }
     },
     {
-      "name": "bakeoff",
+      "name": "smlib",
       "displayName": "Release + SMLib kernel (RFC 0001)",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_SMLIB": "ON" }
+    },
+    {
+      "name": "occt",
+      "displayName": "Release + OpenCASCADE (RFC 0001)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_OCCT": "ON" }
+    },
+    {
+      "name": "bakeoff",
+      "displayName": "Release + both kernels (RFC 0001)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_SMLIB": "ON", "NF_WITH_OCCT": "ON" }
     }
   ],
   "buildPresets": [
     { "name": "dev", "configurePreset": "dev" },
     { "name": "release", "configurePreset": "release" },
     { "name": "asan", "configurePreset": "asan" },
+    { "name": "smlib", "configurePreset": "smlib" },
+    { "name": "occt", "configurePreset": "occt" },
     { "name": "bakeoff", "configurePreset": "bakeoff" }
   ],
   "testPresets": [
@@ -53,6 +67,8 @@
     { "name": "dev", "inherits": "base", "configurePreset": "dev" },
     { "name": "release", "inherits": "base", "configurePreset": "release" },
     { "name": "asan", "inherits": "base", "configurePreset": "asan" },
+    { "name": "smlib", "inherits": "base", "configurePreset": "smlib" },
+    { "name": "occt", "inherits": "base", "configurePreset": "occt" },
     { "name": "bakeoff", "inherits": "base", "configurePreset": "bakeoff" }
   ]
 }

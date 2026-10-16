@@ -5,7 +5,7 @@
 # The one local gate. CI runs exactly this script, so "check.sh passes" means
 # "CI's build, test and hygiene steps pass".
 #
-# Usage: tools/check.sh [--preset dev|release|asan] [--skip-format]
+# Usage: tools/check.sh [--preset dev|release|asan|smlib|occt|bakeoff] [--skip-format]
 
 set -euo pipefail
 
