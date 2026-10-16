@@ -79,7 +79,7 @@ TEST_CASE("unset expectations are not checked", "[runner]") {
 
 TEST_CASE("JSON report escapes strings and writes null for missing values", "[runner]") {
   RunReport report{.kernel = "fake", .version = "1.0 \"q\"\n", .history = HistorySupport::kPartial};
-  PartResult p{.name = "a\\b", .category = "c", .error = "tab\there"};
+  PartResult p{.name = "a\\b", .category = "c", .error = "tab\there", .measured = true};
   p.measures.volume = std::numeric_limits<double>::quiet_NaN();
   report.parts.push_back(p);
   const std::string json = to_json(report);
@@ -98,4 +98,31 @@ TEST_CASE("reference parts have unique names and analytic expectations", "[parts
     CHECK(part.expect.volume.has_value());
   }
   CHECK(names.size() >= 6);
+}
+
+TEST_CASE("JSON keeps valid UTF-8 and replaces invalid bytes", "[runner]") {
+  RunReport report{.kernel = "k"};
+  // "°C", a lone continuation byte, a truncated 3-byte sequence, an overlong '/'.
+  report.parts.push_back(PartResult{.name = "\xC2\xB0"
+                                            "C",
+                                    .error = "a\x80"
+                                             "b\xE2\x82"
+                                             "c\xC0\xAF"});
+  const std::string json = to_json(report);
+  CHECK(json.find("\"name\":\"\xC2\xB0"
+                  "C\"") != std::string::npos);
+  CHECK(json.find(R"("error":"a\ufffdb\ufffd\ufffdc\ufffd\ufffd")") != std::string::npos);
+}
+
+TEST_CASE("JSON writes measured values exactly and unmeasured ones as null", "[runner]") {
+  RunReport report{.kernel = "k"};
+  PartResult measured{.name = "m", .built = true, .measured = true};
+  measured.measures = {.valid = true, .volume = 0.1, .area = 2200.0, .faces = 6, .edges = 12};
+  report.parts.push_back(measured);
+  report.parts.push_back(PartResult{.name = "u", .error = "boom"});
+  const std::string json = to_json(report);
+  CHECK(json.find(R"("valid":true,"volume":0.1,"area":2200,"faces":6,"edges":12)") !=
+        std::string::npos);
+  CHECK(json.find(R"("valid":null,"volume":null,"area":null,"faces":null,"edges":null)") !=
+        std::string::npos);
 }

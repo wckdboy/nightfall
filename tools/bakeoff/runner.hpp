@@ -18,8 +18,9 @@ inline constexpr double kRelativeTolerance = 1e-6;
 struct PartResult {
   std::string name;
   std::string category;
-  bool built = false;  ///< The operation script finished without a kernel error.
-  std::string error;   ///< Why it didn't, when it didn't.
+  bool built = false;     ///< The operation script finished without a kernel error.
+  std::string error;      ///< Why it didn't, when it didn't.
+  bool measured = false;  ///< `measures` were taken (false when building or measuring failed).
   Measures measures;
   double build_ms = 0.0;
   std::optional<bool> volume_ok;  ///< Unset when the part has no volume expectation.
@@ -27,7 +28,8 @@ struct PartResult {
 
   /// Built, valid, and every stated expectation met.
   [[nodiscard]] bool success() const {
-    return built && measures.valid && volume_ok.value_or(true) && area_ok.value_or(true);
+    return built && measured && measures.valid && volume_ok.value_or(true) &&
+           area_ok.value_or(true);
   }
 };
 
