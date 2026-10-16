@@ -1,0 +1,25 @@
+# Build output
+/build/
+/out/
+/_build/
+CMakeUserPresets.json
+
+# Xcode / Swift
+DerivedData/
+.build/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Python
+__pycache__/
+.venv/
+
+# Local kernel checkouts (third_party fetches these; never commit them)
+/third_party/src/
