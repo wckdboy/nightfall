@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Required check on every PR: Conventional Commit title, DCO sign-off on every commit,
+# and a linked issue (WORKFLOW.md §1–2).
+
+name: pr-hygiene
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Conventional Commit title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|perf|refactor|test|docs|build|ci|chore|rfc)(\((math|svg|ir|kernel|usd|script|app|viewport|sketch|agent|cli|evals|third_party|process|ci|build)\))!?: .+'
+          if ! [[ "$TITLE" =~ $pattern ]]; then
+            echo "::error::PR title must be '<type>(<scope>): <summary>' (WORKFLOW.md §2). Got: $TITLE"
+            exit 1
+          fi
+
+      - name: DCO sign-off on every commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          for c in $(git rev-list "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$c" | grep -q '^Signed-off-by: '; then
+              echo "::error::commit $(git log -1 --format='%h %s' "$c") has no Signed-off-by (use git commit -s)"
+              bad=1
+            fi
+          done
+          exit $bad
+
+      - name: Linked issue
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # HTML comments don't link issues on GitHub, so ignore text inside them.
+          body=$(printf '%s' "$BODY" | perl -0pe 's/<!--.*?-->//gs')
+          shopt -s nocasematch
+          keyword='(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+(#[0-9]+|https://github\.com/[^[:space:]]+/issues/[0-9]+)'
+          if [[ "$body" =~ $keyword ]]; then
+            echo "linked: ${BASH_REMATCH[0]}"
+            exit 0
+          fi
+          # Typo-level fixes may skip the issue, but only when every changed file is Markdown.
+          if [[ "$body" == *"no-issue: typo"* ]]; then
+            non_docs=$(git diff --name-only "$BASE" "$HEAD" | grep -v '\.md$' || true)
+            if [[ -z "$non_docs" ]]; then exit 0; fi
+            echo "::error::'no-issue: typo' is only allowed for Markdown-only changes. Non-docs files:"
+            echo "$non_docs"
+            exit 1
+          fi
+          echo "::error::PR body must link an issue, e.g. 'Closes #123' (WORKFLOW.md §1)."
+          exit 1

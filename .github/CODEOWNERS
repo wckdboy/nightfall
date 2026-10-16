@@ -1,0 +1,9 @@
+# Every path needs a CODEOWNER approval (WORKFLOW.md §4).
+# Split ownership by area as maintainers join.
+*                   @wckdboy
+
+# Process, RFCs and CI changes need a maintainer explicitly.
+/docs/process/      @wckdboy
+/docs/rfcs/         @wckdboy
+/.github/           @wckdboy
+/third_party/       @wckdboy
