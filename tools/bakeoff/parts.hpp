@@ -27,7 +27,7 @@ struct Part {
   Expectation expect;
 };
 
-/// The reference corpus (RFC 0001). Grows to 20 parts in #17.
+/// The reference corpus (RFC 0001), growing to 20 parts in #17.
 [[nodiscard]] std::vector<Part> reference_parts();
 
 }  // namespace nf::bakeoff

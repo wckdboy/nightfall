@@ -70,6 +70,10 @@ class Kernel {
   virtual Body cylinder(Vec3 base_center, double radius, double height) = 0;
   virtual Body sphere(Vec3 center, double radius) = 0;
 
+  /// Copy of `body` rotated by `degrees` (right-handed) about the line through `point`
+  /// along `axis`.
+  virtual Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) = 0;
+
   virtual Body boolean(BooleanOp op, Body a, Body b) = 0;
   /// Fillets every edge of `body` whose bounding box lies inside `edges`.
   virtual Body fillet(Body body, Region edges, double radius, FilletKind kind) = 0;
