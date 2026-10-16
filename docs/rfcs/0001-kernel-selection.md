@@ -50,14 +50,20 @@ timings and history information as JSON. The harness is temporary scaffolding; t
 
 ### Metrics and weights
 
-| Metric | Weight | Measured as |
-| --- | --- | --- |
-| Operation success | 30% | Share of operations producing a valid, manifold solid |
-| Correctness | 20% | Volume/area within 1e-6 relative of analytic or consensus values |
-| Operation history | 20% | Can we tell, for every output face/edge, which input or operation produced it? (yes / partial / no) |
-| Fillet and blend quality | 10% | Success on the fillet set; continuity checks on results |
-| Performance | 10% | Median and p95 time per operation on an M1 |
-| Integration cost | 10% | Build friction on macOS, API clarity, binary size |
+Every metric is normalized to a 0–100 score with the formula in its row, so the weighted
+score is reproducible from the raw JSON results:
+
+| Metric | Weight | Raw measurement | Normalized score (0–100) |
+| --- | --- | --- | --- |
+| Operation success | 30% | Operations producing a valid, manifold solid | 100 × successes ÷ operations attempted |
+| Correctness | 20% | Volume and area vs analytic or consensus values | 100 × results within 1e-6 relative ÷ results measured |
+| Operation history | 20% | Can every output face/edge be traced to the input or operation that produced it? | yes = 100, partial (faces only, or some operations) = 50, no = 0 |
+| Fillet and blend quality | 10% | Fillet/chamfer subset of the corpus | 100 × valid fillet results ÷ fillet operations attempted |
+| Performance | 10% | Median time per operation over the shared successful operations (M-series Mac, release build) | 100 × fastest kernel's median ÷ this kernel's median |
+| Integration cost | 10% | Three pass/fail checks | 40 if it builds from unmodified upstream sources + 30 if the CI build takes ≤ 15 min + 30 if shipped binaries total ≤ 50 MB |
+
+Weighted score = Σ (weight × normalized score). p95 timings, memory-safety errors and
+binary sizes are reported alongside but are not part of the score.
 
 Hard requirements, regardless of score: builds reproducibly on Apple Silicon in CI, and
 has a license compatible with Apache-2.0 distribution.
