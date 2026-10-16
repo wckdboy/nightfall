@@ -27,7 +27,8 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | Done (#20) |
 | [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | Done (#22) |
 | [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | Done (#23) |
-| [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 20 parts | kernel | In progress (14/20: analytic parts in review) |
+| [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 14 analytic parts | kernel | In review |
+| [#28](https://github.com/wckdboy/nightfall/issues/28) | Corpus: profile, revolve, sweep, variable-radius parts (to 20) | kernel | Not started |
 | [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Done (#24) |
 | [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | Done (#26) |
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
