@@ -1,0 +1,2 @@
+# Data files must keep LF line endings: scripts parse them byte for byte.
+*.csv text eol=lf

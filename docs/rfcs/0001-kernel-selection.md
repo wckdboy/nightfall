@@ -42,7 +42,9 @@ timings and history information as JSON. The harness is temporary scaffolding; t
 1. **20 reference parts** built from operation scripts: brackets, enclosures with shells,
    filleted blocks (constant radius, varying radius, vertex blends), gears from
    involute curves, sweeps along helices, booleans with coincident faces.
-2. **200 STEP models** sampled from the ABC dataset, stratified by face count. Both
+2. **200 STEP models** sampled from the ABC dataset, stratified by face count: single-solid
+   models from chunk 0000, five face-count quintile bins of 40
+   (`tools/bakeoff/abc/manifest-v1.csv`). Both
    kernels import through OCCT's STEP reader, so the comparison is about modeling, not
    translation. usd-brep has no STEP reader (F4): models reach SMLib as OCCT shapes
    through its `.brep` bridge.
@@ -118,5 +120,6 @@ errors per 1,000 operations are reported next to the weighted score.
 
 - Does SMLib expose operation history? If not, provenance needs tag-and-match.
 - ~~Does SMLib include a STEP reader, or only the USD path?~~ Neither: STEP must go through OCCT and the `.brep` bridge (F4).
-- ABC dataset licensing for redistribution of the sampled models: commit only the
-  manifest (IDs and hashes), not the files, until confirmed.
+- ~~ABC dataset licensing for redistribution of the sampled models~~ Resolved: each model's
+  copyright stays with its creator (the ABC site points to Onshape Terms of Use 1.g.ii), so
+  only the manifest is committed (`tools/bakeoff/abc/`, #18).

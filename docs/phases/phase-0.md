@@ -24,12 +24,12 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#3](https://github.com/wckdboy/nightfall/issues/3) | Branch protection, labels, milestones, CODEOWNERS on GitHub | process | Done |
 | [#4](https://github.com/wckdboy/nightfall/issues/4) | Build SMLib on Apple Silicon (own CMake; no premake needed) | third_party | Done (#14) |
 | [#5](https://github.com/wckdboy/nightfall/issues/5) | Build OCCT 7.9.3 for arm64 as a cached CI artifact | third_party | Done (#19) |
-| [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | In review |
-| [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | In review |
-| [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | In review |
+| [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | Done (#20) |
+| [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | Done (#22) |
+| [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | Done (#23) |
 | [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 20 parts | kernel | Not started |
-| [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | In review (#24) |
-| [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | In review (#26) |
+| [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Done (#24) |
+| [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | Done (#26) |
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Not started |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Not started |
@@ -52,3 +52,7 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 - 2026-10-16 — SMLib driver (#16): 4/6 analytic parts pass vs OCCT 6/6; both SMLib failures
   are area accuracy (SM_API area misses 1e-6 on curved faces), volumes all within 4.3e-9
   (RFC 0001 F5–F9).
+- 2026-10-16 — Bake-off stack merged after review: harness (#20), OCCT driver (#22), SMLib
+  driver (#23), ABC manifest (#24). OCCT CI cache shared via `main` (#26): occt job 28m52s ->
+  45 s. Remaining for the gate: corpus (#17), bake-off run (#7), XPC + viewport spikes (#8, #9),
+  nightly green (#10), layering check (#11).
