@@ -46,10 +46,10 @@ step "Layering"
 # iPadOS and visionOS. Catches Swift/ObjC imports, C/C++ includes and CMake framework links.
 appkit=$(git ls-files --cached --others --exclude-standard \
   '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*CMakeLists.txt' '*.cmake' \
-  | grep -v '^app/' \
+  | { grep -v '^app/' || true; } \
   | while read -r f; do
       [[ -f "$f" ]] || continue
-      grep -nHE '^[[:space:]]*(@?import[[:space:]]+(AppKit|Cocoa)\b|#[[:space:]]*(import|include)[[:space:]]*<(AppKit|Cocoa)/)|-framework[[:space:]]+(AppKit|Cocoa)\b|"-framework (AppKit|Cocoa)"' "$f" || true
+      grep -nHE '^[[:space:]]*(@[_a-zA-Z]+[[:space:]]+)?import([[:space:]]+(typealias|struct|class|enum|protocol|let|var|func))?[[:space:]]+(AppKit|Cocoa)\b|^[[:space:]]*@import[[:space:]]+(AppKit|Cocoa)\b|#[[:space:]]*(import|include)[[:space:]]*[<"](AppKit|Cocoa)/|-framework[,[:space:]]+(AppKit|Cocoa)\b|find_library[[:space:]]*\([^)]*\b(AppKit|Cocoa)\b' "$f" || true
     done)
 if [[ -n "$appkit" ]]; then
   echo "AppKit/Cocoa used outside app/:"; echo "$appkit" | sed 's/^/  /'
