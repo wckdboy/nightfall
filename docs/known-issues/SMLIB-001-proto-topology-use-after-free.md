@@ -104,9 +104,18 @@ there" rule in `AddProtoEdge`:
 +     && (m_pEndPV != m_pStartPV)) { while( m_pEndPV->RemoveProtoEdge(this) == SM_SUCCESS ) {} }
 ```
 
-Verified so far, in a local experiment that was then reverted: with the patch, all six
-operand/operation combinations above run clean under ASan. Still to do before relying on it:
-the full upstream suite under ASan with the patch, and checking whether other code paths
+Verified so far, in a local experiment that was then reverted:
+
+- All six operand/operation combinations above run clean under ASan with the patch.
+- The full upstream SM_API suite under ASan + UBSan with the patch ran for 846 s with no
+  further AddressSanitizer reports, then UBSan halted it in **test code**:
+  `TestSmCurves.cpp:938: load of value 4294967295, which is not a valid value for type
+  'const SmCurveParameterizationType'` (the test feeds an out-of-range enum, which is UB in
+  C++). The suite's progress output was lost at the abort, so how much of the suite ran
+  is unknown.
+
+Still to do before relying on it: rerun the suite with UBSan set to recover
+(`-fsanitize-recover=undefined`) so it completes, and check whether other code paths
 (for example `SmProtoVertex::CombineProtoVertex`, which appends edge lists) create
 duplicates that need the same treatment.
 
