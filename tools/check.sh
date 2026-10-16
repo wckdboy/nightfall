@@ -41,6 +41,23 @@ else
   echo "ok"
 fi
 
+step "Layering"
+# AppKit/Cocoa only inside app/ (WORKFLOW.md §6): everything else must stay portable to
+# iPadOS and visionOS. Catches Swift/ObjC imports, C/C++ includes and CMake framework links.
+appkit=$(git ls-files --cached --others --exclude-standard \
+  '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*CMakeLists.txt' '*.cmake' \
+  | grep -v '^app/' \
+  | while read -r f; do
+      [[ -f "$f" ]] || continue
+      grep -nHE '^[[:space:]]*(@?import[[:space:]]+(AppKit|Cocoa)\b|#[[:space:]]*(import|include)[[:space:]]*<(AppKit|Cocoa)/)|-framework[[:space:]]+(AppKit|Cocoa)\b|"-framework (AppKit|Cocoa)"' "$f" || true
+    done)
+if [[ -n "$appkit" ]]; then
+  echo "AppKit/Cocoa used outside app/:"; echo "$appkit" | sed 's/^/  /'
+  fail=1
+else
+  echo "ok"
+fi
+
 step "Format"
 if [[ $skip_format -eq 1 ]]; then
   echo "skipped (--skip-format)"

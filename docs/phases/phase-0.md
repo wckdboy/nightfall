@@ -10,7 +10,7 @@ All of these, with evidence linked:
 
 - [ ] RFC 0001 accepted with bake-off numbers and a kernel decision
 - [ ] A box appears in a Metal view, built through an XPC service from a JSON IR
-- [ ] CI builds and tests on macOS on every PR; nightly sanitizer build green
+- [x] CI builds and tests on macOS on every PR; nightly sanitizer build green
 - [x] `main` protected per WORKFLOW.md §2 (required: `hygiene`, `build-and-test (macOS arm64)`)
 
 ## Work items
@@ -33,8 +33,8 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Not started |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Not started |
-| [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | In progress (workflow merged in #13; first green run pending) |
-| [#11](https://github.com/wckdboy/nightfall/issues/11) | Layering check: no AppKit below `app/` | ci | Not started |
+| [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | Done (first run green) |
+| [#11](https://github.com/wckdboy/nightfall/issues/11) | Layering check: no AppKit below `app/` | ci | In review |
 
 ## Log
 
