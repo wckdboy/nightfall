@@ -176,8 +176,8 @@ class OcctKernel final : public Kernel {
     return bodies_[static_cast<std::size_t>(body.id)];
   }
 
-  // Exactly one solid, every shell of it closed, and no shells or faces outside it (a
-  // compound of several solids or a solid with stray faces is not a valid part).
+  // Exactly one solid with exactly one closed shell, and no faces outside it (a compound of
+  // several solids or a solid with stray faces is not a valid part). See Measures::valid.
   static bool is_single_closed_solid(const TopoDS_Shape& shape) {
     TopTools_IndexedMapOfShape solids;
     TopExp::MapShapes(shape, TopAbs_SOLID, solids);
@@ -188,12 +188,9 @@ class OcctKernel final : public Kernel {
     TopExp::MapShapes(solid, TopAbs_SHELL, shells_solid);
     TopExp::MapShapes(shape, TopAbs_FACE, faces_all);
     TopExp::MapShapes(solid, TopAbs_FACE, faces_solid);
-    if (shells_all.Extent() != shells_solid.Extent()) return false;
+    if (shells_all.Extent() != 1 || shells_solid.Extent() != 1) return false;
     if (faces_all.Extent() != faces_solid.Extent()) return false;
-    for (int i = 1; i <= shells_solid.Extent(); ++i) {
-      if (!BRep_Tool::IsClosed(shells_solid(i))) return false;
-    }
-    return true;
+    return BRep_Tool::IsClosed(shells_solid(1));
   }
 
   std::vector<TopoDS_Shape> bodies_;

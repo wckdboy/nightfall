@@ -40,7 +40,10 @@ struct Body {
 };
 
 struct Measures {
-  bool valid = false;   ///< Closed, manifold, passes the kernel's own checker.
+  /// Exactly one solid bounded by exactly one closed manifold shell, passing the kernel's own
+  /// checker. Internal voids (extra shells) count as invalid for every kernel. TODO(#17):
+  /// distinguish voids from separate lumps once the corpus has a part with a cavity.
+  bool valid = false;
   double volume = 0.0;  ///< mm³
   double area = 0.0;    ///< mm²
   int faces = 0;
@@ -79,6 +82,9 @@ class Kernel {
 
 #if NF_BAKEOFF_WITH_OCCT
 [[nodiscard]] std::unique_ptr<Kernel> make_occt_kernel();
+#endif
+#if NF_BAKEOFF_WITH_SMLIB
+[[nodiscard]] std::unique_ptr<Kernel> make_smlib_kernel();
 #endif
 
 }  // namespace nf::bakeoff
