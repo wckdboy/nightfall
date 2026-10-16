@@ -171,6 +171,8 @@ std::vector<Part> reference_parts() {
   // L-bracket: 40 × 10 × 4 base and 4 × 10 × 30 upright (overlap 4 × 10 × 4), the inside
   // corner filleted at r = 3 (concave: adds material), and an r = 3 hole through the base.
   // V = 1600 + 1200 − 160 + (1 − π/4)·9·10 − 9π·4 = 2730 − 58.5π
+  // A = 2·264 (L faces) + 140·10 (L perimeter × depth) − 2·3·10 + 15π + 2(1 − π/4)·9
+  //     − 18π + 24π (hole) = 1886 + 16.5π
   parts.push_back({"l_bracket",
                    "fillet",
                    [](Kernel& k) {
@@ -182,7 +184,7 @@ std::vector<Part> reference_parts() {
                      const Body hole = k.cylinder({25, 5, -1}, 3.0, 6.0);
                      return k.boolean(BooleanOp::kDifference, rounded, hole);
                    },
-                   {.volume = 2730.0 - 58.5 * kPi}});
+                   {.volume = 2730.0 - 58.5 * kPi, .area = 1886.0 + 16.5 * kPi}});
 
   return parts;
 }

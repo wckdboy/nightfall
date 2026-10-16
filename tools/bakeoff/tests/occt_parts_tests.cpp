@@ -5,6 +5,7 @@
 // expectations against a mature kernel before they are used to judge SMLib.
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "runner.hpp"
 
@@ -34,4 +35,15 @@ TEST_CASE("OCCT validity requires exactly one closed solid", "[occt]") {
   const Measures two = kernel->measure(kernel->boolean(BooleanOp::kUnion, a, b));
   CHECK_FALSE(two.valid);
   CHECK(kernel->measure(a).valid);
+}
+
+TEST_CASE("OCCT rotate is right-handed", "[occt]") {
+  // A unit cube at x ∈ [1, 2] turned +90° about +Z must land at x ∈ [-1, 0], y ∈ [1, 2].
+  const auto kernel = make_occt_kernel();
+  const Body cube = kernel->box({1, 0, 0}, {1, 1, 1});
+  const Body turned = kernel->rotate(cube, {0, 0, 0}, {0, 0, 1}, 90.0);
+  const Body target = kernel->box({-1, 1, 0}, {1, 1, 1});
+  const Measures overlap =
+      kernel->measure(kernel->boolean(BooleanOp::kIntersection, turned, target));
+  CHECK_THAT(overlap.volume, Catch::Matchers::WithinRel(1.0, kRelativeTolerance));
 }
