@@ -8,10 +8,13 @@
 // as the Kernel interface requires.
 
 #include <SmApiBrep.h>
+#include <SmApiCurves.h>
 #include <SmApiGeneral.h>
 #include <SmApiPrimitives.h>
 #include <SmApiQueries.h>
+#include <SmBSplineCurve.h>
 #include <SmBrep.h>
+#include <SmLine.h>
 #include <SmVector3d.h>
 
 #include <exception>
@@ -30,6 +33,8 @@ namespace {
 // miss even 1e-4 (RFC 0001 F6). SmApiBrepComputeMassProperties is no better overall.
 constexpr double kVolumeAccuracy = 1e-8;
 constexpr double kAreaAccuracy = 1e-4;
+// SmApiCreateHelix's tightest accepted fit tolerance (mm).
+constexpr double kHelixTolerance = 1e-6;
 
 using BrepPtr = std::unique_ptr<SmBrep>;
 
@@ -77,6 +82,62 @@ class SmlibKernel final : public Kernel {
     return store(std::move(work));
   }
 
+  Body cone(Vec3 base_center, double base_radius, double top_radius, double height) override {
+    SmBrep* raw = nullptr;
+    const SmApiStatus status =
+        SmApiCreateCone(to_sm(base_center), base_radius, top_radius, height, raw);
+    return adopt(raw, status, "SmApiCreateCone");
+  }
+
+  Body torus(Vec3 center, double major_radius, double minor_radius) override {
+    SmBrep* raw = nullptr;
+    const SmApiStatus status = SmApiCreateTorus(to_sm(center), major_radius, minor_radius, raw);
+    return adopt(raw, status, "SmApiCreateTorus");
+  }
+
+  Body extrude(const std::vector<Vec2>& profile, double base_z, double height) override {
+    // SmApiCreateLinearSweep copies its curves; the segments are freed here.
+    std::vector<std::unique_ptr<SmLine>> segments;
+    SmTArray<SmCurve*> curves;
+    for (std::size_t i = 0; i < profile.size(); ++i) {
+      const Vec2 a = profile[i];
+      const Vec2 b = profile[(i + 1) % profile.size()];
+      SmLine* line = nullptr;
+      check(SmApiCreateLineSegment(SmPoint3d(a.x, a.y, base_z), SmPoint3d(b.x, b.y, base_z), line),
+            "SmApiCreateLineSegment");
+      segments.emplace_back(line);
+      curves.Add(line);
+    }
+    SmBrep* raw = nullptr;
+    const SmApiStatus status =
+        SmApiCreateLinearSweep(curves, SmVector3d(0, 0, 1), height, TRUE, raw);
+    return adopt(raw, status, "SmApiCreateLinearSweep");
+  }
+
+  Body helix_pipe(double helix_radius, double height, double turns, double tube_radius) override {
+    // SM_API fits the helix with a B-spline to within kHelixTolerance (its tightest); the
+    // pipe surface itself is swept at a looser internal tolerance (RFC 0001 F11).
+    SmBSplineCurve* raw_helix = nullptr;
+    check(SmApiCreateHelix(SmPoint3d(0, 0, 0), height, helix_radius, helix_radius, turns, TRUE,
+                           kHelixTolerance, raw_helix),
+          "SmApiCreateHelix");
+    // SmApiCreatePipeSweep does not document whether the result keeps the path, so the curve
+    // lives as long as the kernel.
+    curves_.emplace_back(raw_helix);
+    SmBrep* raw = nullptr;
+    const SmApiStatus status = SmApiCreatePipeSweep(tube_radius, raw_helix, TRUE, raw);
+    return adopt(raw, status, "SmApiCreatePipeSweep");
+  }
+
+  Body variable_fillet(Body body, Region edges, double start_radius, double end_radius) override {
+    BrepPtr work = copy(body);
+    SmTArray<SmEdge*> selected = edges_in(work.get(), edges);
+    if (selected.GetSize() == 0) throw KernelError("variable fillet: no edges in region");
+    check(SmApiVariableRadiusFillet(work.get(), selected, start_radius, end_radius, 1, 1),
+          "SmApiVariableRadiusFillet");
+    return store(std::move(work));
+  }
+
   Body boolean(BooleanOp op, Body a, Body b) override {
     BrepPtr primary = copy(a);
     BrepPtr tool = copy(b);
@@ -102,13 +163,7 @@ class SmlibKernel final : public Kernel {
 
   Body fillet(Body body, Region edges, double radius, FilletKind kind) override {
     BrepPtr work = copy(body);
-    SmTArray<SmEdge*> all, selected;
-    check(SmApiGetEdges(work.get(), all), "SmApiGetEdges");
-    for (ULONG i = 0; i < all.GetSize(); ++i) {
-      SmPoint3d lo, hi;
-      check(SmApiEdgeBoundingBox(all[i], TRUE, lo, hi), "SmApiEdgeBoundingBox");
-      if (inside(lo, hi, edges)) selected.Add(all[i]);
-    }
+    SmTArray<SmEdge*> selected = edges_in(work.get(), edges);
     if (selected.GetSize() == 0) throw KernelError("fillet: no edges in region");
     // Cross-section 1 = circular (continuity unused); 2 = blend curve, G2.
     const bool blend = kind == FilletKind::kG2Blend;
@@ -157,6 +212,17 @@ class SmlibKernel final : public Kernel {
   }
 
  private:
+  static SmTArray<SmEdge*> edges_in(SmBrep* brep, const Region& region) {
+    SmTArray<SmEdge*> all, selected;
+    check(SmApiGetEdges(brep, all), "SmApiGetEdges");
+    for (ULONG i = 0; i < all.GetSize(); ++i) {
+      SmPoint3d lo, hi;
+      check(SmApiEdgeBoundingBox(all[i], TRUE, lo, hi), "SmApiEdgeBoundingBox");
+      if (inside(lo, hi, region)) selected.Add(all[i]);
+    }
+    return selected;
+  }
+
   Body adopt(SmBrep* raw, SmApiStatus status, const char* what) {
     BrepPtr owned(raw);
     check(status, what);
@@ -184,6 +250,8 @@ class SmlibKernel final : public Kernel {
     return bodies_[static_cast<std::size_t>(body.id)].get();
   }
 
+  // Declared first so they are destroyed after the bodies that may reference them.
+  std::vector<std::unique_ptr<SmBSplineCurve>> curves_;
   std::vector<BrepPtr> bodies_;
 };
 

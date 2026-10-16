@@ -8,17 +8,29 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBndLib.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
+#include <BRepLib.hxx>
+#include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom_CylindricalSurface.hxx>
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
 #include <TopExp.hxx>
@@ -28,10 +40,16 @@
 #include <TopoDS_Shape.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Dir2d.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Trsf.hxx>
+#include <gp_Vec.hxx>
 
+#include <cmath>
 #include <memory>
 #include <numbers>
 #include <string>
@@ -87,6 +105,78 @@ class OcctKernel final : public Kernel {
       rotation.SetRotation(gp_Ax1(to_pnt(point), gp_Dir(axis.x, axis.y, axis.z)),
                            degrees * std::numbers::pi / 180.0);
       return BRepBuilderAPI_Transform(get(body), rotation, /*copy=*/true).Shape();
+    });
+  }
+
+  Body cone(Vec3 base_center, double base_radius, double top_radius, double height) override {
+    return guarded([&] {
+      return BRepPrimAPI_MakeCone(gp_Ax2(to_pnt(base_center), gp::DZ()), base_radius, top_radius,
+                                  height)
+          .Shape();
+    });
+  }
+
+  Body torus(Vec3 center, double major_radius, double minor_radius) override {
+    return guarded([&] {
+      return BRepPrimAPI_MakeTorus(gp_Ax2(to_pnt(center), gp::DZ()), major_radius, minor_radius)
+          .Shape();
+    });
+  }
+
+  Body extrude(const std::vector<Vec2>& profile, double base_z, double height) override {
+    return guarded([&] {
+      BRepBuilderAPI_MakePolygon polygon;
+      for (const Vec2& p : profile) polygon.Add(gp_Pnt(p.x, p.y, base_z));
+      polygon.Close();
+      const TopoDS_Face face = BRepBuilderAPI_MakeFace(polygon.Wire(), /*OnlyPlane=*/true).Face();
+      return BRepPrimAPI_MakePrism(face, gp_Vec(0, 0, height)).Shape();
+    });
+  }
+
+  Body helix_pipe(double helix_radius, double height, double turns, double tube_radius) override {
+    return guarded([&] {
+      // An exact helix: a straight line in the (angle, z) parameter plane of a cylinder.
+      const double pitch = height / turns;
+      const double two_pi = 2.0 * std::numbers::pi;
+      Handle(Geom_CylindricalSurface) cylinder =
+          new Geom_CylindricalSurface(gp_Ax3(gp::Origin(), gp::DZ()), helix_radius);
+      Handle(Geom2d_Line) line = new Geom2d_Line(gp_Pnt2d(0, 0), gp_Dir2d(two_pi, pitch));
+      Handle(Geom2d_TrimmedCurve) segment =
+          new Geom2d_TrimmedCurve(line, 0.0, turns * std::hypot(two_pi, pitch));
+      TopoDS_Edge spine_edge = BRepBuilderAPI_MakeEdge(segment, cylinder).Edge();
+      BRepLib::BuildCurves3d(spine_edge);
+      const TopoDS_Wire spine = BRepBuilderAPI_MakeWire(spine_edge).Wire();
+      // Circular profile at the start point, normal to the helix tangent (0, 2πR, pitch).
+      const gp_Circ circle(
+          gp_Ax2(gp_Pnt(helix_radius, 0, 0), gp_Dir(0, two_pi * helix_radius, pitch)), tube_radius);
+      const TopoDS_Wire profile =
+          BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circle).Edge()).Wire();
+      BRepOffsetAPI_MakePipeShell pipe(spine);
+      pipe.SetMode(/*IsFrenet=*/true);  // the Frenet frame of a helix is exact and twist-free
+      pipe.Add(profile);
+      pipe.Build();
+      if (!pipe.IsDone() || !pipe.MakeSolid()) throw KernelError("helix pipe failed");
+      return pipe.Shape();
+    });
+  }
+
+  Body variable_fillet(Body body, Region edges, double start_radius, double end_radius) override {
+    return guarded([&] {
+      const TopoDS_Shape& shape = get(body);
+      BRepFilletAPI_MakeFillet builder(shape);
+      TopTools_IndexedMapOfShape all_edges;
+      TopExp::MapShapes(shape, TopAbs_EDGE, all_edges);
+      int selected = 0;
+      for (int i = 1; i <= all_edges.Extent(); ++i) {
+        if (inside(all_edges(i), edges)) {
+          builder.Add(start_radius, end_radius, TopoDS::Edge(all_edges(i)));
+          ++selected;
+        }
+      }
+      if (selected == 0) throw KernelError("variable fillet: no edges in region");
+      builder.Build();
+      if (!builder.IsDone()) throw KernelError("variable fillet failed");
+      return builder.Shape();
     });
   }
 

@@ -10,11 +10,13 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "nf/math/vec.hpp"
 
 namespace nf::bakeoff {
 
+using math::Vec2;
 using math::Vec3;
 
 /// Axis-aligned region used to select edges or faces without kernel-specific indices: an
@@ -73,6 +75,23 @@ class Kernel {
   /// Copy of `body` rotated by `degrees` (right-handed) about the line through `point`
   /// along `axis`.
   virtual Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) = 0;
+
+  /// Truncated cone along +Z with its base circle centred at `base_center`.
+  virtual Body cone(Vec3 base_center, double base_radius, double top_radius, double height) = 0;
+  /// Torus around the Z axis, centred at `center`.
+  virtual Body torus(Vec3 center, double major_radius, double minor_radius) = 0;
+  /// Prism: the closed, counter-clockwise polygon `profile` in the plane z = `base_z`
+  /// (last point joins the first), extruded along +Z by `height`.
+  virtual Body extrude(const std::vector<Vec2>& profile, double base_z, double height) = 0;
+  /// Tube of radius `tube_radius` swept along a right-handed helix of radius `helix_radius`
+  /// around the Z axis, from (helix_radius, 0, 0) up to z = `height` in `turns` turns, with
+  /// flat end caps.
+  virtual Body helix_pipe(double helix_radius, double height, double turns, double tube_radius) = 0;
+  /// Fillets every edge inside `edges` with a radius going from `start_radius` at the edge's
+  /// first vertex (the kernel's own edge orientation) to `end_radius` at its last. The law in
+  /// between is kernel-defined: SMLib's is consistent with linear, OCCT interpolates with zero
+  /// end slopes (S-shaped). Results are only comparable by consensus (RFC 0001 F11).
+  virtual Body variable_fillet(Body body, Region edges, double start_radius, double end_radius) = 0;
 
   virtual Body boolean(BooleanOp op, Body a, Body b) = 0;
   /// Fillets every edge of `body` whose bounding box lies inside `edges`.

@@ -66,9 +66,18 @@ int main(int argc, char** argv) {
     }
   }
 
-  int passed = 0;
-  for (const auto& p : report.parts) passed += p.success() ? 1 : 0;
-  std::fprintf(stderr, "%s %s: %d/%zu parts passed\n", report.kernel.c_str(),
-               report.version.c_str(), passed, report.parts.size());
+  int analytic = 0, passed = 0, consensus = 0, consensus_built = 0;
+  for (const auto& p : report.parts) {
+    if (p.judged_by_consensus()) {
+      ++consensus;
+      consensus_built += p.success() ? 1 : 0;
+    } else {
+      ++analytic;
+      passed += p.success() ? 1 : 0;
+    }
+  }
+  std::fprintf(stderr, "%s %s: %d/%d analytic parts passed; %d/%d consensus parts built valid\n",
+               report.kernel.c_str(), report.version.c_str(), passed, analytic, consensus_built,
+               consensus);
   return 0;
 }

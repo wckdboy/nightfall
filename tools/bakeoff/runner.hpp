@@ -25,8 +25,14 @@ struct PartResult {
   double build_ms = 0.0;
   std::optional<bool> volume_ok;  ///< Unset when the part has no volume expectation.
   std::optional<bool> area_ok;
+  /// Set for parts without an analytic expectation: they are judged by comparing kernels
+  /// (the bake-off run, #7), never counted as a single-kernel pass.
+  std::string consensus_reason;
 
-  /// Built, valid, and every stated expectation met.
+  [[nodiscard]] bool judged_by_consensus() const { return !consensus_reason.empty(); }
+
+  /// Built, valid, and every stated expectation met. For consensus parts this only means
+  /// "a valid body came out"; see judged_by_consensus().
   [[nodiscard]] bool success() const {
     return built && measured && measures.valid && volume_ok.value_or(true) &&
            area_ok.value_or(true);

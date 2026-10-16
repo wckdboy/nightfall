@@ -27,6 +27,11 @@ class FakeKernel final : public Kernel {
   Body cylinder(Vec3, double, double) override { return op("cylinder"); }
   Body sphere(Vec3, double) override { return op("sphere"); }
   Body rotate(Body, Vec3, Vec3, double) override { return op("rotate"); }
+  Body cone(Vec3, double, double, double) override { return op("cone"); }
+  Body torus(Vec3, double, double) override { return op("torus"); }
+  Body extrude(const std::vector<Vec2>&, double, double) override { return op("extrude"); }
+  Body helix_pipe(double, double, double, double) override { return op("helix_pipe"); }
+  Body variable_fillet(Body, Region, double, double) override { return op("variable_fillet"); }
   Body boolean(BooleanOp, Body, Body) override { return op("boolean"); }
   Body fillet(Body, Region, double, FilletKind) override { return op("fillet"); }
   Body shell(Body, Region, double) override { return op("shell"); }
@@ -96,9 +101,11 @@ TEST_CASE("reference parts have unique names and analytic expectations", "[parts
   std::set<std::string> names;
   for (const Part& part : reference_parts()) {
     CHECK(names.insert(part.name).second);
-    CHECK(part.expect.volume.has_value());
+    INFO(part.name);
+    // Every part is judged analytically, or says why it relies on cross-kernel consensus.
+    CHECK((part.expect.volume.has_value() || !part.expect.consensus_reason.empty()));
   }
-  CHECK(names.size() >= 6);
+  CHECK(names.size() >= 20);
 }
 
 TEST_CASE("JSON keeps valid UTF-8 and replaces invalid bytes", "[runner]") {
@@ -125,5 +132,22 @@ TEST_CASE("JSON writes measured values exactly and unmeasured ones as null", "[r
   CHECK(json.find(R"("valid":true,"volume":0.1,"area":2200,"faces":6,"edges":12)") !=
         std::string::npos);
   CHECK(json.find(R"("valid":null,"volume":null,"area":null,"faces":null,"edges":null)") !=
+        std::string::npos);
+}
+
+TEST_CASE("consensus parts are reported as such, not as analytic passes", "[runner]") {
+  FakeKernel k;
+  k.next = {.valid = true, .volume = 123.0};
+  const Part part{"c",
+                  "fillet",
+                  [](Kernel& kk) { return kk.box({}, {1, 1, 1}); },
+                  {.consensus_reason = "no closed form"}};
+  const PartResult r = run_part(k, part);
+  CHECK(r.judged_by_consensus());
+  CHECK_FALSE(r.volume_ok.has_value());
+  RunReport report{.kernel = "fake"};
+  report.parts.push_back(r);
+  const std::string json = to_json(report);
+  CHECK(json.find(R"("judged_by":"consensus","consensus_reason":"no closed form")") !=
         std::string::npos);
 }

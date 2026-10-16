@@ -17,6 +17,8 @@ namespace nf::bakeoff {
 struct Expectation {
   std::optional<double> volume;  ///< mm³, analytic
   std::optional<double> area;    ///< mm², analytic
+  /// Why a part has no analytic expectation (judged by cross-kernel consensus instead).
+  std::string consensus_reason;
 };
 
 /// A reference part: an operation script plus its expected result.
