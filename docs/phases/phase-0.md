@@ -23,12 +23,13 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#2](https://github.com/wckdboy/nightfall/issues/2) | CMake build, presets, `libnf-math` seed with tests | build | Done (#13) |
 | [#3](https://github.com/wckdboy/nightfall/issues/3) | Branch protection, labels, milestones, CODEOWNERS on GitHub | process | Done |
 | [#4](https://github.com/wckdboy/nightfall/issues/4) | Build SMLib on Apple Silicon (own CMake; no premake needed) | third_party | Done (#14) |
-| [#5](https://github.com/wckdboy/nightfall/issues/5) | Build OCCT 7.9.3 for arm64 as a cached CI artifact | third_party | In review |
+| [#5](https://github.com/wckdboy/nightfall/issues/5) | Build OCCT 7.9.3 for arm64 as a cached CI artifact | third_party | Done (#19) |
 | [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | In review |
 | [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | In review |
 | [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | Not started |
 | [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 20 parts | kernel | Not started |
-| [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Not started |
+| [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | In review (#24) |
+| [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | In review (#26) |
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Not started |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Not started |
