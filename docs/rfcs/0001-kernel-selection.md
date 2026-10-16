@@ -10,7 +10,7 @@
 
 Choose Nightfall's primary B-rep kernel by measurement, not reputation. SMLib (released
 as [usd-brep](https://github.com/NVIDIA-Omniverse/usd-brep) 1.0.0 under Apache-2.0 on
-2026-10-08) is the lead candidate; OpenCASCADE 7.8 (LGPL-2.1) is the comparison and
+2026-10-08) is the lead candidate; OpenCASCADE 7.9.3 (LGPL-2.1) is the comparison and
 fallback. Both run the same corpus through a thin harness; this RFC fixes the corpus,
 metrics and decision rule before any results exist, so the result can't be argued after
 the fact.
@@ -28,7 +28,7 @@ Phase 3 means redoing every feature, so it must be decided by the Phase 0 gate.
 | Kernel | Version | License | Notes |
 | --- | --- | --- | --- |
 | SMLib (usd-brep) | 1.0.0, pinned commit | Apache-2.0 | NURBS-native (NLib); built with our own CMake (F1) |
-| OpenCASCADE | 7.8.x | LGPL-2.1 | Mature; STEP/IGES translators |
+| OpenCASCADE | 7.9.3, pinned commit | LGPL-2.1 | Mature; STEP/IGES translators. Latest release of the 7.x line; 8.0.x exists and can be evaluated separately |
 
 ### Harness
 

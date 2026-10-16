@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Builds OpenCASCADE at the pinned release (cached by build-script hash) and runs the OCCT
+# smoke tests. Runs nightly and on PRs touching the OCCT build. Not a required check
+# (RFC 0001 evaluation).
+
+name: occt
+
+on:
+  pull_request:
+    paths:
+      - "third_party/occt/**"
+      - "third_party/build-occt.sh"
+      - "tools/check.sh"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/workflows/occt.yml"
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  occt:
+    name: occt build + smoke tests (macOS arm64)
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: brew install ninja
+
+      - name: Restore OCCT install
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install
+          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh') }}
+
+      - name: Build OCCT
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: third_party/build-occt.sh
+
+      - run: tools/check.sh --preset occt --skip-format
