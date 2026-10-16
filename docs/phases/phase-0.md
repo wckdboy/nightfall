@@ -26,7 +26,7 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#5](https://github.com/wckdboy/nightfall/issues/5) | Build OCCT 7.9.3 for arm64 as a cached CI artifact | third_party | Done (#19) |
 | [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | In review |
 | [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | In review |
-| [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | Not started |
+| [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | In review |
 | [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 20 parts | kernel | Not started |
 | [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | In review (#24) |
 | [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | In review (#26) |
@@ -49,3 +49,6 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 - 2026-10-16 — OCCT 7.9.3 builds for arm64 in 6.5 min (10 cores), 54 MB of libraries; smoke
   tests pass (#5). Bake-off harness runs all 6 analytic parts on OCCT at 1e-6 relative (#6).
   #6 split into #21 (OCCT driver + CLI), #16 (SMLib driver), #17 (20-part corpus), #18 (ABC manifest).
+- 2026-10-16 — SMLib driver (#16): 4/6 analytic parts pass vs OCCT 6/6; both SMLib failures
+  are area accuracy (SM_API area misses 1e-6 on curved faces), volumes all within 4.3e-9
+  (RFC 0001 F5–F9).

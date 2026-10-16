@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// nf_bakeoff --kernel <name> [--out <file.json>]
+// nf_bakeoff --kernel <occt|smlib> [--out <file.json>]
 // Runs the reference parts on one kernel and writes the JSON report (stdout by default).
 // Exits non-zero only for usage or I/O errors: failed parts are results, not tool failures.
 
@@ -20,12 +20,15 @@ std::unique_ptr<nf::bakeoff::Kernel> make_kernel(std::string_view name) {
 #if NF_BAKEOFF_WITH_OCCT
   if (name == "occt") return nf::bakeoff::make_occt_kernel();
 #endif
+#if NF_BAKEOFF_WITH_SMLIB
+  if (name == "smlib") return nf::bakeoff::make_smlib_kernel();
+#endif
   (void)name;
   return nullptr;
 }
 
 int usage() {
-  std::cerr << "usage: nf_bakeoff --kernel <occt> [--out <file.json>]\n";
+  std::cerr << "usage: nf_bakeoff --kernel <occt|smlib> [--out <file.json>]\n";
   return 2;
 }
 
