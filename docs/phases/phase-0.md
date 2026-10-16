@@ -50,4 +50,5 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   tests pass (#5). Bake-off harness runs all 6 analytic parts on OCCT at 1e-6 relative (#6).
   #6 split into #21 (OCCT driver + CLI), #16 (SMLib driver), #17 (20-part corpus), #18 (ABC manifest).
 - 2026-10-16 — SMLib driver (#16): 4/6 analytic parts pass vs OCCT 6/6; both SMLib failures
-  are area accuracy (API clamps area to 1e-4), volumes all within 4.3e-9 (RFC 0001 F5–F8).
+  are area accuracy (SM_API area misses 1e-6 on curved faces), volumes all within 4.3e-9
+  (RFC 0001 F5–F9).

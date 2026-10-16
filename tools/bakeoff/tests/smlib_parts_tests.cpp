@@ -42,18 +42,29 @@ TEST_CASE("SMLib operations leave their inputs untouched", "[smlib]") {
   CHECK_THAT(kernel->measure(tool).volume, WithinRel(31.5, kRelativeTolerance));
 }
 
-TEST_CASE("SMLib validity requires exactly one solid", "[smlib]") {
+TEST_CASE("SMLib validity requires exactly one solid and no voids", "[smlib]") {
   const auto kernel = make_smlib_kernel();
   const Body a = kernel->box({0, 0, 0}, {10, 10, 10});
-  const Body b = kernel->box({20, 0, 0}, {10, 10, 10});  // disjoint: union is two solids
-  Body both;
-  try {
-    both = kernel->boolean(BooleanOp::kUnion, a, b);
-  } catch (const KernelError&) {
-    SUCCEED("SMLib rejects the disjoint union outright");
-    return;
-  }
-  const Measures two = kernel->measure(both);
-  INFO("faces=" << two.faces << " volume=" << two.volume);
-  CHECK_FALSE(two.valid);
+  const Body far = kernel->box({20, 0, 0}, {10, 10, 10});
+  Body two;
+  REQUIRE_NOTHROW(two = kernel->boolean(BooleanOp::kUnion, a, far));
+  CHECK_FALSE(kernel->measure(two).valid);  // two lumps
+
+  const Body inner = kernel->box({3, 3, 3}, {4, 4, 4});
+  Body hollow;
+  REQUIRE_NOTHROW(hollow = kernel->boolean(BooleanOp::kDifference, a, inner));
+  CHECK_FALSE(kernel->measure(hollow).valid);  // one solid with an internal void
+
+  CHECK(kernel->measure(a).valid);
+}
+
+TEST_CASE("SMLib fillet and shell leave their input untouched", "[smlib]") {
+  const auto kernel = make_smlib_kernel();
+  const Body block = kernel->box({0, 0, 0}, {10, 20, 30});
+  (void)kernel->fillet(block, {{-0.01, -0.01, -0.01}, {0.01, 0.01, 30.01}}, 2.0,
+                       FilletKind::kCircular);
+  (void)kernel->shell(block, {{-0.01, -0.01, 29.99}, {10.01, 20.01, 30.01}}, 1.0);
+  const Measures m = kernel->measure(block);
+  CHECK_THAT(m.volume, WithinRel(6000.0, kRelativeTolerance));
+  CHECK(m.faces == 6);
 }

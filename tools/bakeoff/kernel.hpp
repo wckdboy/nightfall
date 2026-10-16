@@ -76,7 +76,8 @@ class Kernel {
   /// Hollows `body` inward by `thickness`, opening every face inside `open_faces`.
   virtual Body shell(Body body, Region open_faces, double thickness) = 0;
 
-  /// Mass properties at a relative accuracy of 1e-9 or better.
+  /// Mass properties at the kernel's tightest supported accuracy (OCCT: 1e-9; SMLib: volume
+  /// 1e-8, area 1e-4 — RFC 0001 F6).
   virtual Measures measure(Body body) = 0;
 };
 

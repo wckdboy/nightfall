@@ -25,7 +25,8 @@ namespace nf::bakeoff {
 namespace {
 
 // SM_API's tightest accepted accuracies: volume [1e-8, 1e-1], area [1e-4, 1e-1] relative
-// (SmApiQueries.h). Area therefore cannot be requested at RFC 0001's 1e-6.
+// (SmApiQueries.h). Area cannot be requested at RFC 0001's 1e-6, and on curved faces it can
+// miss even 1e-4 (RFC 0001 F6). SmApiBrepComputeMassProperties is no better overall.
 constexpr double kVolumeAccuracy = 1e-8;
 constexpr double kAreaAccuracy = 1e-4;
 
@@ -132,17 +133,11 @@ class SmlibKernel final : public Kernel {
     Measures m;
     SmBoolean manifold = FALSE;
     check(SmApiBrepIsManifoldSolid(brep, manifold), "SmApiBrepIsManifoldSolid");
-    // SM_API calls two disjoint boxes one manifold solid. SMLib's topology is region-based
-    // (every closed surface has a shell on each side), so count bounded regions instead of
-    // shells: one solid = one region besides the infinite one. Uses SmBrep directly; SM_API
-    // has no region query.
-    SmTArray<SmRegion*> regions;
-    brep->GetRegions(regions);
-    ULONG bounded = 0;
-    for (ULONG i = 0; i < regions.GetSize(); ++i) {
-      if (regions[i] != brep->GetInfiniteRegion()) ++bounded;
-    }
-    m.valid = manifold == TRUE && bounded == 1;
+    // IsManifoldSolid alone accepts two disjoint boxes; the census separates material
+    // regions from void cavities (Measures::valid: one solid, no voids).
+    long solids = 0, voids = 0;
+    check(SmApiBrepMaterialCensus(brep, solids, voids), "SmApiBrepMaterialCensus");
+    m.valid = manifold == TRUE && solids == 1 && voids == 0;
     check(SmApiBrepComputeVolume(brep, kVolumeAccuracy, m.volume), "SmApiBrepComputeVolume");
     check(SmApiBrepComputeArea(brep, kAreaAccuracy, m.area), "SmApiBrepComputeArea");
     SmTArray<SmFace*> faces;
