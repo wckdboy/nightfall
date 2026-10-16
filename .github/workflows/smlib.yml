@@ -11,6 +11,8 @@ on:
   pull_request:
     paths:
       - "third_party/smlib/**"
+      - "tools/bakeoff/**"
+      - "core/**"
       - "third_party/fetch-smlib.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
