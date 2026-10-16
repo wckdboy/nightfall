@@ -93,7 +93,7 @@ Each phase in the build plan ends with a gate: measurable exit criteria.
 | `core/math` | Unit + property tests; tolerances explicit in every assertion; no allocation in evaluation hot paths. |
 | `core/kernel` | Runs against every `IKernel` backend; golden results (volume, area, topology counts) with stated tolerance; validity check after every operation. |
 | `core/ir` | Schema version bump + migration + round-trip test for any persisted change. |
-| `app` | No AppKit outside `app/`; main-thread work < 16 ms per frame while dragging. |
+| `app` | No AppKit/Cocoa outside `app/` (enforced by the Layering step of `tools/check.sh`); main-thread work < 16 ms per frame while dragging. |
 | `agent` | Eval suite run attached to the PR for any prompt, tool or provider change; pass rate may not drop. |
 | `third_party` | License on the allowlist (§8), version pinned, entry in `third_party/README.md`. |
 
