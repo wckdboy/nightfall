@@ -20,6 +20,7 @@ import sys
 
 SEED = "nightfall-abc-v1"
 PER_BIN = 40
+CHUNK_SIZE = 10_000  # models per ABC chunk
 # Quintile edges of #surfs over chunk 0000's 5,111 single-part models (lower bound inclusive).
 BINS = [(1, 8), (8, 17), (17, 32), (32, 68), (68, 10**9)]
 
@@ -75,6 +76,12 @@ def main() -> int:
 
     faces = read_stats(args.stat_dir)
     steps = step_files(args.step_dir)
+    if len(steps) < CHUNK_SIZE:
+        # A partial extraction (e.g. fetch-abc.sh without --all) holds only the manifest's
+        # own models, so regenerating from it would just echo the manifest back.
+        print(f"found {len(steps)} STEP models, expected the whole chunk ({CHUNK_SIZE}): "
+              "run fetch-abc.sh --all first", file=sys.stderr)
+        return 1
     candidates = sorted(set(faces) & set(steps))
     order = lambda model: hashlib.sha256(f"{SEED}:{model}".encode()).hexdigest()
 
