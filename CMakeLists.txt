@@ -54,5 +54,8 @@ endif()
 if(NF_WITH_OCCT)
   add_subdirectory(third_party/occt)
 endif()
+if(NF_WITH_USD)
+  add_subdirectory(third_party/usd-brep-usd)  # SPIKE (RFC 0002)
+endif()
 
 add_subdirectory(tools/bakeoff)
