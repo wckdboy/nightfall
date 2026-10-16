@@ -11,6 +11,7 @@ project(Nightfall
 option(NF_BUILD_TESTS "Build unit tests" ON)
 option(NF_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(NF_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(NF_WITH_SMLIB "Build the SMLib kernel from third_party/src/usd-brep (RFC 0001 evaluation)" OFF)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,3 +46,7 @@ if(NF_BUILD_TESTS)
 endif()
 
 add_subdirectory(core)
+
+if(NF_WITH_SMLIB)
+  add_subdirectory(third_party/smlib)
+endif()
