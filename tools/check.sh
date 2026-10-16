@@ -29,7 +29,7 @@ fail=0
 step "License headers"
 # Every tracked or new source file must carry an SPDX license identifier.
 missing=$(git ls-files --cached --others --exclude-standard \
-  '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' 'CMakeLists.txt' '*.cmake' \
+  '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
   | while read -r f; do
       [[ -f "$f" ]] || continue
       head -n 5 "$f" | grep -q 'SPDX-License-Identifier:' || echo "$f"
@@ -45,7 +45,10 @@ step "Format"
 if [[ $skip_format -eq 1 ]]; then
   echo "skipped (--skip-format)"
 elif ! command -v clang-format >/dev/null; then
-  echo "clang-format not installed; skipping locally (CI enforces it). brew install clang-format"
+  echo "clang-format not installed; skipping locally (CI enforces it). pip install clang-format==$(cat .clang-format-version)"
+elif ! clang-format --version | grep -q "version $(cat .clang-format-version)"; then
+  msg="clang-format $(cat .clang-format-version) required (.clang-format-version), found: $(clang-format --version)"
+  if [[ -n "${CI:-}" ]]; then echo "$msg"; fail=1; else echo "$msg; skipping locally"; fi
 else
   files=$(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h' '*.mm')
   if [[ -n "$files" ]] && ! echo "$files" | xargs clang-format --dry-run --Werror; then

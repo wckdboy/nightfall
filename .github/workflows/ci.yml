@@ -29,7 +29,12 @@ jobs:
         run: test "$(uname -m)" = "arm64"
 
       - name: Install tools
-        run: brew install ninja clang-format
+        run: |
+          brew install ninja
+          # clang-format is pinned (.clang-format-version): format output changes between versions.
+          python3 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --quiet "clang-format==$(cat .clang-format-version)"
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
 
       - name: Toolchain versions
         run: |

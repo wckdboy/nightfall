@@ -13,5 +13,7 @@ if(NF_BUILD_TESTS)
     tests/tolerance_tests.cpp
     tests/vec_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
-  catch_discover_tests(nf_math_tests TEST_PREFIX "math.")
+  # Fixed seed so property-test failures reproduce exactly; run the binary directly with
+  # --rng-seed time to explore new samples.
+  catch_discover_tests(nf_math_tests TEST_PREFIX "math." EXTRA_ARGS --rng-seed=20261016)
 endif()

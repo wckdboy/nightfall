@@ -6,6 +6,8 @@
 #include <catch2/generators/catch_generators_adapters.hpp>
 #include <catch2/generators/catch_generators_random.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
+#include <limits>
 
 #include "nf/math/vec.hpp"
 
@@ -75,4 +77,23 @@ TEST_CASE("near uses the linear tolerance as a distance", "[vec]") {
   CHECK(near(Vec3{0, 0, 0}, Vec3{0.006, 0.0079, 0}, tol));        // distance ≈ 0.00992
   CHECK_FALSE(near(Vec3{0, 0, 0}, Vec3{0.006, 0.0081, 0}, tol));  // distance ≈ 0.01008
   CHECK(near(Vec2{1, 1}, Vec2{1, 1.005}, tol));
+}
+
+TEST_CASE("normalized survives lengths that overflow a double", "[vec]") {
+  const auto unit3 = normalized(Vec3{1e308, 1e308, 0});
+  REQUIRE(unit3.has_value());
+  CHECK_THAT(unit3->x, WithinAbs(1.0 / std::sqrt(2.0), 1e-15));
+  CHECK_THAT(unit3->y, WithinAbs(1.0 / std::sqrt(2.0), 1e-15));
+  CHECK(unit3->z == 0.0);
+  const auto unit2 = normalized(Vec2{-1.5e308, 1.5e308});
+  REQUIRE(unit2.has_value());
+  CHECK_THAT(length(*unit2), WithinAbs(1.0, 1e-15));
+}
+
+TEST_CASE("normalized rejects NaN and infinite components", "[vec]") {
+  const double inf = std::numeric_limits<double>::infinity();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  CHECK_FALSE(normalized(Vec3{nan, 0, 0}).has_value());
+  CHECK_FALSE(normalized(Vec3{inf, 1, 0}).has_value());
+  CHECK_FALSE(normalized(Vec2{0, -inf}).has_value());
 }

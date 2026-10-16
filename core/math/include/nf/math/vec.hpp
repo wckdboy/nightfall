@@ -79,17 +79,31 @@ struct Vec3 {
 }
 
 /// Unit vector in the direction of `a`, or nothing if `a` is shorter than `tol.linear`
-/// (its direction is not meaningful).
+/// (its direction is not meaningful) or has a NaN or infinite component.
 [[nodiscard]] inline std::optional<Vec2> normalized(
     Vec2 a, Tolerance tol = Tolerance::standard()) noexcept {
-  const double len = length(a);
-  if (len <= tol.linear) return std::nullopt;
+  double len = length(a);
+  if (!(len > tol.linear)) return std::nullopt;  // also rejects NaN
+  if (std::isinf(len)) {
+    // The length overflowed: rescale by the largest component, which is exact enough.
+    const double largest = std::fmax(abs(a.x), abs(a.y));
+    if (!std::isfinite(largest)) return std::nullopt;
+    a = a / largest;
+    len = length(a);
+  }
   return a / len;
 }
 [[nodiscard]] inline std::optional<Vec3> normalized(
     Vec3 a, Tolerance tol = Tolerance::standard()) noexcept {
-  const double len = length(a);
-  if (len <= tol.linear) return std::nullopt;
+  double len = length(a);
+  if (!(len > tol.linear)) return std::nullopt;  // also rejects NaN
+  if (std::isinf(len)) {
+    // The length overflowed: rescale by the largest component, which is exact enough.
+    const double largest = std::fmax(std::fmax(abs(a.x), abs(a.y)), abs(a.z));
+    if (!std::isfinite(largest)) return std::nullopt;
+    a = a / largest;
+    len = length(a);
+  }
   return a / len;
 }
 
