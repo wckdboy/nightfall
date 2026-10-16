@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Build the RFC 0001 ABC sample manifest: 200 single-part STEP models from chunk 0000,
+"""Build the RFC 0001 ABC sample manifest: 200 single-solid STEP models from chunk 0000,
 stratified by B-rep face count. Deterministic: rerunning on the same chunk gives the same
 manifest byte for byte.
 
@@ -13,6 +13,7 @@ Standard library only (no PyYAML): the two stats fields used are top-level scala
 import argparse
 import csv
 import hashlib
+import itertools
 import pathlib
 import re
 import sys
@@ -24,6 +25,16 @@ BINS = [(1, 8), (8, 17), (17, 32), (32, 68), (68, 10**9)]
 
 FIELD = re.compile(r"^'#(surfs|parts)': (\d+)$", re.M)
 STAT_NAME = re.compile(r"^(\d{8})_([0-9a-f]+)_stats_\d+\.yml$")
+# '#parts == 1' in the stats does not guarantee one solid: some models are open surface
+# sheets or solids with voids. Check the STEP entities themselves.
+SOLID = re.compile(rb"\bMANIFOLD_SOLID_BREP\s*\(")
+NOT_SINGLE_SOLID = re.compile(rb"\b(BREP_WITH_VOIDS|SHELL_BASED_SURFACE_MODEL)\s*\(")
+
+
+def is_single_solid(step: pathlib.Path) -> bool:
+    """Exactly one manifold solid, no voids, no surface-only geometry."""
+    text = step.read_bytes()
+    return len(SOLID.findall(text)) == 1 and not NOT_SINGLE_SOLID.search(text)
 
 
 def read_stats(stat_dir: pathlib.Path) -> dict[str, int]:
@@ -70,10 +81,12 @@ def main() -> int:
     rows = []
     for index, (low, high) in enumerate(BINS):
         in_bin = sorted((m for m in candidates if low <= faces[m] < high), key=order)
-        if len(in_bin) < PER_BIN:
-            print(f"bin {index} [{low}, {high}) has only {len(in_bin)} models", file=sys.stderr)
+        # Lazy: reads STEP files only until the bin is full.
+        chosen = list(itertools.islice((m for m in in_bin if is_single_solid(steps[m])), PER_BIN))
+        if len(chosen) < PER_BIN:
+            print(f"bin {index} [{low}, {high}) has only {len(chosen)} models", file=sys.stderr)
             return 1
-        for model in in_bin[:PER_BIN]:
+        for model in chosen:
             step = steps[model]
             rows.append([model, step.name, faces[model], index, sha256(step)])
 

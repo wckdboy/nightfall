@@ -8,7 +8,8 @@
 #
 # Usage: tools/bakeoff/abc/fetch-abc.sh [--all]
 #   --all   extract the whole chunk (needed only to regenerate the manifest)
-#   NF_ABC_DIR overrides the download directory. Requires 7zz (brew install sevenzip).
+#   NF_ABC_DIR overrides the download directory. macOS only (md5 -q); requires 7zz
+#   (brew install sevenzip).
 
 set -euo pipefail
 
@@ -31,7 +32,7 @@ fetch() {  # url md5 file
   local url="$1" md5="$2" file="$dir/$3"
   if [[ ! -f "$file" || "$(md5 -q "$file")" != "$md5" ]]; then
     echo "downloading $3"
-    curl -fL --retry 3 -o "$file.part" "$url"
+    curl -fL --retry 3 -C - -o "$file.part" "$url"
     mv "$file.part" "$file"
   fi
   if [[ "$(md5 -q "$file")" != "$md5" ]]; then
@@ -49,7 +50,7 @@ if [[ $all -eq 1 ]]; then
 else
   list="$(mktemp)"
   trap 'rm -f "$list"' EXIT
-  tail -n +2 "$manifest" | cut -d, -f1,2 | tr , / > "$list"
+  tail -n +2 "$manifest" | tr -d '\r' | cut -d, -f1,2 | tr , / > "$list"
   7zz x -y -bso0 -o"$dir/step" "$dir/abc_0000_step_v00.7z" @"$list"
 fi
 
@@ -61,6 +62,6 @@ while IFS=, read -r model file _faces _bin hash; do
   elif [[ "$(shasum -a 256 "$path" | cut -d' ' -f1)" != "$hash" ]]; then
     echo "SHA-256 mismatch: $model/$file" >&2; bad=1
   fi
-done < <(tail -n +2 "$manifest")
+done < <(tail -n +2 "$manifest" | tr -d '\r')
 [[ $bad -eq 0 ]] || exit 1
 echo "$(($(wc -l < "$manifest") - 1)) ABC models verified in $dir/step"
