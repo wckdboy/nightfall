@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// nf_bakeoff --kernel <occt|smlib> [--out <file.json>]
+// nf_bakeoff --kernel <occt|smlib> [--part <name>] [--out <file.json>]
+// nf_bakeoff --list
 // Runs the reference parts on one kernel and writes the JSON report (stdout by default).
 // Exits non-zero only for usage or I/O errors: failed parts are results, not tool failures.
 
@@ -28,7 +29,8 @@ std::unique_ptr<nf::bakeoff::Kernel> make_kernel(std::string_view name) {
 }
 
 int usage() {
-  std::cerr << "usage: nf_bakeoff --kernel <occt|smlib> [--out <file.json>]\n";
+  std::cerr << "usage: nf_bakeoff --kernel <occt|smlib> [--part <name>] [--out <file.json>]\n"
+               "       nf_bakeoff --list\n";
   return 2;
 }
 
@@ -37,13 +39,27 @@ int usage() {
 int main(int argc, char** argv) {
   std::string kernel_name;
   std::string out_path;
+  std::string only_part;
+  auto parts = nf::bakeoff::reference_parts();
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     if (arg == "--kernel" && i + 1 < argc) {
       kernel_name = argv[++i];
     } else if (arg == "--out" && i + 1 < argc) {
       out_path = argv[++i];
+    } else if (arg == "--part" && i + 1 < argc) {
+      only_part = argv[++i];
+    } else if (arg == "--list") {
+      for (const auto& p : parts) std::cout << p.name << ' ' << p.category << '\n';
+      return 0;
     } else {
+      return usage();
+    }
+  }
+  if (!only_part.empty()) {
+    std::erase_if(parts, [&](const auto& p) { return p.name != only_part; });
+    if (parts.empty()) {
+      std::cerr << "unknown part: '" << only_part << "'\n";
       return usage();
     }
   }
@@ -53,7 +69,7 @@ int main(int argc, char** argv) {
     return usage();
   }
 
-  const auto report = nf::bakeoff::run_all(*kernel, nf::bakeoff::reference_parts());
+  const auto report = nf::bakeoff::run_all(*kernel, parts);
   const std::string json = nf::bakeoff::to_json(report);
   if (out_path.empty()) {
     std::cout << json;

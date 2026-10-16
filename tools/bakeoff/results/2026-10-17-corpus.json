@@ -1,0 +1,1402 @@
+{
+ "corpus": "reference parts only (ABC pending RFC 0002, #7)",
+ "date": "2026-10-17",
+ "integration_inputs": {
+  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB; CI times are cold builds on GitHub's macos-26 runner.",
+  "occt": {
+   "builds_from_unmodified_upstream": true,
+   "ci_build_minutes": 31.0,
+   "ci_build_source": "main run 38966858579, step 'Build OCCT': 1861 s (#26)",
+   "shipped_megabytes": 47.2,
+   "shipped_source": "transitive closure of the 18 linked toolkits = 26 dylibs, 45.0 MiB (STEP pulls in TKCAF/TKV3d/TKService etc.)"
+  },
+  "smlib": {
+   "builds_from_unmodified_upstream": true,
+   "ci_build_minutes": 4.7,
+   "ci_build_source": "smlib job on #14: 4m40s including the SM_API suite",
+   "shipped_megabytes": 9.96,
+   "shipped_source": "libSMLib.dylib + libSM_API.dylib (9.5 MiB). STEP import additionally needs OCCT (.brep) and OpenUSD (RFC 0002), not counted here: the metric is per kernel."
+  }
+ },
+ "performance_shared_parts": [
+  "block",
+  "coincident_union",
+  "filleted_edge",
+  "flush_pocket",
+  "l_bracket",
+  "open_box_shell",
+  "rounded_box",
+  "spur_gear",
+  "through_slot",
+  "variable_fillet"
+ ],
+ "repeat": 5,
+ "results": {
+  "occt": {
+   "block": {
+    "category": "primitive",
+    "part": {
+     "area": 2200,
+     "area_ok": true,
+     "build_ms": 4.15325,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "block",
+     "success": true,
+     "valid": true,
+     "volume": 5999.999999999999,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.15325,
+     0.12375,
+     0.168541,
+     0.216459,
+     0.133292
+    ]
+   },
+   "coincident_union": {
+    "category": "boolean",
+    "part": {
+     "area": 1000,
+     "area_ok": true,
+     "build_ms": 3.044584,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 20,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "coincident_union",
+     "success": true,
+     "valid": true,
+     "volume": 1999.9999999999993,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.044584,
+     1.536042,
+     1.433,
+     1.491167,
+     1.509375
+    ]
+   },
+   "counterbore": {
+    "category": "boolean",
+    "part": {
+     "area": 3182.2123739082085,
+     "area_ok": true,
+     "build_ms": 9.575625,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 18,
+     "error": "",
+     "faces": 9,
+     "judged_by": "analytic",
+     "name": "counterbore",
+     "success": true,
+     "valid": true,
+     "volume": 8516.194731347172,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     9.575625,
+     4.342542,
+     4.275541,
+     4.789041,
+     4.260792
+    ]
+   },
+   "filleted_edge": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.5309649148735,
+     "area_ok": true,
+     "build_ms": 8.490209,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "filleted_edge",
+     "success": true,
+     "valid": true,
+     "volume": 5974.2477796076855,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     8.490209,
+     0.920541,
+     0.967042,
+     0.912667,
+     0.912042
+    ]
+   },
+   "flush_pocket": {
+    "category": "boolean",
+    "part": {
+     "area": 1800,
+     "area_ok": true,
+     "build_ms": 1.491792,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "flush_pocket",
+     "success": true,
+     "valid": true,
+     "volume": 3499.9999999999986,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.491792,
+     1.3805,
+     1.368916,
+     1.381125,
+     1.386292
+    ]
+   },
+   "frustum": {
+    "category": "primitive",
+    "part": {
+     "area": 876.8447436748183,
+     "area_ok": true,
+     "build_ms": 0.086833,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "frustum",
+     "success": true,
+     "valid": true,
+     "volume": 1642.0057602762652,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.086833,
+     0.09275,
+     0.086542,
+     0.08775,
+     0.08575
+    ]
+   },
+   "helical_spring": {
+    "category": "sweep",
+    "part": {
+     "area": 1989.183568206797,
+     "area_ok": true,
+     "build_ms": 18.842625,
+     "built": true,
+     "category": "sweep",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "helical_spring",
+     "success": true,
+     "valid": true,
+     "volume": 991.4501925446327,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     18.842625,
+     10.182208,
+     10.226042,
+     9.979333,
+     10.184625
+    ]
+   },
+   "hemisphere": {
+    "category": "boolean",
+    "part": {
+     "area": 235.61944901923454,
+     "area_ok": true,
+     "build_ms": 1.643375,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 2,
+     "judged_by": "analytic",
+     "name": "hemisphere",
+     "success": true,
+     "valid": true,
+     "volume": 261.79938779914943,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.643375,
+     1.604375,
+     1.718292,
+     1.760958,
+     1.655458
+    ]
+   },
+   "hole_grid": {
+    "category": "boolean",
+    "part": {
+     "area": 416.5486677646163,
+     "area_ok": true,
+     "build_ms": 93.83525,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 60,
+     "error": "",
+     "faces": 22,
+     "judged_by": "analytic",
+     "name": "hole_grid",
+     "success": true,
+     "valid": true,
+     "volume": 173.58849917653782,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     93.83525,
+     54.35825,
+     42.397541,
+     44.485125,
+     63.657875
+    ]
+   },
+   "knob": {
+    "category": "boolean",
+    "part": {
+     "area": 1113.7249685898412,
+     "area_ok": true,
+     "build_ms": 4.795292,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 8,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "knob",
+     "success": true,
+     "valid": true,
+     "volume": 2278.701871403796,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.795292,
+     3.871542,
+     3.843084,
+     3.836917,
+     3.858375
+    ]
+   },
+   "l_bracket": {
+    "category": "fillet",
+    "part": {
+     "area": 1937.8362787842316,
+     "area_ok": true,
+     "build_ms": 8.121875,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 36,
+     "error": "",
+     "faces": 16,
+     "judged_by": "analytic",
+     "name": "l_bracket",
+     "success": true,
+     "valid": true,
+     "volume": 2546.216829764999,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     8.121875,
+     6.145333,
+     6.152125,
+     6.619375,
+     6.108583
+    ]
+   },
+   "open_box_shell": {
+    "category": "shell",
+    "part": {
+     "area": 3552,
+     "area_ok": true,
+     "build_ms": 6.439208,
+     "built": true,
+     "category": "shell",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "open_box_shell",
+     "success": true,
+     "valid": true,
+     "volume": 3391.9999999999986,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     6.439208,
+     2.229208,
+     2.250042,
+     2.2125,
+     2.246125
+    ]
+   },
+   "plate_with_hole": {
+    "category": "boolean",
+    "part": {
+     "area": 363.5342917352885,
+     "area_ok": true,
+     "build_ms": 16.3075,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "plate_with_hole",
+     "success": true,
+     "valid": true,
+     "volume": 213.34928119853362,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     16.3075,
+     2.294458,
+     2.207334,
+     2.222666,
+     2.18625
+    ]
+   },
+   "rounded_box": {
+    "category": "fillet",
+    "part": {
+     "area": 4726.265361880023,
+     "area_ok": true,
+     "build_ms": 10.659875,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 56,
+     "error": "",
+     "faces": 26,
+     "judged_by": "analytic",
+     "name": "rounded_box",
+     "success": true,
+     "valid": true,
+     "volume": 23340.8493750551,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     10.659875,
+     6.598666,
+     6.548041,
+     6.171959,
+     4.713209
+    ]
+   },
+   "sphere": {
+    "category": "primitive",
+    "part": {
+     "area": 314.15926535897927,
+     "area_ok": true,
+     "build_ms": 0.876541,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "sphere",
+     "success": true,
+     "valid": true,
+     "volume": 523.598775598299,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.876541,
+     0.089875,
+     0.089417,
+     0.110417,
+     0.118542
+    ]
+   },
+   "spur_gear": {
+    "category": "extrude",
+    "part": {
+     "area": 2122.601996125105,
+     "area_ok": true,
+     "build_ms": 7.09025,
+     "built": true,
+     "category": "extrude",
+     "consensus_reason": "",
+     "edges": 1224,
+     "error": "",
+     "faces": 410,
+     "judged_by": "analytic",
+     "name": "spur_gear",
+     "success": true,
+     "valid": true,
+     "volume": 3459.181370783916,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     7.09025,
+     5.104375,
+     5.034875,
+     5.169083,
+     5.1405
+    ]
+   },
+   "steinmetz": {
+    "category": "boolean",
+    "part": {
+     "area": 399.9999999999236,
+     "area_ok": true,
+     "build_ms": 11.972625,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 7,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "steinmetz",
+     "success": true,
+     "valid": true,
+     "volume": 666.666666666404,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     11.972625,
+     8.666167,
+     9.115416,
+     8.9085,
+     8.774583
+    ]
+   },
+   "through_slot": {
+    "category": "boolean",
+    "part": {
+     "area": 1400,
+     "area_ok": true,
+     "build_ms": 1.861917,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "through_slot",
+     "success": true,
+     "valid": true,
+     "volume": 2499.9999999999995,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.861917,
+     1.836167,
+     1.840708,
+     1.874167,
+     3.037583
+    ]
+   },
+   "torus": {
+    "category": "primitive",
+    "part": {
+     "area": 1184.3525281307225,
+     "area_ok": true,
+     "build_ms": 0.077125,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 2,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "torus",
+     "success": true,
+     "valid": true,
+     "volume": 1776.5287921960849,
+     "volume_ok": true
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.077125,
+     0.078208,
+     0.080208,
+     0.081041,
+     0.07975
+    ]
+   },
+   "variable_fillet": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.121869470596,
+     "area_ok": null,
+     "build_ms": 9.952083,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "variable-radius fillet has no closed-form volume",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "consensus",
+     "name": "variable_fillet",
+     "success": true,
+     "valid": true,
+     "volume": 5971.571200415519,
+     "volume_ok": null
+    },
+    "part_history": "yes",
+    "sanitizer": {
+     "findings": [
+      "<sdk>/c++/v1/__memory/uninitialized_algorithms.h:556:81: runtime error: reference binding to misali",
+      "<sdk>/c++/v1/__vector/vector.h:1153:10: runtime error: reference binding to misaligned address 0x62",
+      "<sdk>/c++/v1/__vector/vector.h:415:12: runtime error: reference binding to misaligned address 0x627",
+      "<sdk>/c++/v1/__vector/vector.h:420:12: runtime error: reference binding to misaligned address 0x627",
+      "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x62700001c154 for type 'IntWalk_Walki",
+      "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x62700001c16c for type 'IntWalk_Walki"
+     ],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     9.952083,
+     5.569416,
+     5.925584,
+     5.470125,
+     5.391875
+    ]
+   }
+  },
+  "smlib": {
+   "block": {
+    "category": "primitive",
+    "part": {
+     "area": 2200,
+     "area_ok": true,
+     "build_ms": 14.688625,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "block",
+     "success": true,
+     "valid": true,
+     "volume": 6000,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     14.688625,
+     0.510833,
+     0.481792,
+     0.466792,
+     0.477791
+    ]
+   },
+   "coincident_union": {
+    "category": "boolean",
+    "part": {
+     "area": 1000,
+     "area_ok": true,
+     "build_ms": 1.491458,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "coincident_union",
+     "success": true,
+     "valid": true,
+     "volume": 2000,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.491458,
+     1.313958,
+     1.293458,
+     1.260334,
+     1.285792
+    ]
+   },
+   "counterbore": {
+    "category": "boolean",
+    "part": {
+     "area": 3182.223146847462,
+     "area_ok": false,
+     "build_ms": 4.66125,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 18,
+     "error": "",
+     "faces": 9,
+     "judged_by": "analytic",
+     "name": "counterbore",
+     "success": false,
+     "valid": true,
+     "volume": 8516.194731534562,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "==2174==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000010058 at pc 0x00011827fc9c bp 0x00016bde9820 sp 0x00016bde9818"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.66125,
+     4.680958,
+     4.695291,
+     4.713917,
+     4.66275
+    ]
+   },
+   "filleted_edge": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.5309772882474,
+     "area_ok": true,
+     "build_ms": 3.7135,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "filleted_edge",
+     "success": true,
+     "valid": true,
+     "volume": 5974.247779605437,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.7135,
+     1.71525,
+     1.748791,
+     1.733833,
+     1.772833
+    ]
+   },
+   "flush_pocket": {
+    "category": "boolean",
+    "part": {
+     "area": 1800,
+     "area_ok": true,
+     "build_ms": 1.072334,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "flush_pocket",
+     "success": true,
+     "valid": true,
+     "volume": 3500,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.072334,
+     1.01675,
+     1.031333,
+     1.085541,
+     1.060291
+    ]
+   },
+   "frustum": {
+    "category": "primitive",
+    "part": {
+     "area": 876.8416124982923,
+     "area_ok": false,
+     "build_ms": 1.306542,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "frustum",
+     "success": false,
+     "valid": true,
+     "volume": 1642.0057669062612,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.306542,
+     1.330083,
+     1.27175,
+     1.31525,
+     1.22775
+    ]
+   },
+   "helical_spring": {
+    "category": "sweep",
+    "part": {
+     "area": 1989.2262043190112,
+     "area_ok": false,
+     "build_ms": 38.851708,
+     "built": true,
+     "category": "sweep",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "helical_spring",
+     "success": false,
+     "valid": true,
+     "volume": 991.4435183486088,
+     "volume_ok": false
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     38.851708,
+     36.324792,
+     36.500833,
+     36.476792,
+     37.316958
+    ]
+   },
+   "hemisphere": {
+    "category": "boolean",
+    "part": {
+     "area": 235.61515826654696,
+     "area_ok": false,
+     "build_ms": 1.842042,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 2,
+     "judged_by": "analytic",
+     "name": "hemisphere",
+     "success": false,
+     "valid": true,
+     "volume": 261.79937179087136,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.842042,
+     1.861459,
+     1.864291,
+     1.838125,
+     1.844041
+    ]
+   },
+   "hole_grid": {
+    "category": "boolean",
+    "part": {
+     "area": 416.5305294949541,
+     "area_ok": false,
+     "build_ms": 35.400792,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 60,
+     "error": "",
+     "faces": 22,
+     "judged_by": "analytic",
+     "name": "hole_grid",
+     "success": false,
+     "valid": true,
+     "volume": 173.5884986962632,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "==2195==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000009ad8 at pc 0x0001149f7c9c bp 0x00016f9118a0 sp 0x00016f911898"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     35.400792,
+     35.079917,
+     35.565542,
+     35.236333,
+     35.09775
+    ]
+   },
+   "knob": {
+    "category": "boolean",
+    "part": {
+     "area": 1113.7855286847955,
+     "area_ok": false,
+     "build_ms": 9.126875,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 8,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "knob",
+     "success": false,
+     "valid": true,
+     "volume": 2278.701839924324,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "==2359==ERROR: AddressSanitizer: heap-use-after-free on address 0x61300001f718 at pc 0x0001144d3c9c bp 0x00016faa5840 sp 0x00016faa5838"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     9.126875,
+     7.725542,
+     7.73825,
+     7.666708,
+     7.795125
+    ]
+   },
+   "l_bracket": {
+    "category": "fillet",
+    "part": {
+     "area": 1937.8369707222246,
+     "area_ok": true,
+     "build_ms": 6.008667,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "l_bracket",
+     "success": true,
+     "valid": true,
+     "volume": 2546.2168179744535,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "==2231==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000018c58 at pc 0x000116da3c9c bp 0x00016cf39680 sp 0x00016cf39678"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     6.008667,
+     4.720292,
+     4.724584,
+     4.652916,
+     4.729208
+    ]
+   },
+   "open_box_shell": {
+    "category": "shell",
+    "part": {
+     "area": 3552,
+     "area_ok": true,
+     "build_ms": 5.36275,
+     "built": true,
+     "category": "shell",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "open_box_shell",
+     "success": true,
+     "valid": true,
+     "volume": 3391.9999999999995,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     5.36275,
+     4.012167,
+     4.090167,
+     4.016291,
+     4.003083
+    ]
+   },
+   "plate_with_hole": {
+    "category": "boolean",
+    "part": {
+     "area": 363.5338556964246,
+     "area_ok": false,
+     "build_ms": 4.618541,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "plate_with_hole",
+     "success": false,
+     "valid": true,
+     "volume": 213.34928117177682,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "==2111==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000009ad8 at pc 0x000118cafc9c bp 0x00016b6718c0 sp 0x00016b6718b8"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.618541,
+     2.725292,
+     2.704875,
+     2.801583,
+     2.795917
+    ]
+   },
+   "rounded_box": {
+    "category": "fillet",
+    "part": {
+     "area": 4726.2696140770995,
+     "area_ok": true,
+     "build_ms": 15.280625,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 48,
+     "error": "",
+     "faces": 26,
+     "judged_by": "analytic",
+     "name": "rounded_box",
+     "success": true,
+     "valid": true,
+     "volume": 23340.849390024436,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     15.280625,
+     14.670542,
+     14.734667,
+     14.30525,
+     14.234875
+    ]
+   },
+   "sphere": {
+    "category": "primitive",
+    "part": {
+     "area": 314.2101128477634,
+     "area_ok": false,
+     "build_ms": 3.47875,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 1,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "sphere",
+     "success": false,
+     "valid": true,
+     "volume": 523.5987778292728,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.47875,
+     0.944166,
+     0.941958,
+     0.959959,
+     0.928
+    ]
+   },
+   "spur_gear": {
+    "category": "extrude",
+    "part": {
+     "area": 2122.601996125105,
+     "area_ok": true,
+     "build_ms": 84.025167,
+     "built": true,
+     "category": "extrude",
+     "consensus_reason": "",
+     "edges": 1224,
+     "error": "",
+     "faces": 410,
+     "judged_by": "analytic",
+     "name": "spur_gear",
+     "success": true,
+     "valid": true,
+     "volume": 3459.1813707839137,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     84.025167,
+     79.453792,
+     79.356542,
+     78.620541,
+     80.466458
+    ]
+   },
+   "steinmetz": {
+    "category": "boolean",
+    "part": {
+     "area": 399.9995668149887,
+     "area_ok": false,
+     "build_ms": 8.543583,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 7,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "steinmetz",
+     "success": false,
+     "valid": true,
+     "volume": 666.6666271330839,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     8.543583,
+     8.465708,
+     8.448042,
+     8.420666,
+     8.516167
+    ]
+   },
+   "through_slot": {
+    "category": "boolean",
+    "part": {
+     "area": 1400,
+     "area_ok": true,
+     "build_ms": 2.152834,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "through_slot",
+     "success": true,
+     "valid": true,
+     "volume": 2500,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     2.152834,
+     1.300833,
+     1.283959,
+     1.331084,
+     1.289875
+    ]
+   },
+   "torus": {
+    "category": "primitive",
+    "part": {
+     "area": 1184.6101682997503,
+     "area_ok": false,
+     "build_ms": 1.861416,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 2,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "torus",
+     "success": false,
+     "valid": true,
+     "volume": 1776.52880538324,
+     "volume_ok": true
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.861416,
+     1.491375,
+     1.509416,
+     1.504291,
+     1.505875
+    ]
+   },
+   "variable_fillet": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.1210102750065,
+     "area_ok": null,
+     "build_ms": 6.089083,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "variable-radius fillet has no closed-form volume",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "consensus",
+     "name": "variable_fillet",
+     "success": true,
+     "valid": true,
+     "volume": 5972.099479232127,
+     "volume_ok": null
+    },
+    "part_history": "no",
+    "sanitizer": {
+     "findings": [
+      "third_party/src/usd-brep/source/SMLib/src/NL_Math.cpp:4145:17: runtime error: load of value 1828342240, which is not a valid value for type 'NL_MATRIXTYPE' (aka 'matr"
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     6.089083,
+     4.665375,
+     4.509958,
+     4.515375,
+     4.558416
+    ]
+   }
+  }
+ },
+ "sanitizer_pass": true,
+ "scores": {
+  "occt": {
+   "_median_ms": 2.054021,
+   "correctness": 100.0,
+   "fillet_quality": 100.0,
+   "integration_cost": 70,
+   "operation_history": 100.0,
+   "operation_success": 100.0,
+   "performance": 100.0,
+   "weighted": 97.0
+  },
+  "smlib": {
+   "_median_ms": 2.882541,
+   "correctness": 71.05263157894737,
+   "fillet_quality": 100.0,
+   "integration_cost": 100,
+   "operation_history": 0.0,
+   "operation_success": 100.0,
+   "performance": 71.25730388570364,
+   "weighted": 71.33625670435984
+  }
+ }
+}
