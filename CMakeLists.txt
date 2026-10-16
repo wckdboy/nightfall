@@ -54,3 +54,5 @@ endif()
 if(NF_WITH_OCCT)
   add_subdirectory(third_party/occt)
 endif()
+
+add_subdirectory(tools/bakeoff)
