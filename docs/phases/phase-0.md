@@ -60,4 +60,5 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   nightly green (#10), layering check (#11).
 - 2026-10-17 — XPC + Metal spike done (#8, #9); RFC 0003 (process architecture, #35) and RFC
   0002 (OpenUSD, #33; 197/200 ABC models translate into SMLib) in review until 2026-10-22.
-  Corpus bake-off with both kernels instrumented (#36): OCCT 97.0, SMLib 71.3 (corpus only).
+  Corpus bake-off with both kernels instrumented (#36): OCCT 87.0, SMLib 69.1 (corpus only;
+  history measured, warm in-process timing).

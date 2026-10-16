@@ -94,7 +94,7 @@ TEST_CASE("JSON report escapes strings and writes null for missing values", "[ru
   CHECK(json.find(R"("error":"tab\there")") != std::string::npos);
   CHECK(json.find(R"("volume":null)") != std::string::npos);
   CHECK(json.find(R"("volume_ok":null)") != std::string::npos);
-  CHECK(json.find(R"("history_support_declared":"partial")") != std::string::npos);
+  CHECK(json.find(R"("history_support":"partial")") != std::string::npos);
 }
 
 TEST_CASE("reference parts have unique names and analytic expectations", "[parts]") {

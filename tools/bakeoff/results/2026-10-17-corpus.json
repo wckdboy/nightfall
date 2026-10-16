@@ -1,8 +1,13 @@
 {
  "corpus": "reference parts only (ABC pending RFC 0002, #7)",
+ "correctness_excludes": "consensus parts (two kernels cannot settle which is right)",
  "date": "2026-10-17",
+ "history_support": {
+  "occt": "partial",
+  "smlib": "no"
+ },
  "integration_inputs": {
-  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB; CI times are cold builds on GitHub's macos-26 runner.",
+  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB. CI minutes are COLD builds on GitHub's macos-26 runner (the RFC's '\u2264 15 min CI build' is read as the uncached build: a cache can always be lost; cached runs are ~1 min for both).",
   "occt": {
    "builds_from_unmodified_upstream": true,
    "ci_build_minutes": 31.0,
@@ -21,13 +26,23 @@
  "performance_shared_parts": [
   "block",
   "coincident_union",
+  "counterbore",
   "filleted_edge",
   "flush_pocket",
+  "frustum",
+  "helical_spring",
+  "hemisphere",
+  "hole_grid",
+  "knob",
   "l_bracket",
   "open_box_shell",
+  "plate_with_hole",
   "rounded_box",
+  "sphere",
   "spur_gear",
+  "steinmetz",
   "through_slot",
+  "torus",
   "variable_fillet"
  ],
  "repeat": 5,
@@ -38,7 +53,7 @@
     "part": {
      "area": 2200,
      "area_ok": true,
-     "build_ms": 4.15325,
+     "build_ms": 0.013959,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -52,18 +67,18 @@
      "volume": 5999.999999999999,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     4.15325,
-     0.12375,
-     0.168541,
-     0.216459,
-     0.133292
+     0.013959,
+     0.014042
     ]
    },
    "coincident_union": {
@@ -71,7 +86,7 @@
     "part": {
      "area": 1000,
      "area_ok": true,
-     "build_ms": 3.044584,
+     "build_ms": 0.751125,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -85,18 +100,18 @@
      "volume": 1999.9999999999993,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     3.044584,
-     1.536042,
-     1.433,
-     1.491167,
-     1.509375
+     0.751125,
+     0.730875
     ]
    },
    "counterbore": {
@@ -104,7 +119,7 @@
     "part": {
      "area": 3182.2123739082085,
      "area_ok": true,
-     "build_ms": 9.575625,
+     "build_ms": 2.98925,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -118,18 +133,18 @@
      "volume": 8516.194731347172,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     9.575625,
-     4.342542,
-     4.275541,
-     4.789041,
-     4.260792
+     2.98925,
+     3.137542
     ]
    },
    "filleted_edge": {
@@ -137,7 +152,7 @@
     "part": {
      "area": 2172.5309649148735,
      "area_ok": true,
-     "build_ms": 8.490209,
+     "build_ms": 0.391167,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -151,18 +166,18 @@
      "volume": 5974.2477796076855,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     8.490209,
-     0.920541,
-     0.967042,
-     0.912667,
-     0.912042
+     0.391167,
+     0.390084
     ]
    },
    "flush_pocket": {
@@ -170,7 +185,7 @@
     "part": {
      "area": 1800,
      "area_ok": true,
-     "build_ms": 1.491792,
+     "build_ms": 0.710416,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -184,18 +199,18 @@
      "volume": 3499.9999999999986,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.491792,
-     1.3805,
-     1.368916,
-     1.381125,
-     1.386292
+     0.710416,
+     0.646292
     ]
    },
    "frustum": {
@@ -203,7 +218,7 @@
     "part": {
      "area": 876.8447436748183,
      "area_ok": true,
-     "build_ms": 0.086833,
+     "build_ms": 0.006583,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -217,18 +232,18 @@
      "volume": 1642.0057602762652,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     0.086833,
-     0.09275,
-     0.086542,
-     0.08775,
-     0.08575
+     0.006583,
+     0.006458
     ]
    },
    "helical_spring": {
@@ -236,7 +251,7 @@
     "part": {
      "area": 1989.183568206797,
      "area_ok": true,
-     "build_ms": 18.842625,
+     "build_ms": 9.568459,
      "built": true,
      "category": "sweep",
      "consensus_reason": "",
@@ -250,18 +265,18 @@
      "volume": 991.4501925446327,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     18.842625,
-     10.182208,
-     10.226042,
-     9.979333,
-     10.184625
+     9.568459,
+     9.48675
     ]
    },
    "hemisphere": {
@@ -269,7 +284,7 @@
     "part": {
      "area": 235.61944901923454,
      "area_ok": true,
-     "build_ms": 1.643375,
+     "build_ms": 0.84675,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -283,18 +298,18 @@
      "volume": 261.79938779914943,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.643375,
-     1.604375,
-     1.718292,
-     1.760958,
-     1.655458
+     0.84675,
+     0.862709
     ]
    },
    "hole_grid": {
@@ -302,7 +317,7 @@
     "part": {
      "area": 416.5486677646163,
      "area_ok": true,
-     "build_ms": 93.83525,
+     "build_ms": 32.667542,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -316,18 +331,18 @@
      "volume": 173.58849917653782,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     93.83525,
-     54.35825,
-     42.397541,
-     44.485125,
-     63.657875
+     32.667542,
+     30.289292
     ]
    },
    "knob": {
@@ -335,7 +350,7 @@
     "part": {
      "area": 1113.7249685898412,
      "area_ok": true,
-     "build_ms": 4.795292,
+     "build_ms": 2.801167,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -349,18 +364,18 @@
      "volume": 2278.701871403796,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     4.795292,
-     3.871542,
-     3.843084,
-     3.836917,
-     3.858375
+     2.801167,
+     2.860375
     ]
    },
    "l_bracket": {
@@ -368,7 +383,7 @@
     "part": {
      "area": 1937.8362787842316,
      "area_ok": true,
-     "build_ms": 8.121875,
+     "build_ms": 4.365,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -382,18 +397,18 @@
      "volume": 2546.216829764999,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     8.121875,
-     6.145333,
-     6.152125,
-     6.619375,
-     6.108583
+     4.365,
+     4.978625
     ]
    },
    "open_box_shell": {
@@ -401,7 +416,7 @@
     "part": {
      "area": 3552,
      "area_ok": true,
-     "build_ms": 6.439208,
+     "build_ms": 1.347292,
      "built": true,
      "category": "shell",
      "consensus_reason": "",
@@ -415,18 +430,18 @@
      "volume": 3391.9999999999986,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     6.439208,
-     2.229208,
-     2.250042,
-     2.2125,
-     2.246125
+     1.347292,
+     1.328125
     ]
    },
    "plate_with_hole": {
@@ -434,7 +449,7 @@
     "part": {
      "area": 363.5342917352885,
      "area_ok": true,
-     "build_ms": 16.3075,
+     "build_ms": 1.303167,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -448,18 +463,18 @@
      "volume": 213.34928119853362,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     16.3075,
-     2.294458,
-     2.207334,
-     2.222666,
-     2.18625
+     1.303167,
+     1.308583
     ]
    },
    "rounded_box": {
@@ -467,7 +482,7 @@
     "part": {
      "area": 4726.265361880023,
      "area_ok": true,
-     "build_ms": 10.659875,
+     "build_ms": 2.703084,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -481,18 +496,18 @@
      "volume": 23340.8493750551,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     10.659875,
-     6.598666,
-     6.548041,
-     6.171959,
-     4.713209
+     2.703084,
+     2.69825
     ]
    },
    "sphere": {
@@ -500,7 +515,7 @@
     "part": {
      "area": 314.15926535897927,
      "area_ok": true,
-     "build_ms": 0.876541,
+     "build_ms": 0.003583,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -514,18 +529,18 @@
      "volume": 523.598775598299,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     0.876541,
-     0.089875,
-     0.089417,
-     0.110417,
-     0.118542
+     0.003583,
+     0.003625
     ]
    },
    "spur_gear": {
@@ -533,7 +548,7 @@
     "part": {
      "area": 2122.601996125105,
      "area_ok": true,
-     "build_ms": 7.09025,
+     "build_ms": 4.487791,
      "built": true,
      "category": "extrude",
      "consensus_reason": "",
@@ -547,18 +562,18 @@
      "volume": 3459.181370783916,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     7.09025,
-     5.104375,
-     5.034875,
-     5.169083,
-     5.1405
+     4.487791,
+     4.443875
     ]
    },
    "steinmetz": {
@@ -566,7 +581,7 @@
     "part": {
      "area": 399.9999999999236,
      "area_ok": true,
-     "build_ms": 11.972625,
+     "build_ms": 8.228291,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -580,18 +595,18 @@
      "volume": 666.666666666404,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     11.972625,
-     8.666167,
-     9.115416,
-     8.9085,
-     8.774583
+     8.228291,
+     8.177584
     ]
    },
    "through_slot": {
@@ -599,7 +614,7 @@
     "part": {
      "area": 1400,
      "area_ok": true,
-     "build_ms": 1.861917,
+     "build_ms": 1.019708,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -613,18 +628,18 @@
      "volume": 2499.9999999999995,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.861917,
-     1.836167,
-     1.840708,
-     1.874167,
-     3.037583
+     1.019708,
+     1.088
     ]
    },
    "torus": {
@@ -632,7 +647,7 @@
     "part": {
      "area": 1184.3525281307225,
      "area_ok": true,
-     "build_ms": 0.077125,
+     "build_ms": 0.003084,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -646,18 +661,18 @@
      "volume": 1776.5287921960849,
      "volume_ok": true
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     0.077125,
-     0.078208,
-     0.080208,
-     0.081041,
-     0.07975
+     0.003084,
+     0.003625
     ]
    },
    "variable_fillet": {
@@ -665,7 +680,7 @@
     "part": {
      "area": 2172.121869470596,
      "area_ok": null,
-     "build_ms": 9.952083,
+     "build_ms": 3.973959,
      "built": true,
      "category": "fillet",
      "consensus_reason": "variable-radius fillet has no closed-form volume",
@@ -679,25 +694,44 @@
      "volume": 5971.571200415519,
      "volume_ok": null
     },
-    "part_history": "yes",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "<sdk>/c++/v1/__memory/uninitialized_algorithms.h:556:81: runtime error: reference binding to misali",
-      "<sdk>/c++/v1/__vector/vector.h:1153:10: runtime error: reference binding to misaligned address 0x62",
-      "<sdk>/c++/v1/__vector/vector.h:415:12: runtime error: reference binding to misaligned address 0x627",
-      "<sdk>/c++/v1/__vector/vector.h:420:12: runtime error: reference binding to misaligned address 0x627",
-      "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x62700001c154 for type 'IntWalk_Walki",
-      "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x62700001c16c for type 'IntWalk_Walki"
+      {
+       "frame": "#0 0x?  (libTKGeomAlgo.7.9.3.dylib:arm64+0x?)",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__memory/uninitialized_algorithms.h:556:81: runtime error: reference binding to misaligned address 0x? for type 'IntWalk_WalkingData', which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::Perform(NCollection_Sequence<IntSurf_PathPoint> const&, NCollection_Sequence<IntSurf_InteriorPoint> const&, IntPatch_TheSurfFunction&, opencascade::handle<Adaptor3d_Surface> const&, bool)+",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:1153:10: runtime error: reference binding to misaligned address 0x? for type 'value_type' (aka 'IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::ComputeOpenLine(NCollection_Sequence<double> const&, NCollection_Sequence<double> const&, NCollection_Sequence<IntSurf_PathPoint> const&, IntPatch_TheSurfFunction&, bool&)+0x? (libTKGeomAl",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:415:12: runtime error: reference binding to misaligned address 0x? for type 'value_type' (aka 'IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::ComputeOpenLine(NCollection_Sequence<double> const&, NCollection_Sequence<double> const&, NCollection_Sequence<IntSurf_PathPoint> const&, IntPatch_TheSurfFunction&, bool&)+0x? (libTKGeomAl",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:420:12: runtime error: reference binding to misaligned address 0x? for type 'const value_type' (aka 'const IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x?  (libTKGeomAlgo.7.9.3.dylib:arm64+0x?)",
+       "kind": "ubsan",
+       "report": "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x? for type 'IntWalk_WalkingData', which requires 8 byte alignment"
+      }
      ],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     9.952083,
-     5.569416,
-     5.925584,
-     5.470125,
-     5.391875
+     3.973959,
+     3.973709
     ]
    }
   },
@@ -707,7 +741,7 @@
     "part": {
      "area": 2200,
      "area_ok": true,
-     "build_ms": 14.688625,
+     "build_ms": 0.162333,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -721,18 +755,18 @@
      "volume": 6000,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     14.688625,
-     0.510833,
-     0.481792,
-     0.466792,
-     0.477791
+     0.162333,
+     0.171083
     ]
    },
    "coincident_union": {
@@ -740,7 +774,7 @@
     "part": {
      "area": 1000,
      "area_ok": true,
-     "build_ms": 1.491458,
+     "build_ms": 0.790166,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -754,18 +788,18 @@
      "volume": 2000,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.491458,
-     1.313958,
-     1.293458,
-     1.260334,
-     1.285792
+     0.790166,
+     0.772875
     ]
    },
    "counterbore": {
@@ -773,7 +807,7 @@
     "part": {
      "area": 3182.223146847462,
      "area_ok": false,
-     "build_ms": 4.66125,
+     "build_ms": 4.170042,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -787,20 +821,24 @@
      "volume": 8516.194731534562,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "==2174==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000010058 at pc 0x00011827fc9c bp 0x00016bde9820 sp 0x00016bde9818"
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     4.66125,
-     4.680958,
-     4.695291,
-     4.713917,
-     4.66275
+     4.170042,
+     4.14025
     ]
    },
    "filleted_edge": {
@@ -808,7 +846,7 @@
     "part": {
      "area": 2172.5309772882474,
      "area_ok": true,
-     "build_ms": 3.7135,
+     "build_ms": 1.109084,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -822,18 +860,18 @@
      "volume": 5974.247779605437,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     3.7135,
-     1.71525,
-     1.748791,
-     1.733833,
-     1.772833
+     1.109084,
+     1.112125
     ]
    },
    "flush_pocket": {
@@ -841,7 +879,7 @@
     "part": {
      "area": 1800,
      "area_ok": true,
-     "build_ms": 1.072334,
+     "build_ms": 0.594083,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -855,18 +893,18 @@
      "volume": 3500,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.072334,
-     1.01675,
-     1.031333,
-     1.085541,
-     1.060291
+     0.594083,
+     0.588042
     ]
    },
    "frustum": {
@@ -874,7 +912,7 @@
     "part": {
      "area": 876.8416124982923,
      "area_ok": false,
-     "build_ms": 1.306542,
+     "build_ms": 0.857292,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -888,18 +926,18 @@
      "volume": 1642.0057669062612,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.306542,
-     1.330083,
-     1.27175,
-     1.31525,
-     1.22775
+     0.857292,
+     0.834542
     ]
    },
    "helical_spring": {
@@ -907,7 +945,7 @@
     "part": {
      "area": 1989.2262043190112,
      "area_ok": false,
-     "build_ms": 38.851708,
+     "build_ms": 35.553042,
      "built": true,
      "category": "sweep",
      "consensus_reason": "",
@@ -921,18 +959,18 @@
      "volume": 991.4435183486088,
      "volume_ok": false
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     38.851708,
-     36.324792,
-     36.500833,
-     36.476792,
-     37.316958
+     35.553042,
+     35.307167
     ]
    },
    "hemisphere": {
@@ -940,7 +978,7 @@
     "part": {
      "area": 235.61515826654696,
      "area_ok": false,
-     "build_ms": 1.842042,
+     "build_ms": 1.374291,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -954,18 +992,18 @@
      "volume": 261.79937179087136,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.842042,
-     1.861459,
-     1.864291,
-     1.838125,
-     1.844041
+     1.374291,
+     1.381625
     ]
    },
    "hole_grid": {
@@ -973,7 +1011,7 @@
     "part": {
      "area": 416.5305294949541,
      "area_ok": false,
-     "build_ms": 35.400792,
+     "build_ms": 33.97225,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -987,20 +1025,24 @@
      "volume": 173.5884986962632,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "==2195==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000009ad8 at pc 0x0001149f7c9c bp 0x00016f9118a0 sp 0x00016f911898"
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     35.400792,
-     35.079917,
-     35.565542,
-     35.236333,
-     35.09775
+     33.97225,
+     33.756458
     ]
    },
    "knob": {
@@ -1008,7 +1050,7 @@
     "part": {
      "area": 1113.7855286847955,
      "area_ok": false,
-     "build_ms": 9.126875,
+     "build_ms": 7.055458,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -1022,20 +1064,24 @@
      "volume": 2278.701839924324,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "==2359==ERROR: AddressSanitizer: heap-use-after-free on address 0x61300001f718 at pc 0x0001144d3c9c bp 0x00016faa5840 sp 0x00016faa5838"
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     9.126875,
-     7.725542,
-     7.73825,
-     7.666708,
-     7.795125
+     7.055458,
+     7.029209
     ]
    },
    "l_bracket": {
@@ -1043,7 +1089,7 @@
     "part": {
      "area": 1937.8369707222246,
      "area_ok": true,
-     "build_ms": 6.008667,
+     "build_ms": 4.070917,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -1057,20 +1103,24 @@
      "volume": 2546.2168179744535,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "==2231==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000018c58 at pc 0x000116da3c9c bp 0x00016cf39680 sp 0x00016cf39678"
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     6.008667,
-     4.720292,
-     4.724584,
-     4.652916,
-     4.729208
+     4.070917,
+     4.044667
     ]
    },
    "open_box_shell": {
@@ -1078,7 +1128,7 @@
     "part": {
      "area": 3552,
      "area_ok": true,
-     "build_ms": 5.36275,
+     "build_ms": 3.389542,
      "built": true,
      "category": "shell",
      "consensus_reason": "",
@@ -1092,18 +1142,18 @@
      "volume": 3391.9999999999995,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     5.36275,
-     4.012167,
-     4.090167,
-     4.016291,
-     4.003083
+     3.389542,
+     3.364417
     ]
    },
    "plate_with_hole": {
@@ -1111,7 +1161,7 @@
     "part": {
      "area": 363.5338556964246,
      "area_ok": false,
-     "build_ms": 4.618541,
+     "build_ms": 2.056667,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -1125,20 +1175,24 @@
      "volume": 213.34928117177682,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "==2111==ERROR: AddressSanitizer: heap-use-after-free on address 0x613000009ad8 at pc 0x000118cafc9c bp 0x00016b6718c0 sp 0x00016b6718b8"
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     4.618541,
-     2.725292,
-     2.704875,
-     2.801583,
-     2.795917
+     2.056667,
+     2.058875
     ]
    },
    "rounded_box": {
@@ -1146,7 +1200,7 @@
     "part": {
      "area": 4726.2696140770995,
      "area_ok": true,
-     "build_ms": 15.280625,
+     "build_ms": 14.115792,
      "built": true,
      "category": "fillet",
      "consensus_reason": "",
@@ -1160,18 +1214,18 @@
      "volume": 23340.849390024436,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     15.280625,
-     14.670542,
-     14.734667,
-     14.30525,
-     14.234875
+     14.115792,
+     14.004667
     ]
    },
    "sphere": {
@@ -1179,7 +1233,7 @@
     "part": {
      "area": 314.2101128477634,
      "area_ok": false,
-     "build_ms": 3.47875,
+     "build_ms": 0.605875,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -1193,18 +1247,18 @@
      "volume": 523.5987778292728,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     3.47875,
-     0.944166,
-     0.941958,
-     0.959959,
-     0.928
+     0.605875,
+     0.697959
     ]
    },
    "spur_gear": {
@@ -1212,7 +1266,7 @@
     "part": {
      "area": 2122.601996125105,
      "area_ok": true,
-     "build_ms": 84.025167,
+     "build_ms": 180.771375,
      "built": true,
      "category": "extrude",
      "consensus_reason": "",
@@ -1226,18 +1280,18 @@
      "volume": 3459.1813707839137,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     84.025167,
-     79.453792,
-     79.356542,
-     78.620541,
-     80.466458
+     180.771375,
+     132.915792
     ]
    },
    "steinmetz": {
@@ -1245,7 +1299,7 @@
     "part": {
      "area": 399.9995668149887,
      "area_ok": false,
-     "build_ms": 8.543583,
+     "build_ms": 7.837375,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -1259,18 +1313,18 @@
      "volume": 666.6666271330839,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     8.543583,
-     8.465708,
-     8.448042,
-     8.420666,
-     8.516167
+     7.837375,
+     7.874958
     ]
    },
    "through_slot": {
@@ -1278,7 +1332,7 @@
     "part": {
      "area": 1400,
      "area_ok": true,
-     "build_ms": 2.152834,
+     "build_ms": 0.823541,
      "built": true,
      "category": "boolean",
      "consensus_reason": "",
@@ -1292,18 +1346,18 @@
      "volume": 2500,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     2.152834,
-     1.300833,
-     1.283959,
-     1.331084,
-     1.289875
+     0.823541,
+     0.788083
     ]
    },
    "torus": {
@@ -1311,7 +1365,7 @@
     "part": {
      "area": 1184.6101682997503,
      "area_ok": false,
-     "build_ms": 1.861416,
+     "build_ms": 1.254584,
      "built": true,
      "category": "primitive",
      "consensus_reason": "",
@@ -1325,18 +1379,18 @@
      "volume": 1776.52880538324,
      "volume_ok": true
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [],
      "status": "ok"
     },
     "status": "ok",
     "timings_ms": [
-     1.861416,
-     1.491375,
-     1.509416,
-     1.504291,
-     1.505875
+     1.254584,
+     1.343208
     ]
    },
    "variable_fillet": {
@@ -1344,7 +1398,7 @@
     "part": {
      "area": 2172.1210102750065,
      "area_ok": null,
-     "build_ms": 6.089083,
+     "build_ms": 3.809458,
      "built": true,
      "category": "fillet",
      "consensus_reason": "variable-radius fillet has no closed-form volume",
@@ -1358,20 +1412,24 @@
      "volume": 5972.099479232127,
      "volume_ok": null
     },
-    "part_history": "no",
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
     "sanitizer": {
      "findings": [
-      "third_party/src/usd-brep/source/SMLib/src/NL_Math.cpp:4145:17: runtime error: load of value 1828342240, which is not a valid value for type 'NL_MATRIXTYPE' (aka 'matr"
+      {
+       "frame": "#0 0x? in N_GetRealMatrixData NL_Math.cpp:4145",
+       "kind": "ubsan",
+       "report": "third_party/src/usd-brep/source/SMLib/src/NL_Math.cpp:4145:17: runtime error: load of value 1866565280, which is not a valid value for type 'NL_MATRIXTYPE' (aka 'matrixtype')"
+      }
      ],
      "status": "signal 6"
     },
     "status": "ok",
     "timings_ms": [
-     6.089083,
-     4.665375,
-     4.509958,
-     4.515375,
-     4.558416
+     3.809458,
+     3.830709
     ]
    }
   }
@@ -1379,24 +1437,31 @@
  "sanitizer_pass": true,
  "scores": {
   "occt": {
-   "_median_ms": 2.054021,
    "correctness": 100.0,
    "fillet_quality": 100.0,
+   "geomean_time_ratio_vs_fastest": 1.031984194058033,
    "integration_cost": 70,
-   "operation_history": 100.0,
+   "median_ms_shared": 1.32179175,
+   "memory_errors_per_1000_operations": 0.0,
+   "operation_history": 50.0,
    "operation_success": 100.0,
-   "performance": 100.0,
-   "weighted": 97.0
+   "performance": 100.00000000000001,
+   "ub_reports_per_1000_operations": 50.0,
+   "weighted": 87.0
   },
   "smlib": {
-   "_median_ms": 2.882541,
    "correctness": 71.05263157894737,
    "fillet_quality": 100.0,
+   "geomean_time_ratio_vs_fastest": 4.320461998276831,
    "integration_cost": 100,
+   "median_ms_shared": 2.71737525,
+   "memory_errors_per_1000_operations": 250.0,
    "operation_history": 0.0,
    "operation_success": 100.0,
-   "performance": 71.25730388570364,
-   "weighted": 71.33625670435984
+   "performance": 48.64222377825809,
+   "ub_reports_per_1000_operations": 50.0,
+   "weighted": 69.07474869361528
   }
- }
+ },
+ "unit": "one reference part = one operation script"
 }

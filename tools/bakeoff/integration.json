@@ -1,5 +1,5 @@
 {
-  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB; CI times are cold builds on GitHub's macos-26 runner.",
+  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB. CI minutes are COLD builds on GitHub's macos-26 runner (the RFC's '\u2264 15 min CI build' is read as the uncached build: a cache can always be lost; cached runs are ~1 min for both).",
   "occt": {
     "builds_from_unmodified_upstream": true,
     "ci_build_minutes": 31.0,
