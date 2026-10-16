@@ -76,7 +76,8 @@ with a different Section 6 (trademarks), stating that the licence grants no perm
 use the licensor's trade names or marks. All other terms match Apache-2.0. Bundled
 components are MIT/BSD/zlib-style; oneTBB is Apache-2.0.
 
-This RFC adds **TOST-1.0** to the allowed list in WORKFLOW.md §8. It is permissive and
+This RFC adds **TOST-1.0** to the allowed list in WORKFLOW.md §8 (the change is part of
+this PR, so accepting the RFC enacts it). It is permissive and
 compatible with distributing Nightfall under Apache-2.0. The only obligation it adds is
 not using Pixar's or the "OpenUSD" marks beyond attribution.
 

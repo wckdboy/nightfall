@@ -112,7 +112,8 @@ A change is done when all of these hold:
 
 ## 8. Dependencies
 
-- **Allowed:** Apache-2.0, MIT, BSD-2/3, ISC, Zlib, BSL-1.0, Unicode, CC0, CC-BY (data/docs).
+- **Allowed:** Apache-2.0, MIT, BSD-2/3, ISC, Zlib, BSL-1.0, Unicode, CC0, CC-BY (data/docs),
+  TOST-1.0 (Apache-2.0 with a stricter trademark section; OpenUSD, RFC 0002).
 - **Allowed with an RFC:** LGPL, only when dynamically linked and optional (OCCT, planegcs).
 - **Not allowed:** GPL, AGPL, SSPL, BUSL, "non-commercial" licenses, unlicensed code.
 - Every dependency is pinned to an exact version or commit, fetched reproducibly, and
