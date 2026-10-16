@@ -26,3 +26,12 @@ TEST_CASE("OCCT reports G2 blends as unsupported instead of substituting", "[occ
   CHECK_THROWS_AS(kernel->fillet(block, {{-1, -1, -1}, {0.1, 0.1, 11}}, 1.0, FilletKind::kG2Blend),
                   KernelError);
 }
+
+TEST_CASE("OCCT validity requires exactly one closed solid", "[occt]") {
+  const auto kernel = make_occt_kernel();
+  const Body a = kernel->box({0, 0, 0}, {10, 10, 10});
+  const Body b = kernel->box({20, 0, 0}, {10, 10, 10});  // disjoint: union is two solids
+  const Measures two = kernel->measure(kernel->boolean(BooleanOp::kUnion, a, b));
+  CHECK_FALSE(two.valid);
+  CHECK(kernel->measure(a).valid);
+}

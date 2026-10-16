@@ -3,7 +3,7 @@
 //
 // nf_bakeoff --kernel <name> [--out <file.json>]
 // Runs the reference parts on one kernel and writes the JSON report (stdout by default).
-// Exits non-zero only for usage errors: failed parts are results, not tool failures.
+// Exits non-zero only for usage or I/O errors: failed parts are results, not tool failures.
 
 #include <cstdio>
 #include <fstream>
@@ -55,7 +55,12 @@ int main(int argc, char** argv) {
   if (out_path.empty()) {
     std::cout << json;
   } else {
-    std::ofstream(out_path) << json;
+    std::ofstream file(out_path);
+    file << json;
+    if (!file.flush()) {
+      std::cerr << "cannot write " << out_path << "\n";
+      return 1;
+    }
   }
 
   int passed = 0;

@@ -15,6 +15,7 @@
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
@@ -136,7 +137,7 @@ class OcctKernel final : public Kernel {
     const TopoDS_Shape& shape = get(body);
     Measures m;
     try {
-      m.valid = BRepCheck_Analyzer(shape).IsValid() && has_solid(shape);
+      m.valid = BRepCheck_Analyzer(shape).IsValid() && is_single_closed_solid(shape);
       GProp_GProps volume_props, area_props;
       BRepGProp::VolumeProperties(shape, volume_props, kMassAccuracy, /*OnlyClosed=*/true);
       BRepGProp::SurfaceProperties(shape, area_props, kMassAccuracy);
@@ -175,10 +176,24 @@ class OcctKernel final : public Kernel {
     return bodies_[static_cast<std::size_t>(body.id)];
   }
 
-  static bool has_solid(const TopoDS_Shape& shape) {
+  // Exactly one solid, every shell of it closed, and no shells or faces outside it (a
+  // compound of several solids or a solid with stray faces is not a valid part).
+  static bool is_single_closed_solid(const TopoDS_Shape& shape) {
     TopTools_IndexedMapOfShape solids;
     TopExp::MapShapes(shape, TopAbs_SOLID, solids);
-    return solids.Extent() > 0;
+    if (solids.Extent() != 1) return false;
+    const TopoDS_Shape& solid = solids(1);
+    TopTools_IndexedMapOfShape shells_all, shells_solid, faces_all, faces_solid;
+    TopExp::MapShapes(shape, TopAbs_SHELL, shells_all);
+    TopExp::MapShapes(solid, TopAbs_SHELL, shells_solid);
+    TopExp::MapShapes(shape, TopAbs_FACE, faces_all);
+    TopExp::MapShapes(solid, TopAbs_FACE, faces_solid);
+    if (shells_all.Extent() != shells_solid.Extent()) return false;
+    if (faces_all.Extent() != faces_solid.Extent()) return false;
+    for (int i = 1; i <= shells_solid.Extent(); ++i) {
+      if (!BRep_Tool::IsClosed(shells_solid(i))) return false;
+    }
+    return true;
   }
 
   std::vector<TopoDS_Shape> bodies_;
