@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Required check on every PR: runs the same tools/check.sh developers run locally.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: build-and-test (macOS arm64)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+
+      - name: Install tools
+        run: |
+          brew install ninja
+          # clang-format is pinned (.clang-format-version): format output changes between versions.
+          python3 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --quiet "clang-format==$(cat .clang-format-version)"
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          cmake --version | head -1
+          clang-format --version
+
+      - name: tools/check.sh
+        run: tools/check.sh --preset dev
