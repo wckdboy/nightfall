@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -76,9 +75,5 @@ class Kernel {
   /// Mass properties at a relative accuracy of 1e-9 or better.
   virtual Measures measure(Body body) = 0;
 };
-
-#if NF_BAKEOFF_WITH_OCCT
-[[nodiscard]] std::unique_ptr<Kernel> make_occt_kernel();
-#endif
 
 }  // namespace nf::bakeoff
