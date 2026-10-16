@@ -15,4 +15,4 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 | RFC | Title | Status |
 | --- | --- | --- |
 | [0001](0001-kernel-selection.md) | Geometry kernel selection and bake-off | Draft |
-| [0002](0002-openusd-dependency.md) | Adopt OpenUSD 25.11 (C++-only) as a dependency | Draft |
+| [0002](0002-openusd-dependency.md) | Adopt OpenUSD 25.11 (C++-only) as a dependency | Review |

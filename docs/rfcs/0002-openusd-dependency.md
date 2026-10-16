@@ -1,6 +1,6 @@
 # RFC 0002: Adopt OpenUSD 25.11 (C++-only) as a dependency
 
-- **Status:** Draft
+- **Status:** Review (opened 2026-10-17; earliest decision 2026-10-22 per WORKFLOW §3)
 - **Author(s):** wckdboy
 - **Phase:** 0
 - **Created:** 2026-10-17
@@ -38,7 +38,8 @@ The maintainer chose this route on 2026-10-17 over two alternatives (see below).
 | usd-brep USD modules | usd-brep 1.0.0 (already pinned, #14) | our CMake, like SMLib | Optional (`NF_WITH_USD`) |
 
 usd-brep modules: `BREP_USD_DATA`, `BREP_STAGING`, `OCCT_BREP_IMPORT`, `BREP_SM_USD`,
-`SM_API_USD` (and `USD_BREP_UTILS` if they need it). None reference Python, and
+`SM_API_USD` (the spike showed `USD_BREP_UTILS` is not needed). They link OpenUSD's `usd`,
+`usdGeom`, `usdShade`, `usdUtils`, `sdf`, `tf`, `gf`, `vt`, `plug`, `ar`, `kind` and `js`. None reference Python, and
 `OCCT_BREP_IMPORT` is a standalone parser of OCCT's `.brep` format: it does not link OCCT.
 
 ### How it is used in Phase 0
@@ -61,6 +62,12 @@ intends. Translation failures are recorded separately from modeling failures.
   caches it, as `occt.yml` does (#26).
 - No Nightfall code outside `third_party/` and `tools/bakeoff/` depends on USD until an RFC
   for the `.nightfall` format says so.
+- **OCCT and OpenUSD never share a translation unit.** OCCT's `Handle` macro breaks OpenUSD
+  headers that follow it (found in the spike). Code that needs both calls across a plain C++
+  interface between two `.cpp` files.
+- The `omniSolid` schema plugin is registered by pointing `PXR_PLUGINPATH_NAME` at usd-brep's
+  `source/schema/omniSolid/resources` (or `SmApiUsdEnsurePluginRegistered` before any stage
+  is opened).
 
 ### Licence
 
@@ -91,13 +98,20 @@ and CI are unchanged apart from the new cached `usd` workflow.
 
 ## Testing and measurement
 
-The build spike (`spike/usd-build`, not merged) records:
+Build spike on branch `spike/usd-build` (not for merge), 2026-10-17, M-series Mac, 10 cores:
 
-- OpenUSD build time and install size on an M-series Mac
-- the usd-brep USD modules building with our CMake
-- one ABC model loaded into SMLib through the pipeline above, with volume compared to OCCT
+| Measure | Result |
+| --- | --- |
+| OpenUSD 25.11 C++-only build (`build_usd.py`, incl. oneTBB) | 3 min 56 s wall; 65 MB installed (49 dylibs), `minos 15.0` |
+| usd-brep USD modules with our CMake | build and link; needed `usdShade` and `usdUtils` |
+| ABC manifest (200 models) through STEP → OCCT → `.brep` → USD → SMLib | **197/200 translated** |
+| Translation failures | 2 in `.brep` → USD staging ("multi-turn analytic" periodic surfaces), 1 in USD → SMLib import |
+| SMLib volume vs OCCT on the 197 | within 1e-9: 49 · 1e-6: 161 · 1e-4: 188 · 1e-2: 193; worst 0.38 (00001412) |
+| Translation time | ~5–30 ms per model (`.brep` → USD), ~3–7 ms (USD → SMLib), healer off |
 
-These results are appended here before the RFC moves to Review.
+Raw per-model output: `third_party/usd-brep-usd/spike-results-abc200.txt` on the spike
+branch. The large volume disagreements are for the bake-off (#7) to explain (translation
+versus either kernel's mass properties). The pipeline itself is usable.
 
 ## Risks and open questions
 
