@@ -115,7 +115,8 @@ class SmlibKernel final : public Kernel {
   }
 
   Body helix_pipe(double helix_radius, double height, double turns, double tube_radius) override {
-    // SM_API fits the helix with a B-spline to within kHelixTolerance (its tightest).
+    // SM_API fits the helix with a B-spline to within kHelixTolerance (its tightest); the
+    // pipe surface itself is swept at a looser internal tolerance (RFC 0001 F11).
     SmBSplineCurve* raw_helix = nullptr;
     check(SmApiCreateHelix(SmPoint3d(0, 0, 0), height, helix_radius, helix_radius, turns, TRUE,
                            kHelixTolerance, raw_helix),

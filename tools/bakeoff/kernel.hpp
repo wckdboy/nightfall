@@ -87,8 +87,10 @@ class Kernel {
   /// around the Z axis, from (helix_radius, 0, 0) up to z = `height` in `turns` turns, with
   /// flat end caps.
   virtual Body helix_pipe(double helix_radius, double height, double turns, double tube_radius) = 0;
-  /// Fillets every edge inside `edges`; the radius varies linearly from `start_radius` to
-  /// `end_radius` along each edge.
+  /// Fillets every edge inside `edges` with a radius going from `start_radius` at the edge's
+  /// first vertex (the kernel's own edge orientation) to `end_radius` at its last. The law in
+  /// between is kernel-defined: SMLib's is consistent with linear, OCCT interpolates with zero
+  /// end slopes (S-shaped). Results are only comparable by consensus (RFC 0001 F11).
   virtual Body variable_fillet(Body body, Region edges, double start_radius, double end_radius) = 0;
 
   virtual Body boolean(BooleanOp op, Body a, Body b) = 0;
