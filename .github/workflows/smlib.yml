@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Builds the SMLib kernel from the pinned usd-brep commit and runs its SM_API suite.
+# Runs nightly and on PRs that touch the SMLib build. Not a required check (RFC 0001
+# evaluation); becomes one if SMLib is accepted as the primary kernel.
+
+name: smlib
+
+on:
+  pull_request:
+    paths:
+      - "third_party/smlib/**"
+      - "third_party/fetch-smlib.sh"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/workflows/smlib.yml"
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smlib:
+    name: smlib build + SM_API tests (macOS arm64)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: brew install ninja
+      - run: third_party/fetch-smlib.sh
+      - run: tools/check.sh --preset bakeoff --skip-format

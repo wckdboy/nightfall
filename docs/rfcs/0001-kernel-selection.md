@@ -94,9 +94,23 @@ The harness, corpus manifest and raw JSON results are committed under `tools/bak
 Results and the final decision are appended to this RFC and summarized in
 `docs/phases/phase-0.md`.
 
+## Findings so far
+
+Recorded as they come in; scoring waits for the full bake-off (#7).
+
+| # | Date | Finding | Affects |
+| --- | --- | --- | --- |
+| F1 | 2026-10-16 | SMLib + SM_API build on macOS arm64 with plain CMake (C++17), no premake, Packman, TBB or USD. 30 s on 10 cores; `libSMLib.dylib` 9.7 MB, `libSM_API.dylib` 0.2 MB. | Integration cost (positive) |
+| F2 | 2026-10-16 | Upstream SM_API suite passes unchanged: 115/115 in 25 s (release, M-series). | Operation success (baseline) |
+| F3 | 2026-10-16 | Under ASan, a boolean difference (`TestSmBooleanBoundsExample`) hits a heap-use-after-free in `SmProtoTopologyManager::~SmProtoTopologyManager` (`SmProtoTopology.cpp:3371`): a ProtoVertex destructor writes to a ProtoEdge already freed. Not in KNOWN_ISSUES.md. To be reported upstream. | Correctness, robustness |
+| F4 | 2026-10-16 | usd-brep ships `OCCT_BREP_IMPORT` / `OCCT_BREP_EXPORT`: NVIDIA itself translates STEP through OpenCASCADE. OCCT stays in our stack as a translator either way. | Integration cost, licensing |
+
+Because of F3, the harness also runs both kernels under ASan/UBSan, and memory-safety
+errors per 1,000 operations are reported next to the weighted score.
+
 ## Risks and open questions
 
 - Does SMLib expose operation history? If not, provenance needs tag-and-match.
-- Does SMLib include a STEP reader, or only the USD path?
+- ~~Does SMLib include a STEP reader, or only the USD path?~~ STEP goes through OCCT (F4).
 - ABC dataset licensing for redistribution of the sampled models: commit only the
   manifest (IDs and hashes), not the files, until confirmed.

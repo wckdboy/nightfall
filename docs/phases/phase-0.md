@@ -19,10 +19,10 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 
 | Issue | Item | Scope | Status |
 | --- | --- | --- | --- |
-| [#1](https://github.com/wckdboy/nightfall/issues/1) | Repository, workflow, CI, governance files | process | In review |
-| [#2](https://github.com/wckdboy/nightfall/issues/2) | CMake build, presets, `libnf-math` seed with tests | build | In review |
-| [#3](https://github.com/wckdboy/nightfall/issues/3) | Branch protection, labels, milestones, CODEOWNERS on GitHub | process | Not started |
-| [#4](https://github.com/wckdboy/nightfall/issues/4) | Fork usd-brep; build SMLib on Apple Silicon with a self-built premake | third_party | Not started |
+| [#1](https://github.com/wckdboy/nightfall/issues/1) | Repository, workflow, CI, governance files | process | Done (#12) |
+| [#2](https://github.com/wckdboy/nightfall/issues/2) | CMake build, presets, `libnf-math` seed with tests | build | Done (#13) |
+| [#3](https://github.com/wckdboy/nightfall/issues/3) | Branch protection, labels, milestones, CODEOWNERS on GitHub | process | Done |
+| [#4](https://github.com/wckdboy/nightfall/issues/4) | Build SMLib on Apple Silicon (own CMake; no premake needed) | third_party | In review (#14) |
 | [#5](https://github.com/wckdboy/nightfall/issues/5) | Build OCCT 7.8 for arm64 as a cached CI artifact | third_party | Not started |
 | [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness and corpus manifest (RFC 0001) | kernel | Not started |
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
@@ -34,3 +34,8 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 ## Log
 
 - 2026-10-16 — Phase started. Workflow, RFC process and build skeleton proposed (0.1, 0.2).
+- 2026-10-16 — GitHub configured (#3): labels, milestone, issues #1–#11, `main` protected
+  (`hygiene` required; `build-and-test` becomes required once #13 merges).
+- 2026-10-16 — SMLib builds on macOS arm64 with plain CMake in 30 s (10 cores) and passes
+  upstream's SM_API suite (115/115, 25 s). Under ASan it hits a heap-use-after-free in
+  `SmProtoTopologyManager` teardown during a boolean difference (finding F3 in RFC 0001).

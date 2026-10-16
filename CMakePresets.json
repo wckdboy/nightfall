@@ -29,12 +29,19 @@
       "displayName": "Debug + ASan/UBSan (nightly)",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NF_SANITIZE": "ON" }
+    },
+    {
+      "name": "bakeoff",
+      "displayName": "Release + SMLib kernel (RFC 0001)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_SMLIB": "ON" }
     }
   ],
   "buildPresets": [
     { "name": "dev", "configurePreset": "dev" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "asan", "configurePreset": "asan" }
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "bakeoff", "configurePreset": "bakeoff" }
   ],
   "testPresets": [
     {
@@ -45,6 +52,7 @@
     },
     { "name": "dev", "inherits": "base", "configurePreset": "dev" },
     { "name": "release", "inherits": "base", "configurePreset": "release" },
-    { "name": "asan", "inherits": "base", "configurePreset": "asan" }
+    { "name": "asan", "inherits": "base", "configurePreset": "asan" },
+    { "name": "bakeoff", "inherits": "base", "configurePreset": "bakeoff" }
   ]
 }
