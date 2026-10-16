@@ -63,8 +63,20 @@ triangle, so 2,112 triangles are 152 KB, copied once by XPC. Before Phase 4 that
 | Event | Detection | Response |
 | --- | --- | --- |
 | Service crash | `interruptionHandler` | Mark the in-flight request failed, show "kernel restarted", replay the IR on the next request (spike: relaunch + rebuild in 55.5 ms) |
-| Hang | Per-request deadline in the app (default 5 s, per the build plan) | Invalidate the connection (launchd tears down the service), report the feature as the culprit, retry once without it |
+| Hang | **Watchdog inside the service** (below), default 5 s per request (build plan) | The service replies "timed out at feature *N*" and terminates itself; the app marks feature *N* as the culprit and retries once with it suppressed |
 | Kernel error | Structured error from the bridge (feature index, code, message) | Show it on the feature; the agent receives the same structure |
+
+**Why the watchdog lives in the service.** `NSXPCConnection.invalidate()` only invalidates the
+client's side: a service stuck inside a kernel call keeps running, and XPC keeps its
+transaction open until the reply is sent, so launchd will not reap it either. So each
+request runs the kernel on a worker thread while the service records the index of the
+feature being evaluated. A watchdog thread with the request's deadline, when it fires,
+(1) sends the pending reply itself with a timeout error naming that feature index (XPC
+replies may be sent from any thread, once), then (2) terminates the process (`_exit`). The
+app therefore always learns *which* feature hung, including during document open or crash
+replay, and the next request starts a clean service. An app-side deadline of watchdog + 2 s
+remains as a backstop for a service that cannot even reply; then the app shows a generic
+"kernel unresponsive" error and the next request starts a fresh connection.
 
 ### Packaging
 
@@ -102,7 +114,8 @@ Spike (`spike/8-9-xpc-viewport`), Debug build, M-series Mac:
 | Toolchain | Swift 6 `SWIFT_STRICT_CONCURRENCY=complete`; xcodegen 2.46; builds in 8 s |
 
 Production will add headless tests built on the spike's `--snapshot` / `--crash-test` modes,
-plus a hang test once the deadline exists.
+plus a hang test: a debug-only IR feature that spins forever must produce "timed out at
+feature N" within the deadline and a fresh service process on the next request.
 
 ## Risks and open questions
 
