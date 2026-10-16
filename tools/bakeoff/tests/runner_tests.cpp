@@ -134,3 +134,20 @@ TEST_CASE("JSON writes measured values exactly and unmeasured ones as null", "[r
   CHECK(json.find(R"("valid":null,"volume":null,"area":null,"faces":null,"edges":null)") !=
         std::string::npos);
 }
+
+TEST_CASE("consensus parts are reported as such, not as analytic passes", "[runner]") {
+  FakeKernel k;
+  k.next = {.valid = true, .volume = 123.0};
+  const Part part{"c",
+                  "fillet",
+                  [](Kernel& kk) { return kk.box({}, {1, 1, 1}); },
+                  {.consensus_reason = "no closed form"}};
+  const PartResult r = run_part(k, part);
+  CHECK(r.judged_by_consensus());
+  CHECK_FALSE(r.volume_ok.has_value());
+  RunReport report{.kernel = "fake"};
+  report.parts.push_back(r);
+  const std::string json = to_json(report);
+  CHECK(json.find(R"("judged_by":"consensus","consensus_reason":"no closed form")") !=
+        std::string::npos);
+}

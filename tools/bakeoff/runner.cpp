@@ -129,7 +129,9 @@ void append_optional_bool(std::string& out, std::optional<bool> v) {
 }  // namespace
 
 PartResult run_part(Kernel& kernel, const Part& part) {
-  PartResult result{.name = part.name, .category = part.category};
+  PartResult result{.name = part.name,
+                    .category = part.category,
+                    .consensus_reason = part.expect.consensus_reason};
   const auto start = std::chrono::steady_clock::now();
   try {
     const Body body = part.build(kernel);
@@ -173,6 +175,10 @@ std::string to_json(const RunReport& report) {
     append_string(out, p.name);
     out += ",\"category\":";
     append_string(out, p.category);
+    out += ",\"judged_by\":";
+    append_string(out, p.judged_by_consensus() ? "consensus" : "analytic");
+    out += ",\"consensus_reason\":";
+    append_string(out, p.consensus_reason);
     out += ",\"success\":";
     out += p.success() ? "true" : "false";
     out += ",\"built\":";
