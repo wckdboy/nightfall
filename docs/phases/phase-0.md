@@ -11,7 +11,7 @@ All of these, with evidence linked:
 - [ ] RFC 0001 accepted with bake-off numbers and a kernel decision
 - [ ] A box appears in a Metal view, built through an XPC service from a JSON IR
 - [ ] CI builds and tests on macOS on every PR; nightly sanitizer build green
-- [ ] `main` protected per WORKFLOW.md §2
+- [x] `main` protected per WORKFLOW.md §2 (required: `hygiene`, `build-and-test (macOS arm64)`)
 
 ## Work items
 
@@ -28,14 +28,16 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Not started |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Not started |
-| [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | Not started |
+| [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | In progress (workflow merged in #13; first green run pending) |
 | [#11](https://github.com/wckdboy/nightfall/issues/11) | Layering check: no AppKit below `app/` | ci | Not started |
 
 ## Log
 
 - 2026-10-16 — Phase started. Workflow, RFC process and build skeleton proposed (0.1, 0.2).
 - 2026-10-16 — GitHub configured (#3): labels, milestone, issues #1–#11, `main` protected
-  (`hygiene` required; `build-and-test` becomes required once #13 merges).
+  (`hygiene` required).
+- 2026-10-16 — #12 and #13 merged after an independent review pass and Codex review threads;
+  `build-and-test (macOS arm64)` added as a required check.
 - 2026-10-16 — SMLib builds on macOS arm64 with plain CMake in 30 s (10 cores) and passes
   upstream's SM_API suite (115/115, 25 s). Under ASan it hits a heap-use-after-free in
-  `SmProtoTopologyManager` teardown during a boolean difference (finding F3 in RFC 0001).
+  booleans on closed-edge solids (RFC 0001 F3, written up as SMLIB-001, deferred).

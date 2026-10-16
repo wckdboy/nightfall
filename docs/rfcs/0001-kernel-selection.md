@@ -27,7 +27,7 @@ Phase 3 means redoing every feature, so it must be decided by the Phase 0 gate.
 
 | Kernel | Version | License | Notes |
 | --- | --- | --- | --- |
-| SMLib (usd-brep) | 1.0.0, pinned commit | Apache-2.0 | NURBS-native (NLib); macOS build needs a self-built premake |
+| SMLib (usd-brep) | 1.0.0, pinned commit | Apache-2.0 | NURBS-native (NLib); built with our own CMake (F1) |
 | OpenCASCADE | 7.8.x | LGPL-2.1 | Mature; STEP/IGES translators |
 
 ### Harness
@@ -44,7 +44,8 @@ timings and history information as JSON. The harness is temporary scaffolding; t
    involute curves, sweeps along helices, booleans with coincident faces.
 2. **200 STEP models** sampled from the ABC dataset, stratified by face count. Both
    kernels import through OCCT's STEP reader, so the comparison is about modeling, not
-   translation, unless SMLib turns out to have its own STEP reader.
+   translation. usd-brep has no STEP reader (F4): models reach SMLib as OCCT shapes
+   through its `.brep` bridge.
 3. **Stress cases** from SMLib's `KNOWN_ISSUES.md` (closed-surface seams, fillets near
    caps), to measure how often they hit in practice.
 
@@ -100,10 +101,10 @@ Recorded as they come in; scoring waits for the full bake-off (#7).
 
 | # | Date | Finding | Affects |
 | --- | --- | --- | --- |
-| F1 | 2026-10-16 | SMLib + SM_API build on macOS arm64 with plain CMake (C++17), no premake, Packman, TBB or USD. 30 s on 10 cores; `libSMLib.dylib` 9.7 MB, `libSM_API.dylib` 0.2 MB. | Integration cost (positive) |
+| F1 | 2026-10-16 | Measured on the unmodified pinned commit `c9c5979f`. SMLib + SM_API build on macOS arm64 with plain CMake (C++17), no premake, Packman, TBB or USD. 30 s on 10 cores; `libSMLib.dylib` 9.7 MB, `libSM_API.dylib` 0.2 MB. | Integration cost (positive) |
 | F2 | 2026-10-16 | Upstream SM_API suite passes unchanged: 115/115 in 25 s (release, M-series). | Operation success (baseline) |
-| F3 | 2026-10-16 | Under ASan, a boolean difference (`TestSmBooleanBoundsExample`) hits a heap-use-after-free in `SmProtoTopologyManager::~SmProtoTopologyManager` (`SmProtoTopology.cpp:3371`): a ProtoVertex destructor writes to a ProtoEdge already freed. Not in KNOWN_ISSUES.md. To be reported upstream. | Correctness, robustness |
-| F4 | 2026-10-16 | usd-brep ships `OCCT_BREP_IMPORT` / `OCCT_BREP_EXPORT`: NVIDIA itself translates STEP through OpenCASCADE. OCCT stays in our stack as a translator either way. | Integration cost, licensing |
+| F3 | 2026-10-16 | Heap-use-after-free in every boolean (difference, union, intersection) whose operands have closed edges, such as a box minus a cylinder: a closed edge is listed twice on its vertex but unlinked once. Box-only booleans are clean. Root cause, repro and candidate fix: [SMLIB-001](../known-issues/SMLIB-001-proto-topology-use-after-free.md). Not in upstream KNOWN_ISSUES.md; not reported upstream (maintainer decision), deferred. | Correctness, robustness |
+| F4 | 2026-10-16 | usd-brep has no STEP or IGES reader. `OCCT_BREP_IMPORT` / `OCCT_BREP_EXPORT` bridge OpenCASCADE's native `.brep` format (`BRepTools::Read`, `BinTools::Read`). STEP into SMLib therefore means OCCT reads STEP, then the shape crosses via `.brep`: OCCT stays in our stack either way. | Integration cost, licensing |
 
 Because of F3, the harness also runs both kernels under ASan/UBSan, and memory-safety
 errors per 1,000 operations are reported next to the weighted score.
@@ -111,6 +112,6 @@ errors per 1,000 operations are reported next to the weighted score.
 ## Risks and open questions
 
 - Does SMLib expose operation history? If not, provenance needs tag-and-match.
-- ~~Does SMLib include a STEP reader, or only the USD path?~~ STEP goes through OCCT (F4).
+- ~~Does SMLib include a STEP reader, or only the USD path?~~ Neither: STEP must go through OCCT and the `.brep` bridge (F4).
 - ABC dataset licensing for redistribution of the sampled models: commit only the
   manifest (IDs and hashes), not the files, until confirmed.

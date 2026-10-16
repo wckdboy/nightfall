@@ -12,6 +12,7 @@ on:
     paths:
       - "third_party/smlib/**"
       - "third_party/fetch-smlib.sh"
+      - "tools/check.sh"
       - "CMakeLists.txt"
       - "CMakePresets.json"
       - ".github/workflows/smlib.yml"

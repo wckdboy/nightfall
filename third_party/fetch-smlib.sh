@@ -25,6 +25,13 @@ cd "$dest"
 if ! git cat-file -e "$COMMIT^{commit}" 2>/dev/null; then
   GIT_LFS_SKIP_SMUDGE=1 git fetch --quiet origin
 fi
+# Refuse to reuse a checkout with local edits: results must come from the pinned source.
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "usd-brep checkout at $dest has local modifications:" >&2
+  git status --short --untracked-files=no >&2
+  echo "Stash or discard them (git -C \"$dest\" checkout -- .) and run again." >&2
+  exit 1
+fi
 GIT_LFS_SKIP_SMUDGE=1 git -c advice.detachedHead=false checkout --quiet "$COMMIT"
 
 actual="$(git rev-parse HEAD)"
