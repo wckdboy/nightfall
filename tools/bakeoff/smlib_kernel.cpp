@@ -132,7 +132,17 @@ class SmlibKernel final : public Kernel {
     Measures m;
     SmBoolean manifold = FALSE;
     check(SmApiBrepIsManifoldSolid(brep, manifold), "SmApiBrepIsManifoldSolid");
-    m.valid = manifold == TRUE;
+    // SM_API calls two disjoint boxes one manifold solid. SMLib's topology is region-based
+    // (every closed surface has a shell on each side), so count bounded regions instead of
+    // shells: one solid = one region besides the infinite one. Uses SmBrep directly; SM_API
+    // has no region query.
+    SmTArray<SmRegion*> regions;
+    brep->GetRegions(regions);
+    ULONG bounded = 0;
+    for (ULONG i = 0; i < regions.GetSize(); ++i) {
+      if (regions[i] != brep->GetInfiniteRegion()) ++bounded;
+    }
+    m.valid = manifold == TRUE && bounded == 1;
     check(SmApiBrepComputeVolume(brep, kVolumeAccuracy, m.volume), "SmApiBrepComputeVolume");
     check(SmApiBrepComputeArea(brep, kAreaAccuracy, m.area), "SmApiBrepComputeArea");
     SmTArray<SmFace*> faces;

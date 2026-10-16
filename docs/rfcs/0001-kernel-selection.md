@@ -109,6 +109,7 @@ Recorded as they come in; scoring waits for the full bake-off (#7).
 | F6 | 2026-10-16 | SM_API clamps requested area accuracy to [1e-4, 1e-1] relative (volume: [1e-8, 1e-1]). First harness run (6 analytic parts): every SMLib volume within 4.3e-9 of the analytic value, but area errors of 1.6e-4 (sphere) and 1.2e-6 (plate with hole) fail the 1e-6 bar, so SMLib passes 4/6 vs OCCT 6/6. The scoring rule is unchanged; this is recorded so the result is read correctly. | Correctness |
 | F7 | 2026-10-16 | SM_API exposes no operation history (which output face came from which input or operation). Provenance exists only inside the fillet, sweep and offset modules. History support: **no** at the API level, pending a look at whether those internals can be surfaced. | Operation history |
 | F8 | 2026-10-16 | SMLib merges coplanar faces after a union (two coincident cubes: 6 faces); OCCT leaves them split (10 faces) unless unified explicitly. | Integration cost (positive) |
+| F9 | 2026-10-16 | `SmApiBrepIsManifoldSolid` reports two disjoint boxes as one manifold solid. SMLib's topology is region-based (each closed surface has a shell on both sides: a box has 2 shells), so "one solid" must be checked as one bounded region via `SmBrep::GetRegions`, outside SM_API. The harness applies the same rule to both kernels. | Integration cost |
 
 Because of F3, the harness also runs both kernels under ASan/UBSan, and memory-safety
 errors per 1,000 operations are reported next to the weighted score.

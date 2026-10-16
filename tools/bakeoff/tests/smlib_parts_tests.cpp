@@ -41,3 +41,19 @@ TEST_CASE("SMLib operations leave their inputs untouched", "[smlib]") {
   CHECK_THAT(kernel->measure(plate).volume, WithinRel(before, 1e-12));
   CHECK_THAT(kernel->measure(tool).volume, WithinRel(31.5, kRelativeTolerance));
 }
+
+TEST_CASE("SMLib validity requires exactly one solid", "[smlib]") {
+  const auto kernel = make_smlib_kernel();
+  const Body a = kernel->box({0, 0, 0}, {10, 10, 10});
+  const Body b = kernel->box({20, 0, 0}, {10, 10, 10});  // disjoint: union is two solids
+  Body both;
+  try {
+    both = kernel->boolean(BooleanOp::kUnion, a, b);
+  } catch (const KernelError&) {
+    SUCCEED("SMLib rejects the disjoint union outright");
+    return;
+  }
+  const Measures two = kernel->measure(both);
+  INFO("faces=" << two.faces << " volume=" << two.volume);
+  CHECK_FALSE(two.valid);
+}
