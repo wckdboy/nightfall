@@ -5,7 +5,7 @@
 # and the kernel service; never depends on a kernel.
 add_library(nf_math STATIC src/knot_vector.cpp src/basis.cpp src/nurbs_curve.cpp
                             src/constructors.cpp src/refine.cpp src/query.cpp
-                            src/intersect.cpp src/fit.cpp)
+                            src/intersect.cpp src/fit.cpp src/arrangement.cpp)
 add_library(nf::math ALIAS nf_math)
 target_include_directories(nf_math PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(nf_math PUBLIC cxx_std_23)
@@ -21,7 +21,8 @@ if(NF_BUILD_TESTS)
     tests/refine_tests.cpp
     tests/query_tests.cpp
     tests/intersect_tests.cpp
-    tests/fit_tests.cpp)
+    tests/fit_tests.cpp
+    tests/arrangement_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.
