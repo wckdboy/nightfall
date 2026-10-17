@@ -22,7 +22,7 @@ struct Arrangement {
   struct HalfEdge {
     NurbsCurve2 curve;  // from origin to target; the twin runs the same edge backwards
     int origin, target, twin, next, face;
-    int direction;  // +1 along its input path, −1 against
+    int direction;  // signed sum of input traversals; coincident opposite paths can cancel
   };
   struct Face {
     std::vector<int> half_edges;  // the boundary cycle, the face on the left of each
@@ -42,7 +42,10 @@ struct Arrangement {
 /// every crossing and touching point, vertices closer than 1e-9 of the drawing's size are
 /// joined, and each bounded face gets the winding number of the input at an interior point.
 ///
-/// Not supported yet (an error): curves that share a stretch (coincident edges, #74).
+/// Coincident degree-1 spans are split at overlap endpoints and merged with summed signed
+/// traversal counts, including rational lines and multi-span polylines. Their curves retain
+/// the original parameterization; zero-count internal seams remain in the arrangement.
+/// Shared stretches involving higher-degree curves remain an explicit error (#74).
 /// A single curve's own self-intersections (a cubic with a loop) are not split.
 [[nodiscard]] std::expected<Arrangement, std::string> arrange(
     std::span<const std::vector<NurbsCurve2>> paths);

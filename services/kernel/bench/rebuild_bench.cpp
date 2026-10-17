@@ -110,6 +110,12 @@ int main() {
       {"id":"inner","type":"ellipse","center":[0,0],"radii":["depth / 6",2.5],"rotation":35}],
       "constraints":[]})")
                                         .value();
+    auto shared = plate;
+    shared.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+      {"id":"left","type":"rect","corner":["-depth / 3",0],"size":["depth / 3",20]},
+      {"id":"right","type":"rect","corner":[0,0],"size":["depth / 3",20]}],
+      "constraints":[]})")
+                                    .value();
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -130,7 +136,8 @@ int main() {
          {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
-          Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true}})
+          Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
+          Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})
         measure(*backend, part, mode);
   } catch (const std::exception& error) {

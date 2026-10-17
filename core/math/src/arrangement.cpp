@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <optional>
 
@@ -41,6 +42,39 @@ double extent(const NurbsCurve2& c) {
     hi = {std::max(hi.x, q.x), std::max(hi.y, q.y)};
   }
   return length(hi - lo);
+}
+
+// Degree-1 Bézier spans are straight even with unequal rational weights. Recognize a
+// common interval geometrically, using local scale and coordinate rounding, not the
+// drawing-wide vertex-weld tolerance (which could conflate nearby parallel boundaries).
+std::optional<std::array<Vec2, 2>> shared_line(const NurbsCurve2& a, const NurbsCurve2& b) {
+  if (a.degree() != 1 || b.degree() != 1) return std::nullopt;
+  const Vec2 delta = end_of(a) - start_of(a);
+  const double len = length(delta), other_len = length(end_of(b) - start_of(b));
+  if (!(len > 0 && other_len > 0)) return std::nullopt;
+  const Vec2 dir = delta / len;
+  double magnitude = 0;
+  for (const auto p : {start_of(a), end_of(a), start_of(b), end_of(b)})
+    magnitude = std::max({magnitude, std::abs(p.x), std::abs(p.y)});
+  const double near =
+      1e-12 * std::max(len, other_len) + 8 * std::numeric_limits<double>::epsilon() * magnitude;
+  const Vec2 first = start_of(b) - start_of(a), last = end_of(b) - start_of(a);
+  if (std::abs(cross(dir, first)) > near || std::abs(cross(dir, last)) > near) return std::nullopt;
+  const double s = dot(dir, first), t = dot(dir, last);
+  const double lo = std::max(0.0, std::min(s, t)), hi = std::min(len, std::max(s, t));
+  if (hi - lo <= near) return std::nullopt;
+  return std::array{start_of(a) + dir * lo, start_of(a) + dir * hi};
+}
+
+// Invert a rational line's geometric fraction to its original knot parameter. Interpolating
+// knots directly by distance is only correct when both weights are equal.
+double line_parameter(const NurbsCurve2& c, Vec2 p) {
+  const Vec2 delta = end_of(c) - start_of(c);
+  const double len = length(delta);
+  const double s = std::clamp(dot(p - start_of(c), delta / len) / len, 0.0, 1.0);
+  const double numerator = s * c.weights().front();
+  const double t = numerator / (numerator + (1 - s) * c.weights().back());
+  return std::lerp(c.domain_start(), c.domain_end(), t);
 }
 
 // Half-edges leaving a vertex along (nearly) the same tangent, as where curves touch, are
@@ -132,7 +166,12 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
   for (const auto& path : paths) {
     if (path.empty()) continue;
     for (const NurbsCurve2& c : path) {
-      input.push_back(c);
+      if (c.degree() == 1) {
+        const auto spans = decompose(c);
+        input.insert(input.end(), spans.begin(), spans.end());
+      } else {
+        input.push_back(c);
+      }
       for (const Vec2 q : c.points()) {
         lo = {std::min(lo.x, q.x), std::min(lo.y, q.y)};
         hi = {std::max(hi.x, q.x), std::max(hi.y, q.y)};
@@ -151,10 +190,18 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
   std::vector<std::vector<double>> cuts(input.size());
   for (std::size_t i = 0; i < input.size(); ++i) {
     for (std::size_t j = i + 1; j < input.size(); ++j) {
+      if (const auto shared = shared_line(input[i], input[j])) {
+        for (const auto p : *shared) {
+          cuts[i].push_back(line_parameter(input[i], p));
+          cuts[j].push_back(line_parameter(input[j], p));
+        }
+        continue;
+      }
       const auto r = intersect(input[i], input[j]);
       if (r.overlap)
         return std::unexpected(
-            "curves share a stretch; coincident edges are not supported yet (#74)");
+            "curves share an unsupported stretch; only degree-1 coincident spans are supported "
+            "(#74)");
       for (const auto& h : r.hits) {
         const auto interior = [&](const NurbsCurve2& c, double u) {
           return length(c.point(u) - start_of(c)) > tol && length(c.point(u) - end_of(c)) > tol;
@@ -190,6 +237,20 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
       const int a = vertex(start_of(piece)), b = vertex(end_of(piece));
       // A piece with both ends at one vertex is kept only if it is a real loop.
       if (a == b && extent(piece) <= tol) continue;
+      bool merged = false;
+      if (piece.degree() == 1) {
+        for (std::size_t h = 0; h < out.half_edges.size(); h += 2) {
+          auto& edge = out.half_edges[h];
+          const bool same = edge.origin == a && edge.target == b;
+          const bool opposite = edge.origin == b && edge.target == a;
+          if (!(same || opposite) || !shared_line(piece, edge.curve)) continue;
+          edge.direction += same ? 1 : -1;
+          out.half_edges[h + 1].direction = -edge.direction;
+          merged = true;
+          break;
+        }
+      }
+      if (merged) continue;  // zero-winding seams still delimit arrangement faces
       const int f = static_cast<int>(out.half_edges.size());
       out.half_edges.push_back({piece, a, b, f + 1, -1, -1, +1});
       out.half_edges.push_back({reverse(piece), b, a, f, -1, -1, -1});
