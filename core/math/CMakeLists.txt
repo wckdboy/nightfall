@@ -6,7 +6,8 @@
 add_library(nf_math STATIC src/knot_vector.cpp src/basis.cpp src/nurbs_curve.cpp
                             src/constructors.cpp src/refine.cpp src/query.cpp
                             src/intersect.cpp src/fit.cpp src/arrangement.cpp
-                            src/nurbs_surface.cpp src/expression.cpp)
+                            src/nurbs_surface.cpp src/expression.cpp
+                            src/equation.cpp)
 add_library(nf::math ALIAS nf_math)
 target_include_directories(nf_math PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(nf_math PUBLIC cxx_std_23)
@@ -26,7 +27,8 @@ if(NF_BUILD_TESTS)
     tests/arrangement_tests.cpp
     tests/region_tests.cpp
     tests/surface_tests.cpp
-    tests/expression_tests.cpp)
+    tests/expression_tests.cpp
+    tests/equation_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.
