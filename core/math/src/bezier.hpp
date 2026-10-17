@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -25,6 +27,18 @@ inline Vec3 min_each(Vec3 a, Vec3 b) {
 inline Vec2 max_each(Vec2 a, Vec2 b) { return {std::max(a.x, b.x), std::max(a.y, b.y)}; }
 inline Vec3 max_each(Vec3 a, Vec3 b) {
   return {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
+}
+
+// Diagonal of the box [lo, hi] without overflow (capped at the largest double).
+inline double safe_diagonal(Vec2 lo, Vec2 hi) {
+  const double half = std::hypot(hi.x / 2 - lo.x / 2, hi.y / 2 - lo.y / 2);
+  return half < std::numeric_limits<double>::max() / 2 ? 2 * half
+                                                       : std::numeric_limits<double>::max();
+}
+inline double safe_diagonal(Vec3 lo, Vec3 hi) {
+  const double half = std::hypot(hi.x / 2 - lo.x / 2, hi.y / 2 - lo.y / 2, hi.z / 2 - lo.z / 2);
+  return half < std::numeric_limits<double>::max() / 2 ? 2 * half
+                                                       : std::numeric_limits<double>::max();
 }
 
 template <typename Point>
@@ -47,6 +61,11 @@ struct Bezier {
       hi = max_each(hi, at(i));
     }
     return {lo, hi};
+  }
+
+  [[nodiscard]] double diagonal() const {
+    const auto [lo, hi] = box();
+    return safe_diagonal(lo, hi);
   }
 
   // de Casteljau in homogeneous coordinates at t ∈ (0, 1): exact for rational pieces.

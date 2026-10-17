@@ -44,14 +44,13 @@ double size_of(const NurbsCurve<Point>& c) {
     lo = detail::min_each(lo, q);
     hi = detail::max_each(hi, q);
   }
-  return length(hi - lo);
+  return detail::safe_diagonal(lo, hi);
 }
 
 }  // namespace
 
 template <typename Point>
 Closest<Point> closest_point(const NurbsCurve<Point>& curve, Point p) {
-  const double eps = 1e-9 * std::max(size_of(curve), 1e-300);
   Closest<Point> best{curve.domain_start(), curve.point(curve.domain_start()), 0.0};
   best.distance = length(p - best.point);
   const auto consider = [&](double u) {
@@ -86,10 +85,10 @@ Closest<Point> closest_point(const NurbsCurve<Point>& curve, Point p) {
     const Bezier<Point> b = stack.back();
     stack.pop_back();
     const auto [lo, hi] = b.box();
-    if (box_distance(p, lo, hi) >= best.distance - eps) continue;  // cannot improve
+    if (box_distance(p, lo, hi) >= best.distance) continue;  // cannot improve
     const double um = (b.u0 + b.u1) / 2;
     consider(um);
-    if (length(hi - lo) <= small) {
+    if (detail::safe_diagonal(lo, hi) <= small) {
       consider(b.u0);
       consider(b.u1);
       polish(um, b.u0, b.u1);
@@ -107,7 +106,9 @@ std::vector<CurvePoint<Point>> polyline(const NurbsCurve<Point>& curve, double t
   if (!(tolerance > 0 && std::isfinite(tolerance))) {
     throw std::invalid_argument("polyline tolerance must be positive and finite");
   }
-  tolerance = std::max(tolerance, 1e-12 * size_of(curve));
+  const double size = size_of(curve);
+  tolerance = std::max(tolerance, 1e-12 * size);
+  const double scale = std::ldexp(1.0, -std::max(0, std::ilogb(std::max(size, 1.0))));
   std::vector<CurvePoint<Point>> out{{curve.domain_start(), curve.point(curve.domain_start())}};
   // Depth-first, left to right, so points come out in order.
   for (const Bezier<Point>& piece : detail::bezier_pieces(curve)) {
@@ -115,10 +116,13 @@ std::vector<CurvePoint<Point>> polyline(const NurbsCurve<Point>& curve, double t
     while (!stack.empty()) {
       const auto [b, depth] = stack.back();
       stack.pop_back();
+      // Measured on points scaled by a power of two (exact), so huge coordinates can't
+      // overflow the chord arithmetic.
       double off = 0.0;
-      for (int i = 1; i < b.degree; ++i)
-        off = std::max(off, segment_distance(b.at(i), b.first(), b.last()));
-      if (off > tolerance && depth < 40) {
+      for (int i = 1; i < b.degree; ++i) {
+        off = std::max(off, segment_distance(b.at(i) * scale, b.first() * scale, b.last() * scale));
+      }
+      if (off > tolerance * scale && depth < 40) {
         const auto [left, right] = b.split();
         stack.push_back({right, depth + 1});
         stack.push_back({left, depth + 1});

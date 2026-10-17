@@ -125,6 +125,18 @@ TEST_CASE("closest point special cases", "[query]") {
   CHECK(e.point == Vec2{1, 0});
 }
 
+TEST_CASE("queries near the ends and at extreme scales", "[query]") {
+  // Within a hair of an end, the exact point still wins (review finding).
+  const NurbsCurve2 unit = make_line(Vec2{0, 0}, Vec2{1, 0});
+  CHECK(closest_point(unit, Vec2{5e-10, 0}).distance == 0.0);
+  // Coordinates near the range of double (review finding).
+  const auto huge = make_bezier(std::vector<Vec2>{{-1e308, 0}, {0, 1e308}, {1e308, 0}});
+  const auto pl = polyline(huge, 1.0);
+  CHECK(pl.size() > 1000);  // not just the two ends
+  const auto c = closest_point(huge, Vec2{0, 0});
+  CHECK(c.distance < 0.6e308);  // the arch's top (5e307 away), not an end (1e308)
+}
+
 TEMPLATE_TEST_CASE("polylines stay within the tolerance", "[query][property]", Vec2, Vec3) {
   const int degree = GENERATE(1, 2, 3, 5);
   const auto seed = GENERATE(take(5, random(1u, 1000000u)));
