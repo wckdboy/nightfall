@@ -2,6 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Private kernel-service components (RFCs 0003, 0005). No kernel dependency in the app.
+if(NF_WITH_OCCT)
+  add_library(nf_evaluator STATIC src/model_inputs.cpp)
+  target_include_directories(nf_evaluator PUBLIC src)
+  target_link_libraries(nf_evaluator PUBLIC nf::ir nf::kernel PRIVATE nf::warnings)
+  if(NF_BUILD_TESTS)
+    add_executable(nf_evaluator_tests tests/model_inputs_tests.cpp)
+    target_link_libraries(nf_evaluator_tests PRIVATE nf_evaluator nf::warnings Catch2::Catch2WithMain)
+    set_target_properties(nf_evaluator_tests PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
+    catch_discover_tests(nf_evaluator_tests TEST_PREFIX "evaluator." EXTRA_ARGS --rng-seed=20261017)
+  endif()
+endif()
+
 if(NF_BUILD_TESTS)
   add_executable(nf_kernel_cache_tests tests/cache_tests.cpp)
   target_include_directories(nf_kernel_cache_tests PRIVATE src)

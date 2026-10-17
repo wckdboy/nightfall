@@ -112,3 +112,8 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   decomposition and span-aware volume integration fix measurements of rational profiles.
   Annulus plus island: volume 553π mm³ and area 396π mm², both within 1e-5 after rotation.
   OCCT checks pass 236/236 (12.43 s); service-side IR execution remains the next slice.
+- 2026-10-17 — #92 service adapters construct exact rectangle/circle/polygon/closed-line
+  profiles from normalized inputs, select regions by interior points, place datum/explicit
+  planes and prepare symmetric/directed extrusions and rigid transforms. Open/ambiguous
+  chains and unsupported constraints/selectors/modes return field diagnostics. OCCT checks
+  pass 240/240 (15.86 s); incremental document execution follows these tested adapters.
