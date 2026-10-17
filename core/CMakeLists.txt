@@ -3,6 +3,7 @@
 
 add_subdirectory(math)
 add_subdirectory(svg)
+add_subdirectory(ir)
 if(NF_WITH_OCCT)
   add_subdirectory(kernel)
 endif()
