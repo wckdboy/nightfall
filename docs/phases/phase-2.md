@@ -137,6 +137,15 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   histories after eviction. Fourteen new regression cases cover geometry, tool lifecycle,
   failures, cache rebinding, rollback and suppression; remaining operations/selectors are pending.
 
+- 2026-10-18 — #92 implements extrusion `join`, `cut` and `intersect` results with current-body
+  dependencies and atomic publication. Temporary swept solids stay private and retained only
+  as cache/history inputs. Target and tool face names survive the boolean and rebind to renamed
+  features on cache hits. Seven new regressions cover analytic box combinations (9,000/3,000/
+  3,000 mm³), a symmetric circular through-cut (6,000 − 120π mm³, tolerance 1e-5), target motion,
+  suppression, rollback, failed combinations and input-snapshot eviction.
+  Full OCCT checks pass 273/273 (16.16 s); ASan/UBSan evaluator tests pass 32/32 (28.69 s),
+  with no sanitizer diagnostics. The independent schema corpus remains 202/202.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.

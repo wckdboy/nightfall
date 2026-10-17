@@ -15,6 +15,7 @@ namespace {
 using ir::json::Value;
 struct Output {
   std::optional<Sketch> sketch;
+  std::optional<kernel::OperationResult> tool;  // private extrusion before a result-mode boolean
   std::vector<kernel::OperationResult> operations;
   std::vector<kernel::ShapePtr> bindings;
   std::size_t bytes = sizeof(Output);
@@ -37,6 +38,11 @@ T take(std::expected<T, E> value) {
   return std::move(*value);
 }
 const std::string& string(const Value& value) { return *value.if_string(); }
+kernel::BooleanOp boolean_kind(std::string_view mode) {
+  if (mode == "union" || mode == "join") return kernel::BooleanOp::kUnion;
+  if (mode == "subtract" || mode == "cut") return kernel::BooleanOp::kSubtract;
+  return kernel::BooleanOp::kIntersect;  // schema-checked op/result modes
+}
 void selector_targets(const Value& value, const Targets& previous, std::set<std::string>& ids) {
   if (const auto* array = value.if_array()) {
     for (const auto& item : *array) selector_targets(item, previous, ids);
@@ -144,7 +150,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/2;roles/2;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/3;roles/3;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -184,6 +190,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         bindings.push_back(body.shape);
       };
       std::shared_ptr<const Output> sketch;
+      std::string result_mode;
       if (feature.type == "extrude") {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
         const auto& upstream = result.features[features.at(id)];
@@ -192,6 +199,11 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                "profile sketch is unavailable: " + id, "/inputs/profile/sketch");
         dependencies.emplace("/inputs/profile/sketch", *upstream.hash);
         sketch = sketches.at(id);
+        for (const auto* mode : {"join", "cut", "intersect"}) {
+          if (!inputs.find("result")->find(mode)) continue;
+          result_mode = mode;
+          bind(affected.front(), "/inputs/result/" + result_mode);
+        }
       } else if (feature.type == "transform") {
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
@@ -226,15 +238,21 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         } else if (feature.type == "extrude") {
           const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
           ++result.kernel_calls;
-          built->operations.push_back(take(state_->kernel.extrude(operation)));
+          auto solid = take(state_->kernel.extrude(operation));
+          if (result_mode.empty()) {
+            built->operations.push_back(std::move(solid));
+          } else {
+            built->tool = std::move(solid);
+            built->bytes += built->tool->estimated_bytes;
+            ++result.kernel_calls;
+            built->operations.push_back(take(state_->kernel.boolean_operation(
+                bindings.front(), {built->tool->shape}, boolean_kind(result_mode))));
+          }
         } else if (feature.type == "boolean") {
           const auto& op = string(*inputs.find("op"));
-          const auto kind = op == "union"      ? kernel::BooleanOp::kUnion
-                            : op == "subtract" ? kernel::BooleanOp::kSubtract
-                                               : kernel::BooleanOp::kIntersect;
           ++result.kernel_calls;
           built->operations.push_back(take(state_->kernel.boolean_operation(
-              bindings.front(), {bindings.begin() + 1, bindings.end()}, kind)));
+              bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
         } else {
           const auto operation = take(prepare_transform(inputs));
           for (const auto& input : bindings) {
@@ -249,12 +267,15 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
-        const auto* input = (feature.type == "transform" || feature.type == "boolean")
-                                ? &result.bodies.at(affected[i])
-                                : nullptr;
+        const auto* input = bindings.empty() ? nullptr : &result.bodies.at(affected[i]);
         std::vector<const BodyState*> named_inputs;
         if (input) named_inputs.push_back(input);
         for (const auto& tool : tools) named_inputs.push_back(&result.bodies.at(tool));
+        BodyState temporary;
+        if (output->tool) {
+          temporary.names = names({}, *output->tool, feature.id);
+          named_inputs.push_back(&temporary);
+        }
         published.push_back({operation.shape,
                              ir::body_hash(input ? input->hash : std::nullopt, key),
                              names(named_inputs, operation, feature.id),

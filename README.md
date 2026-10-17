@@ -63,7 +63,7 @@ See [the expression API](core/ir/include/nf/ir/expression.hpp) and
 [parameter evaluation](core/ir/include/nf/ir/parameters.hpp).
 
 The service's [document evaluator](services/kernel/src/evaluator.hpp) executes sketches,
-new B-rep extrusions, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
+B-rep extrusions, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
 It supports rectangle, circle, polygon and closed-line profiles, holes, interior-point selection,
 datum/explicit planes and symmetric extrusion. Content hashes and a bounded cache preserve
 unchanged geometry. Rollback, suppression and failures have explicit states; unsupported
@@ -74,6 +74,9 @@ Booleans union, subtract or intersect a target with the union of its tool bodies
 consumed on success unless `keep_tools` is true; failed operations preserve the tools and
 invalidate the target for downstream execution. Empty or non-solid results are errors.
 Face provenance survives cuts, cache reuse and subsequent transforms.
+Extrusions can create a new body or use `result: {"join": "body"}`, `{"cut": "body"}` or
+`{"intersect": "body"}` to modify an existing body. The intermediate extrusion stays private;
+the target's geometry and face history are published together after both operations succeed.
 
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates):
 

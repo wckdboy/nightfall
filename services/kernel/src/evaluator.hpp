@@ -36,8 +36,8 @@ struct Evaluation {
 };
 
 /// Per-document, serialized service evaluator (RFC 0007). The borrowed kernel must outlive it.
-/// Parses/validates before kernel work; then evaluates sketches, new B-rep extrusions and
-/// rigid transforms and solid booleans. Booleans modify their target and retire tools unless
+/// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions (new/join/
+/// cut/intersect), rigid transforms and solid booleans. Booleans retire their tools unless
 /// keep_tools is true. Unsupported features are explicit errors; independent branches continue.
 /// No files are opened, no cache is persisted, and returned geometry survives cache eviction.
 class Evaluator {

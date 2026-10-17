@@ -148,8 +148,7 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
                                                               const Sketch& sketch) {
   return guarded([&] {
     const auto& result = field(inputs, "result");
-    if (!result.find("new")) fail("/result", "only new-body extrusion is implemented");
-    if (*field(result, "body_type").if_string() != "brep")
+    if (result.find("new") && *field(result, "body_type").if_string() != "brep")
       fail("/result/body_type", "only B-rep bodies are implemented", "unsupported_body_type");
     if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
     if (const auto* draft = inputs.find("draft"); draft && number(*draft) != 0)

@@ -93,10 +93,12 @@ TEST_CASE("extrusion modes and rigid transform axes are checked explicitly") {
       const auto* text :
       {R"({"profile":{"sketch":"s"},"distance":3,"draft":1,"result":{"new":"b","body_type":"brep"}})",
        R"({"profile":{"sketch":"s"},"to":{"faces_of":"other"},"result":{"new":"b","body_type":"brep"}})",
-       R"({"profile":{"sketch":"s"},"distance":3,"result":{"join":"other"}})",
        R"({"profile":{"sketch":"s"},"distance":3,"result":{"new":"b","body_type":"mesh"}})"}) {
     CHECK_FALSE(prepare_extrusion(inputs("extrude", text), sketch));
   }
+  CHECK(prepare_extrusion(inputs("extrude", R"({"profile":{"sketch":"s"},
+    "distance":3,"result":{"join":"other"}})"),
+                          sketch));
   auto rotation = prepare_transform(inputs("transform", R"({"bodies":["b"],"translation":[1,2,3],
     "rotation":{"axis":{"origin":[4,5,6],"direction":"z"},"angle":90}})"));
   REQUIRE(rotation);
