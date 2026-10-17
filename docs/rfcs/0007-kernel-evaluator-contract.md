@@ -1,14 +1,16 @@
 # RFC 0007: Production kernel interface and incremental evaluator
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Author(s):** The Nightfall Authors (agent-authored proposal)
 - **Phase:** 2
 - **Created:** 2026-10-17
 - **Issue:** [#92](https://github.com/wckdboy/nightfall/issues/92)
+- **Accepted:** 2026-10-17 by the maintainer in the project conversation; the instruction
+  “force it, and keep working” authorizes implementation and waives the RFC review wait.
 
 Number 0006 is reserved by RFC 0005 for Nightfall Script (#93). This proposal supplements
 RFCs 0001, 0003 and 0005; it does not change their accepted text. Implementation of the new
-`IKernel` interface waits for acceptance under WORKFLOW §3.
+`IKernel` interface proceeds under this accepted contract.
 
 ## Summary
 
