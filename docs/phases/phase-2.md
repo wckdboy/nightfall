@@ -23,10 +23,11 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds merged in #103 |
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Done: evaluator/cache and local benchmark merged in #103; further operation/selector coverage remains open |
 | [#104](https://github.com/wckdboy/nightfall/issues/104) | Exact curved sketch profiles: arcs, ellipses and NURBS splines | kernel | Implemented with regression tests and local benchmark evidence |
+| [#106](https://github.com/wckdboy/nightfall/issues/106) | Shared straight boundaries in sketch profiles | math | Implemented with arrangement, region and evaluator regressions; local benchmark evidence |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
-| [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math |  |
+| [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Degree-1 slice in #106; higher-degree shared stretches remain open |
 
 ## Log
 
@@ -187,6 +188,21 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   OCCT remains the pinned Release shared-library build. The prior integrated tree also passed
   the full 287-test sanitizer suite; this slice reruns the affected geometry/service selection.
 
+- 2026-10-18 — #106 supports coincident degree-1 boundaries in planar arrangements. Overlap
+  endpoints split both inputs using their original rational parameterization; one half-edge pair
+  retains the signed sum of traversals. Zero-count seams remain for topology and disappear from
+  filled outlines. Nonzero/even-odd regions now handle adjacent rectangles, partial overlaps,
+  repeated/reversed outlines and notches. Empty profiles fail at `/inputs/profile` before kernel
+  work; general curved coincidence remains an explicit #74 error. Evaluator identity is bumped.
+  Sixteen additional tests include a fixed-seed 128-case analytic rectangle corpus, rational
+  parameters, multi-span polylines, crossing seams, scale/rotation/order, separated parallel
+  edges and actual OCCT extrusion/cache behavior. The original ten math and four evaluator
+  reproductions failed before implementation. Full Release `tools/check.sh --preset occt`
+  passes 319/319 (23.50 s), hygiene and the independent 202-case schema corpus pass.
+  Targeted local ASan/UBSan passes 40 math cases (20,936 assertions across arrangement,
+  region, intersection and refinement tests) plus 93 kernel/evaluator/cache cases (74.58 s),
+  with no diagnostics or retries. Nightfall is instrumented; OCCT uses pinned Release libraries.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -297,3 +313,27 @@ boolean-cut plate 47.112/50.712/51.059 ms, sleeve 6.318/7.494/7.524 ms. Every sa
 100 ms in this run; earlier slower tails remain documented above. Timing variation is not
 an optimization claim or a universal bound. Includes parsing, validation, geometry and naming;
 excludes serialization, IPC and tessellation. Full phase sign-off remains open.
+
+### Shared straight-boundary rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature part has two adjacent rectangles, one extrusion and 28 transforms. Each unique
+`depth` edit changes both rectangle widths and the extrusion distance. The union has width
+`2 × depth/3` mm and height 20 mm; every sample checks volume `(40/3) × depth²` mm³, centroid
+and execution counts. The shared internal edge must disappear from the filled outline.
+
+| Shared-edge plate | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 3.238 | 6.298 | 7.173 | 29 / 0 |
+| Profile + depth edit | 7.934 | 22.958 | 106.810 | 29 / 0 |
+| Last transform edit | 1.841 | 15.023 | 27.758 | 1 / 29 |
+| Unused parameter edit | 1.132 | 15.357 | 17.751 | 0 / 30 |
+
+The cache retains 96 entries / 14,631,984 estimated bytes after profile/depth edits (not RSS).
+Same-run depth-edit median/p95/max: plate 2.357/4.381/5.129 ms,
+bored plate 17.057/26.177/36.863 ms, boolean-cut plate 79.371/124.210/256.712 ms,
+sleeve 13.588/157.142/191.908 ms, elliptic tube 15.563/27.029/30.351 ms.
+The shared-edge maximum and boolean/sleeve tails exceed 100 ms in this run. These are local
+measurements with visible timing variation; no universal latency bound or performance
+improvement is claimed. Includes parsing, validation, geometry and naming; excludes
+serialization, IPC and tessellation. Full Phase 2 sign-off remains open.

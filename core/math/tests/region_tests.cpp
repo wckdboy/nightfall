@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <random>
 #include <vector>
 
 #include "nf/math/arrangement.hpp"
@@ -39,7 +40,8 @@ double area(const Loop& loop) {
   return s / 2;
 }
 
-std::vector<Region> regions_of(const std::vector<std::vector<NurbsCurve2>>& paths, FillRule rule) {
+std::vector<Region> regions_of(const std::vector<std::vector<NurbsCurve2>>& paths, FillRule rule,
+                               double closure_tolerance = 1e-12) {
   auto r = regions(paths, rule);
   INFO((r ? "" : r.error()));
   REQUIRE(r.has_value());
@@ -52,7 +54,7 @@ std::vector<Region> regions_of(const std::vector<std::vector<NurbsCurve2>>& path
          }()) {
       for (std::size_t i = 0; i < loop->curves.size(); ++i) {
         const auto& next = loop->curves[(i + 1) % loop->curves.size()];
-        CHECK(length(loop->curves[i].points().back() - next.points().front()) <= 1e-12);
+        CHECK(length(loop->curves[i].points().back() - next.points().front()) <= closure_tolerance);
       }
     }
     CHECK(area(g.outer) > 0);
@@ -152,4 +154,85 @@ TEST_CASE("winding numbers of points", "[regions]") {
   CHECK(winding_number(sq, Vec2{3, 1}) == 0);
   CHECK(winding_number(square(0, 0, 2, false), Vec2{1, 1}) == -1);
   CHECK(regions(std::vector<std::vector<NurbsCurve2>>{}, FillRule::kNonZero)->empty());
+}
+
+TEST_CASE("shared straight boundaries disappear inside filled regions", "[regions][shared]") {
+  for (const auto rule : {FillRule::kNonZero, FillRule::kEvenOdd}) {
+    auto r = regions_of({square(0, 0, 4), square(4, 1, 2)}, rule);
+    REQUIRE(r.size() == 1);
+    CHECK(r[0].holes.empty());
+    CHECK(std::abs(total_area(r) - 20) <= 1e-10);
+    r = regions_of({square(0, 0, 2), square(1, 0, 2)}, rule);
+    CHECK(r.size() == (rule == FillRule::kNonZero ? 1 : 2));
+    CHECK(std::abs(total_area(r) - (rule == FillRule::kNonZero ? 6 : 4)) <= 1e-10);
+  }
+}
+
+TEST_CASE("duplicate straight outlines obey both fill rules", "[regions][shared]") {
+  for (const bool ccw : {true, false}) {
+    const auto paths = std::vector<std::vector<NurbsCurve2>>{square(0, 0, 2), square(0, 0, 2, ccw)};
+    const auto nz = regions_of(paths, FillRule::kNonZero);
+    CHECK(nz.size() == (ccw ? 1 : 0));
+    CHECK(std::abs(total_area(nz) - (ccw ? 4 : 0)) <= 1e-10);
+    CHECK(regions_of(paths, FillRule::kEvenOdd).empty());
+  }
+}
+
+TEST_CASE("a straight hole sharing the outline becomes a notch", "[regions][shared]") {
+  for (const auto rule : {FillRule::kNonZero, FillRule::kEvenOdd}) {
+    const auto r = regions_of({square(0, 0, 4), square(1, 0, 2, false)}, rule);
+    REQUIRE(r.size() == 1);
+    CHECK(r[0].holes.empty());
+    CHECK(std::abs(total_area(r) - 12) <= 1e-10);
+  }
+}
+
+TEST_CASE("shared straight profiles are invariant to scale rotation and order",
+          "[regions][shared]") {
+  for (const double scale : {1e-4, 1.0, 1e4}) {
+    for (const double angle : {0.0, 0.73, 2.2}) {
+      std::vector<std::vector<NurbsCurve2>> paths{square(0, 0, 4), square(4, 1, 2)};
+      const auto moved = [&](Vec2 p) {
+        return Vec2{(p.x * std::cos(angle) - p.y * std::sin(angle) + 13) * scale,
+                    (p.x * std::sin(angle) + p.y * std::cos(angle) - 7) * scale};
+      };
+      for (auto& path : paths)
+        for (auto& c : path) c = make_line(moved(c.points().front()), moved(c.points().back()));
+      for (int order = 0; order < 2; ++order) {
+        const auto r = regions_of(paths, FillRule::kNonZero, 1e-12 * std::max(scale, 1.0));
+        REQUIRE(r.size() == 1);
+        CHECK(std::abs(total_area(r) / (scale * scale) - 20) <= 1e-9);
+        std::ranges::reverse(paths);
+      }
+    }
+  }
+}
+
+TEST_CASE("parallel straight boundaries with a real gap stay separate", "[regions][shared]") {
+  for (const double gap : {1e-5, 1e-7}) {
+    const auto r = regions_of({square(0, 0, 1), square(1 + gap, 0, 1)}, FillRule::kNonZero);
+    REQUIRE(r.size() == 2);
+    CHECK(std::abs(total_area(r) - 2) <= 1e-10);
+  }
+}
+
+TEST_CASE("shared straight rectangle areas match analytic unions and differences",
+          "[regions][shared][property]") {
+  std::mt19937_64 rng(20261018);
+  std::uniform_real_distribution<double> size(0.5, 20), offset(-5, 25);
+  for (int trial = 0; trial < 128; ++trial) {
+    const double w1 = size(rng), h1 = size(rng), w2 = size(rng), h2 = size(rng), x = offset(rng);
+    CAPTURE(trial, w1, h1, w2, h2, x);
+    const double overlap =
+        std::max(0.0, std::min(w1, x + w2) - std::max(0.0, x)) * std::min(h1, h2);
+    const auto first = polygon({{0, 0}, {w1, 0}, {w1, h1}, {0, h1}});
+    const auto second = polygon({{x, 0}, {x + w2, 0}, {x + w2, h2}, {x, h2}});
+    const auto backward = polygon({{x, h2}, {x + w2, h2}, {x + w2, 0}, {x, 0}});
+    const auto united = regions_of({first, second}, FillRule::kNonZero);
+    const auto parity = regions_of({first, second}, FillRule::kEvenOdd);
+    const auto cancelled = regions_of({first, backward}, FillRule::kNonZero);
+    CHECK(std::abs(total_area(united) - (w1 * h1 + w2 * h2 - overlap)) <= 1e-8);
+    CHECK(std::abs(total_area(parity) - (w1 * h1 + w2 * h2 - 2 * overlap)) <= 1e-8);
+    CHECK(std::abs(total_area(cancelled) - (w1 * h1 + w2 * h2 - 2 * overlap)) <= 1e-8);
+  }
 }

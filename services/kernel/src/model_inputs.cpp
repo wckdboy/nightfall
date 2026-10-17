@@ -280,6 +280,7 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
       for (auto index : selected) picked.push_back(std::move((*regions)[index]));
       *regions = std::move(picked);
     }
+    if (regions->empty()) fail("/profile", "profile has no filled regions");
     return std::move(*regions);
   });
 }

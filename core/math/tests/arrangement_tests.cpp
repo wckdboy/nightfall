@@ -153,7 +153,86 @@ TEST_CASE("small faces and stationary edges", "[arrangement]") {
   CHECK(windings(*r) == std::vector<int>{1});
 }
 
-TEST_CASE("coincident edges are reported, not mis-arranged", "[arrangement]") {
-  const auto r = arrange(std::vector<std::vector<NurbsCurve2>>{square(0, 0, 1), square(1, 0, 1)});
-  CHECK_FALSE(r.has_value());
+TEST_CASE("shared straight edges retain topology with cancelling winding",
+          "[arrangement][shared]") {
+  const auto a = arranged({square(0, 0, 1), square(1, 0, 1)});
+  CHECK(a.vertices.size() == 6);
+  CHECK(a.half_edges.size() == 14);
+  CHECK(windings(a) == std::vector<int>{1, 1});
+  CHECK(std::ranges::count(a.half_edges, 0, &Arrangement::HalfEdge::direction) == 2);
+  check_euler(a);
+}
+
+TEST_CASE("partial shared straight edges split both boundaries", "[arrangement][shared]") {
+  const auto a = arranged({square(0, 0, 4), square(4, 1, 2)});
+  CHECK(a.vertices.size() == 8);
+  CHECK(a.half_edges.size() == 18);
+  CHECK(windings(a) == std::vector<int>{1, 1});
+  check_euler(a);
+  const auto overlap = arranged({square(0, 0, 2), square(1, 0, 2)});
+  CHECK(windings(overlap) == std::vector<int>{1, 1, 2});
+  CHECK(std::ranges::count(overlap.half_edges, 2, &Arrangement::HalfEdge::direction) == 2);
+  check_euler(overlap);
+}
+
+TEST_CASE("shared straight duplicates add signed contributions", "[arrangement][shared]") {
+  for (const bool ccw : {true, false}) {
+    const auto a = arranged({square(0, 0, 2), square(0, 0, 2, ccw)});
+    CHECK(a.half_edges.size() == 8);
+    CHECK(windings(a) == std::vector<int>{ccw ? 2 : 0});
+    for (const auto& h : a.half_edges) CHECK(std::abs(h.direction) == (ccw ? 2 : 0));
+    check_euler(a);
+  }
+  const auto three = arranged({square(0, 0, 2), square(0, 0, 2), square(0, 0, 2, false)});
+  CHECK(windings(three) == std::vector<int>{1});
+  for (const auto& h : three.half_edges) CHECK(std::abs(h.direction) == 1);
+  check_euler(three);
+}
+
+TEST_CASE("shared rational straight spans keep their original parameterization",
+          "[arrangement][shared]") {
+  auto first = square(0, 0, 4);
+  const auto rational =
+      NurbsCurve2::make(KnotVector::make({2, 2, 9, 9}, 1).value(), {{0, 0}, {4, 0}}, {1, 7})
+          .value();
+  first[0] = rational;
+  const auto a = arranged({first, square(1, 0, 2)});
+  CHECK(windings(a) == std::vector<int>{1, 2});
+  check_euler(a);
+  int spans = 0;
+  for (std::size_t h = 0; h < a.half_edges.size(); h += 2) {
+    const auto& c = a.half_edges[h].curve;
+    if (!c.rational()) continue;
+    ++spans;
+    for (const double f : {0.0, 0.25, 0.5, 0.75, 1.0}) {
+      const double u = std::lerp(c.domain_start(), c.domain_end(), f);
+      CHECK(length(c.point(u) - rational.point(u)) <= 1e-12);
+    }
+  }
+  CHECK(spans == 3);
+}
+
+TEST_CASE("shared straight boundaries include multi-span polylines", "[arrangement][shared]") {
+  const auto poly = make_polyline(std::vector<Vec2>{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}});
+  const auto a = arranged({{poly}, square(2, 0, 2)});
+  CHECK(windings(a) == std::vector<int>{1, 1});
+  CHECK(a.half_edges.size() == 14);
+  check_euler(a);
+}
+
+TEST_CASE("shared straight seams split at crossings from a third path", "[arrangement][shared]") {
+  const auto a = arranged({square(0, 0, 2), square(2, 0, 2), square(1, 1, 2)});
+  CHECK(windings(a) == std::vector<int>{1, 1, 1, 2, 2});
+  check_euler(a);
+  for (const auto& h : a.half_edges) {
+    CHECK(a.half_edges[static_cast<std::size_t>(h.next)].origin == h.target);
+    CHECK(a.half_edges[static_cast<std::size_t>(h.twin)].direction == -h.direction);
+  }
+}
+
+TEST_CASE("curved shared stretches remain explicit errors", "[arrangement][shared]") {
+  const auto circle = make_circle(Vec2{0, 0}, 1);
+  const auto a = arrange(std::vector<std::vector<NurbsCurve2>>{{circle}, {circle}});
+  REQUIRE_FALSE(a);
+  CHECK(a.error().find("#74") != std::string::npos);
 }

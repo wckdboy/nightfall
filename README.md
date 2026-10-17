@@ -81,6 +81,13 @@ decomposition handles spline corners before region
 detection. Initial work limits are 4,096 sketch curves, 4,096 spline control points per sketch
 and 4,096 profile spans; oversized inputs report errors before arrangement work.
 
+Closed outlines may share straight boundaries: adjacent rectangles merge into one filled
+region, partial overlaps split at their endpoints, and duplicate outlines follow the selected
+`evenodd` (default) or `nonzero` fill rule. Rational degree-1 spans retain their original
+parameterization. A profile whose outlines cancel reports an empty-profile error before kernel
+work. Shared stretches involving higher-degree curves remain tracked in
+[#74](https://github.com/wckdboy/nightfall/issues/74).
+
 Booleans union, subtract or intersect a target with the union of its tool bodies. Tools are
 consumed on success unless `keep_tools` is true; failed operations preserve the tools and
 invalidate the target for downstream execution. Empty or non-solid results are errors.
@@ -95,8 +102,8 @@ partial turns retain start/end cap provenance. Profile control hulls must stay o
 of the axis, touching it if needed; potentially overlapping sweeps are rejected. Sketch-line
 and selector axes remain unimplemented.
 
-To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve
-and parametric elliptic tube):
+To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
+parametric elliptic tube and a plate made from rectangles sharing an edge):
 
 ```sh
 third_party/build-occt.sh
