@@ -256,6 +256,25 @@ std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> spli
 }
 
 template <typename Point>
+std::vector<NurbsCurve<Point>> decompose(const NurbsCurve<Point>& curve) {
+  std::vector<double> cuts;
+  for (const double k : curve.knots().knots()) {
+    if (k > curve.domain_start() && k < curve.domain_end() && (cuts.empty() || k != cuts.back())) {
+      cuts.push_back(k);
+    }
+  }
+  std::vector<NurbsCurve<Point>> pieces;
+  NurbsCurve<Point> rest = curve;
+  for (const double u : cuts) {
+    auto halves = split(rest, u).value();  // u is strictly inside rest's domain
+    pieces.push_back(std::move(halves.first));
+    rest = std::move(halves.second);
+  }
+  pieces.push_back(std::move(rest));
+  return pieces;
+}
+
+template <typename Point>
 NurbsCurve<Point> reverse(const NurbsCurve<Point>& curve) {
   const std::span<const double> U = curve.knots().knots();
   const double sum = curve.domain_start() + curve.domain_end();
@@ -281,6 +300,8 @@ template std::expected<std::pair<NurbsCurve2, NurbsCurve2>, std::string> split(c
 template std::expected<std::pair<NurbsCurve3, NurbsCurve3>, std::string> split(const NurbsCurve3&,
                                                                                double);
 
+template std::vector<NurbsCurve2> decompose(const NurbsCurve2&);
+template std::vector<NurbsCurve3> decompose(const NurbsCurve3&);
 template NurbsCurve2 reverse(const NurbsCurve2&);
 template NurbsCurve3 reverse(const NurbsCurve3&);
 

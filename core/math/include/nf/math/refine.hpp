@@ -10,6 +10,7 @@
 #include <expected>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "nf/math/nurbs_curve.hpp"
 
@@ -32,6 +33,11 @@ template <typename Point>
 template <typename Point>
 [[nodiscard]] std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> split(
     const NurbsCurve<Point>& curve, double u);
+
+/// The curve's Bézier pieces, one per non-empty knot span, in order (splitting at every
+/// interior knot). Each piece keeps its original parameters.
+template <typename Point>
+[[nodiscard]] std::vector<NurbsCurve<Point>> decompose(const NurbsCurve<Point>& curve);
 
 /// The same curve traversed the other way on the same domain: C'(u) = C(a + b − u).
 template <typename Point>
