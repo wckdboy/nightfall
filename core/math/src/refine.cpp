@@ -255,22 +255,48 @@ std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> spli
   return std::pair{std::move(*l), std::move(*rr)};
 }
 
+// The NURBS Book A5.6: one pass, inserting each interior knot up to multiplicity p locally.
 template <typename Point>
 std::vector<NurbsCurve<Point>> decompose(const NurbsCurve<Point>& curve) {
-  std::vector<double> cuts;
-  for (const double k : curve.knots().knots()) {
-    if (k > curve.domain_start() && k < curve.domain_end() && (cuts.empty() || k != cuts.back())) {
-      cuts.push_back(k);
+  const int p = curve.degree();
+  const std::span<const double> U = curve.knots().knots();
+  const auto Pw = to_hom(curve);
+  const int m = static_cast<int>(U.size()) - 1;
+  const auto at = [](int i) { return static_cast<std::size_t>(i); };
+  constexpr std::size_t kN = KnotVector::kMaxDegree + 1;
+
+  std::vector<NurbsCurve<Point>> pieces;
+  std::array<Hom<Point>, kN> q{}, next{};
+  std::array<double, kN> alphas{};
+  for (int i = 0; i <= p; ++i) q[at(i)] = Pw[at(i)];
+  int a = p, b = p + 1;
+  while (b < m) {
+    const int first = b;
+    while (b < m && U[at(b + 1)] == U[at(b)]) ++b;
+    const int mult = b - first + 1;
+    if (mult < p) {
+      const double numer = U[at(b)] - U[at(a)];
+      for (int j = p; j > mult; --j) alphas[at(j - mult - 1)] = numer / (U[at(a + j)] - U[at(a)]);
+      const int r = p - mult;
+      for (int j = 1; j <= r; ++j) {
+        const int save = r - j, s = mult + j;
+        for (int k = p; k >= s; --k) q[at(k)] = lerp(alphas[at(k - s)], q[at(k)], q[at(k - 1)]);
+        if (b < m) next[at(save)] = q[at(p)];
+      }
+    }
+    std::vector<double> knots(at(p + 1), U[at(a)]);
+    knots.insert(knots.end(), at(p + 1), U[at(b)]);
+    pieces.push_back(from_hom(std::move(knots), p,
+                              std::vector<Hom<Point>>(q.begin(), q.begin() + p + 1),
+                              curve.rational())
+                         .value());
+    if (b < m) {
+      for (int i = 0; i < p - mult; ++i) q[at(i)] = next[at(i)];
+      for (int i = p - mult; i <= p; ++i) q[at(i)] = Pw[at(b - p + i)];
+      a = b;
+      ++b;
     }
   }
-  std::vector<NurbsCurve<Point>> pieces;
-  NurbsCurve<Point> rest = curve;
-  for (const double u : cuts) {
-    auto halves = split(rest, u).value();  // u is strictly inside rest's domain
-    pieces.push_back(std::move(halves.first));
-    rest = std::move(halves.second);
-  }
-  pieces.push_back(std::move(rest));
   return pieces;
 }
 
