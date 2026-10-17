@@ -20,7 +20,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | --- | --- | --- | --- |
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
-| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | In progress: shared named-expression parser |
+| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | In progress: dimensional expressions; parameter graph next |
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel |  |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
@@ -58,3 +58,8 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 - 2026-10-17 — #91 reuses the math expression grammar for parameter names and numeric unit
   suffixes, retaining source locations for diagnostics. Both parser modes bound source size,
   node count and recursion; equation curves retain their numeric semantics.
+- 2026-10-17 — #91 dimensional expressions normalize lengths to mm and angles to radians,
+  check arithmetic/functions and reject non-finite results. Bare JSON field numbers use
+  document units; parameter numbers and bare numbers inside expressions are dimensionless.
+  Compiled expressions are reusable. Declared parameter names take precedence over pi/e;
+  function syntax and numeric unit suffixes remain unambiguous.

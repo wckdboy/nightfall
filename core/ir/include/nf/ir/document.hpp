@@ -7,8 +7,8 @@
 
 namespace nf::ir {
 
-/// A diagnostic: parse, schema, unknown_id or forward_reference; pointer is RFC 6901.
-/// JSON syntax errors use the root pointer and a byte offset; other errors name the field.
+/// A diagnostic: parse, schema, unit, bounds, unknown_id or forward_reference; pointer is RFC 6901.
+/// The pointer names the field (or root); offsets identify bytes in JSON or expression source.
 struct Error {
   std::string code, message, pointer;
   std::optional<std::size_t> offset;
