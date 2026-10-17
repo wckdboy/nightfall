@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -14,6 +13,7 @@
 #include <vector>
 
 #include "nf/math/refine.hpp"
+#include "number.hpp"
 
 namespace nf::svg {
 
@@ -24,13 +24,7 @@ using math::Vec2;
 
 double dist(Vec2 a, Vec2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
 
-// Shortest text that reads back to the same double; never "-0".
-std::string format(double x) {
-  if (x == 0.0) x = 0.0;
-  std::array<char, 32> buf{};
-  const auto r = std::to_chars(buf.data(), buf.data() + buf.size(), x);
-  return std::string(buf.data(), r.ptr);
-}
+using detail::format_number;
 
 class Writer {
  public:
@@ -107,7 +101,8 @@ class Writer {
     const double bound = deviation_bound(cubic, restrict(c, a, b));
     if (bound > options_.tolerance) {
       if (depth >= kMaxDepth || ++pieces_ > kMaxPieces) {
-        failed_ = "tolerance " + format(options_.tolerance) + " is not reachable for this curve";
+        failed_ =
+            "tolerance " + format_number(options_.tolerance) + " is not reachable for this curve";
         return;
       }
       const double m = (a + b) / 2;
@@ -159,7 +154,7 @@ class Writer {
     const auto put = [&](double x) {
       if (!first && !(x < 0)) out_.text += ' ';  // a minus sign separates by itself
       first = false;
-      out_.text += format(x);
+      out_.text += format_number(x);
     };
     for (const double x : numbers) put(x);
     for (const Vec2 q : points) {
@@ -239,8 +234,9 @@ std::expected<Exported, std::string> write_document(std::span<const Subpath> mod
   doc.text =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
       "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" +
-      format(width) + "mm\" height=\"" + format(height) + "mm\" viewBox=\"" + format(lo.x) + ' ' +
-      format(lo.y) + ' ' + format(width) + ' ' + format(height) + "\">\n  <path d=\"" + path.text +
+      format_number(width) + "mm\" height=\"" + format_number(height) + "mm\" viewBox=\"" +
+      format_number(lo.x) + ' ' + format_number(lo.y) + ' ' + format_number(width) + ' ' +
+      format_number(height) + "\">\n  <path d=\"" + path.text +
       "\" fill=\"none\" stroke=\"black\" stroke-width=\"0.1\"/>\n</svg>\n";
   return doc;
 }

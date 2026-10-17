@@ -3,7 +3,7 @@
 
 # SVG ↔ exact NURBS (RFC 0004). Kernel-free, like libnf-math, so the app can import SVG
 # without a round trip to the kernel service.
-add_library(nf_svg STATIC src/path.cpp src/export.cpp src/xml.cpp)
+add_library(nf_svg STATIC src/number.cpp src/path.cpp src/export.cpp src/xml.cpp)
 add_library(nf::svg ALIAS nf_svg)
 target_include_directories(nf_svg PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nf_svg PUBLIC nf::math PRIVATE nf::warnings)
