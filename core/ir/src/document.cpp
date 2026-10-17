@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "nf/ir/document.hpp"
+#include "schema.hpp"
 
 #include <algorithm>
 #include <unordered_set>
@@ -179,6 +180,8 @@ std::expected<Document, Errors> decode(const Value& root) {
   else
     r.fail("/ui", "expected an object");
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));
+  auto schema = detail::check_schema(root);
+  if (!schema.errors.empty()) return std::unexpected(std::move(schema.errors));
   return d;
 }
 

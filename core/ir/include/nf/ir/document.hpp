@@ -42,9 +42,9 @@ struct Feature {
   json::Object extensions;
 };
 
-/// The RFC 0005 v1 document envelope. Numeric expressions and feature inputs stay as JSON:
-/// read_document checks their container types, not expression semantics (#91), per-feature
-/// schemas, body/entity IDs or input references (the remaining validation work in #90).
+/// The RFC 0005 v1 document. Numeric expressions and feature inputs stay as JSON:
+/// read_document enforces the published per-feature schemas. Expression semantics (#91),
+/// body/entity IDs and input references remain separate validation work in #90.
 /// References are metadata only: reading a document never opens a referenced path.
 struct Document {
   Units units;
@@ -63,7 +63,8 @@ inline constexpr std::size_t kMaxDocumentBytes = 16 * 1024 * 1024;
 /// Checks the format/version first; rejects older (none supported yet) and newer versions
 /// without reinterpretation. Collects independent field errors, checks unique IDs within
 /// each envelope namespace and resolves history_end. Unknown keys must start with "x-";
-/// UI and inputs are opaque objects. No geometry is evaluated or external file accessed.
+/// UI and x- extension values are opaque. Feature inputs follow the published v1 schema.
+/// No geometry is evaluated or external file accessed.
 /// All nine top-level fields are required; meta and the three collections may be empty.
 [[nodiscard]] std::expected<Document, Errors> read_document(std::string_view text);
 

@@ -254,9 +254,12 @@ TEST_CASE("IR document: in-memory nesting is checked before serialization", "[ir
   // root(0), features(1), feature(2), inputs(3), then the extension value(4).
   json::Value nested;
   for (int i = 4; i < json::kMaxDepth; ++i) nested = json::Array{std::move(nested)};
-  doc.features[0].inputs = json::Object{{"x-nested", nested}};
+  auto inputs = *doc.features[0].inputs.if_object();
+  inputs.push_back({"x-nested", nested});
+  doc.features[0].inputs = inputs;
   REQUIRE(write_document(doc).has_value());
-  doc.features[0].inputs = json::Object{{"x-nested", json::Array{std::move(nested)}}};
+  inputs.back().value = json::Array{std::move(nested)};
+  doc.features[0].inputs = std::move(inputs);
   const auto written = write_document(doc);
   REQUIRE_FALSE(written.has_value());
   CHECK(written.error()[0].pointer == "/features/0/inputs");
@@ -292,29 +295,21 @@ TEST_CASE("IR document: every envelope field and collection item is checked", "[
   CHECK(written.error()[0].pointer == "/references/1/id");
 }
 
-TEST_CASE("IR document: all v1 feature envelopes remain stored through rollback",
+TEST_CASE("IR document: rollback preserves features and still validates their inputs",
           "[ir][document]") {
-  Document doc;
-  for (const auto* type : {"sketch", "extrude", "revolve", "sweep", "loft", "fillet", "chamfer",
-                           "shell", "hole", "boolean", "pattern_linear", "pattern_circular",
-                           "mirror", "transform", "import", "script"}) {
-    Feature f;
-    f.id = type;
-    f.type = type;
-    doc.features.push_back(std::move(f));
-  }
-  doc.history_end = "extrude";
+  auto doc = read_ok();
+  doc.history_end = "outline";
   doc.features.back().suppressed = true;
   const auto text = write_document(doc);
   REQUIRE(text.has_value());
   const auto again = read_ok(*text);
-  CHECK(again.features.size() == 16);
+  CHECK(again.features.size() == 2);
   CHECK(again.features.back().suppressed == true);
-  // Rollback and suppression never hide malformed stored envelopes.
-  doc.features.back().type = "unknown";
+  // Rollback and suppression never hide malformed stored inputs.
+  doc.features.back().inputs = json::Object{};
   const auto invalid = write_document(doc);
   REQUIRE_FALSE(invalid.has_value());
-  CHECK(invalid.error()[0].pointer == "/features/15/type");
+  CHECK(invalid.error()[0].pointer.starts_with("/features/1/inputs"));
 }
 
 TEST_CASE("IR document: parse errors and size limits are reported", "[ir][document]") {

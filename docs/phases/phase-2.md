@@ -43,3 +43,6 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 - 2026-10-17 — #90 publishes the JSON Schema 2020-12 definitions for all 16 feature types,
   sketch entities, constraints and semantic selectors. A shared valid/invalid corpus is
   independently checked with pinned Python test tooling in CI; native enforcement follows.
+- 2026-10-17 — #90 native schema enforcement: load/save uses the embedded published schema,
+  including recursive selectors and mutually exclusive operation forms. Native and Python
+  checks share the corpus; reference annotations are collected for the semantic checker.
