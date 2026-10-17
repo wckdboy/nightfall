@@ -8,6 +8,7 @@
 #include <cstdio>
 
 #include "nf/ir/document.hpp"
+#include "nf/ir/parameters.hpp"
 
 using namespace nf::ir;
 using json::Array;
@@ -78,5 +79,19 @@ int main() {
     });
     std::printf("  %zu features, %zu bytes: load %.1f us; edit + save %.1f us\n", count,
                 text.size(), load, save);
+    std::vector<Parameter> params;
+    for (std::size_t i = 0; i < count; ++i) {
+      Parameter p;
+      p.name = "p" + std::to_string(i);
+      p.value = i == 0 ? "1 mm" : "p" + std::to_string(i - 1) + " + 1 mm";
+      p.min = "0 mm";
+      params.push_back(std::move(p));
+    }
+    const double resolve = microseconds([&](int i) {
+      params[0].value = i % 2 == 0 ? "1 mm" : "2 mm";
+      return evaluate_parameters(params).value().values.size();
+    });
+    std::printf("  %zu chained parameters: edit + compile + evaluate + bounds %.1f us\n", count,
+                resolve);
   }
 }

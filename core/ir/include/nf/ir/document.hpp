@@ -7,7 +7,8 @@
 
 namespace nf::ir {
 
-/// A diagnostic: parse, schema, unit, bounds, unknown_id or forward_reference; pointer is RFC 6901.
+/// A diagnostic: parse, schema, unit, bounds, cycle, unknown_id or forward_reference.
+/// Pointers use RFC 6901.
 /// The pointer names the field (or root); offsets identify bytes in JSON or expression source.
 struct Error {
   std::string code, message, pointer;
@@ -44,7 +45,8 @@ struct Feature {
 
 /// The RFC 0005 v1 document. Numeric expressions and feature inputs stay as JSON:
 /// read_document enforces the published per-feature schemas, ID namespaces and ordered
-/// feature/body/sketch/entity references. Expression semantics are evaluated in #91.
+/// feature/body/sketch/entity references. Parameter expressions, dependencies and bounds are
+/// validated on load/save; feature-field expressions are evaluated separately (expression.hpp).
 /// References are metadata only: reading a document never opens a referenced path.
 struct Document {
   Units units;
@@ -64,6 +66,8 @@ inline constexpr std::size_t kMaxDocumentBytes = 16 * 1024 * 1024;
 /// without reinterpretation. Collects independent errors, checks unique IDs and typed,
 /// backward-only input references, and resolves history_end. Unknown keys must start with "x-";
 /// UI and x- extension values are opaque. Feature inputs follow the published v1 schema.
+/// Parameter values/bounds must resolve to finite quantities with compatible dimensions and
+/// an acyclic value graph; their authored strings are preserved, not replaced with numbers.
 /// No geometry is evaluated or external file accessed.
 /// All nine top-level fields are required; meta and the three collections may be empty.
 /// Reports at most 128 diagnostics per validation stage.

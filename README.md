@@ -6,7 +6,7 @@ Nightfall pairs fluid direct modeling with a full parametric history, on exact N
 geometry. Every part is a program: defined by math, code and SVG, editable by hand or
 by any AI agent.
 
-> **Status:** Phase 2 — parametric document foundations. The NURBS math and SVG phase is
+> **Status:** Phase 2 — parametric documents and unit-aware expressions. The NURBS math and SVG phase is
 > complete; the native modeling app is not usable yet. See the [phase tracker](docs/phases/phase-2.md).
 
 ## Principles
@@ -54,6 +54,13 @@ NF_SCHEMA_PYTHON=build/schema-venv/bin/python tools/check.sh
 
 The published [part schema](core/ir/schema/part-v1.schema.json) is generated from
 `core/ir/schema/build_schema.py`; `tools/check.sh` rejects a stale generated copy.
+
+Part load/save also validates parameter expressions, dependencies and bounds. Values such as
+`"2 * bolt_pitch + 10 mm"` resolve in dependency order, with lengths normalized to mm and
+angles to radians. Parameter numbers are dimensionless; bare numbers in feature fields use
+the document units. Errors include the field's JSON Pointer and expression offset when available.
+See [the expression API](core/ir/include/nf/ir/expression.hpp) and
+[parameter evaluation](core/ir/include/nf/ir/parameters.hpp).
 
 ## Contributing
 

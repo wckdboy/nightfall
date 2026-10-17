@@ -21045,7 +21045,7 @@
       },
       "params": [
         {
-          "name": "w\u00e1ll",
+          "name": "wáll",
           "value": "3 mm"
         }
       ],
@@ -24285,6 +24285,519 @@
       ],
       "history_end": null,
       "ui": {}
+    }
+  },
+  {
+    "name": "parameter-semantics-out-of-order",
+    "schema_valid": true,
+    "valid": true,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "pitch * 2 + 10 mm"
+        },
+        {
+          "name": "pitch",
+          "value": "2 cm"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "parameter-semantics-self-bound",
+    "schema_valid": true,
+    "valid": true,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "20 mm",
+          "min": "width/2",
+          "max": "width*2"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "parameter-semantics-angle-functions",
+    "schema_valid": true,
+    "valid": true,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "angle",
+          "value": "atan(1)"
+        },
+        {
+          "name": "ratio",
+          "value": "sin(angle)"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "parameter-semantics-shadowed-constant",
+    "schema_valid": true,
+    "valid": true,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "pi*2"
+        },
+        {
+          "name": "pi",
+          "value": "3 mm"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "parameter-semantics-parse",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 +"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "parse",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-unknown",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "missing + 1 mm"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-no-implicit-t",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "t"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-self-cycle",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "width"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "cycle",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-mutual-cycle",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "pitch"
+        },
+        {
+          "name": "pitch",
+          "value": "width"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "cycle",
+      "pointer": "/params/1/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-mixed-units",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm + 3 deg"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unit",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-bound-dimension",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm",
+          "min": 1
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unit",
+      "pointer": "/params/0/min"
+    }
+  },
+  {
+    "name": "parameter-semantics-below-min",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm",
+          "min": "3 mm"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "bounds",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-above-max",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm",
+          "max": "1 mm"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "bounds",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-reversed-bounds",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "count",
+          "value": 2,
+          "min": 3,
+          "max": 1
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "bounds",
+      "pointer": "/params/0/max"
+    }
+  },
+  {
+    "name": "parameter-semantics-domain",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "sqrt(-1)"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "bounds",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-unknown-bound",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm",
+          "max": "missing"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/params/0/max"
+    }
+  },
+  {
+    "name": "parameter-semantics-fractional-dimension",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "sqrt(2 mm)"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "unit",
+      "pointer": "/params/0/value"
+    }
+  },
+  {
+    "name": "parameter-semantics-bound-parse",
+    "schema_valid": true,
+    "valid": false,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {},
+      "params": [
+        {
+          "name": "width",
+          "value": "2 mm",
+          "max": "3 + )"
+        }
+      ],
+      "references": [],
+      "features": [],
+      "history_end": null,
+      "ui": {}
+    },
+    "error": {
+      "code": "parse",
+      "pointer": "/params/0/max"
     }
   }
 ]

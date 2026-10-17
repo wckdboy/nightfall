@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "nf/ir/document.hpp"
+#include "nf/ir/parameters.hpp"
 #include "schema.hpp"
 
 #include <algorithm>
@@ -185,6 +186,8 @@ std::expected<Document, Errors> decode(const Value& root) {
   if (!schema.errors.empty()) return std::unexpected(std::move(schema.errors));
   auto references = detail::check_links(d, schema.links);
   if (!references.empty()) return std::unexpected(std::move(references));
+  auto parameters = evaluate_parameters(d.params);
+  if (!parameters) return std::unexpected(std::move(parameters.error()));
   return d;
 }
 

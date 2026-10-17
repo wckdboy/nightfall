@@ -20,7 +20,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | --- | --- | --- | --- |
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
-| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | In progress: dimensional expressions; parameter graph next |
+| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel |  |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
@@ -63,3 +63,11 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   document units; parameter numbers and bare numbers inside expressions are dimensionless.
   Compiled expressions are reusable. Declared parameter names take precedence over pi/e;
   function syntax and numeric unit suffixes remain unambiguous.
+- 2026-10-17 — #91 resolves parameter values in dependency order and checks inclusive bounds
+  afterward. Load/save rejects cycles, unknown names, unit mismatches and non-finite results,
+  while preserving authored expressions. Iterative traversal handles a 10,000-parameter chain;
+  source/instruction/diagnostic limits bound generated inputs. Feature evaluation remains #92.
+  Development checks pass 189/189 tests; the shared corpus now has 202 cases, and all five
+  Swift integration tests pass. Release medians (5 × 100): edit/compile/evaluate/bounds for
+  30 chained parameters takes 20.1 µs, for 300 takes 201.6 µs. No geometry is evaluated.
+  Full ASan/UBSan checks also pass 189/189 tests (160.11 s), with no sanitizer diagnostics.
