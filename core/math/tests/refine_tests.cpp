@@ -157,6 +157,20 @@ TEST_CASE("refinement keeps non-rational curves non-rational", "[refine]") {
   CHECK_FALSE(split(c, 0.6)->first.rational());
 }
 
+TEST_CASE("reversal traces the curve backwards on the same domain", "[refine][property]") {
+  const int degree = GENERATE(1, 2, 3, 5);
+  const auto seed = GENERATE(take(10, random(1u, 1000000u)));
+  const NurbsCurve3 c = random_curve(degree, seed);
+  const NurbsCurve3 r = reverse(c);
+  CHECK(r.domain_start() == c.domain_start());
+  CHECK(r.domain_end() == c.domain_end());
+  CHECK(r.points().front() == c.points().back());
+  for (int i = 0; i <= 200; ++i) {
+    const double u = i / 200.0;
+    CHECK(distance(r.point(u), c.point(1.0 - u)) <= kTol);
+  }
+}
+
 TEST_CASE("refinement rejects invalid requests", "[refine]") {
   const NurbsCurve3 c = random_curve(3, 7);
   CHECK_FALSE(insert_knot(c, 0.0).has_value());     // domain end
