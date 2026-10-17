@@ -4,6 +4,7 @@
 #include "nf/ir/json.hpp"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
@@ -296,8 +297,195 @@ class Parser {
   std::string_view s_;
   std::size_t i_ = 0;
 };
+
+void quote(std::string& out, std::string_view s) {
+  out.push_back('"');
+  for (const char ch : s) {
+    const auto c = static_cast<unsigned char>(ch);
+    switch (c) {
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\b':
+        out += "\\b";
+        break;
+      case '\f':
+        out += "\\f";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      default:
+        if (c < 0x20) {
+          constexpr std::string_view kHex = "0123456789abcdef";
+          out += "\\u00";
+          out.push_back(kHex[static_cast<std::size_t>(c >> 4)]);
+          out.push_back(kHex[static_cast<std::size_t>(c & 0xf)]);
+        } else {
+          out.push_back(ch);
+        }
+    }
+  }
+  out.push_back('"');
+}
+
+// UTF-16 code units of a valid UTF-8 string, for JCS key order.
+std::u16string utf16(std::string_view s) {
+  std::u16string out;
+  for (std::size_t i = 0; i < s.size();) {
+    const auto b = [&](std::size_t k) {
+      return static_cast<unsigned>(static_cast<unsigned char>(s[i + k]));
+    };
+    unsigned cp = 0;
+    if (b(0) < 0x80) {
+      cp = b(0);
+      i += 1;
+    } else if (b(0) < 0xe0) {
+      cp = ((b(0) & 0x1f) << 6) | (b(1) & 0x3f);
+      i += 2;
+    } else if (b(0) < 0xf0) {
+      cp = ((b(0) & 0x0f) << 12) | ((b(1) & 0x3f) << 6) | (b(2) & 0x3f);
+      i += 3;
+    } else {
+      cp = ((b(0) & 0x07) << 18) | ((b(1) & 0x3f) << 12) | ((b(2) & 0x3f) << 6) | (b(3) & 0x3f);
+      i += 4;
+    }
+    if (cp >= 0x10000) {
+      out.push_back(static_cast<char16_t>(0xd800 + ((cp - 0x10000) >> 10)));
+      out.push_back(static_cast<char16_t>(0xdc00 + ((cp - 0x10000) & 0x3ff)));
+    } else {
+      out.push_back(static_cast<char16_t>(cp));
+    }
+  }
+  return out;
+}
+
+void put_canonical(std::string& out, const Value& v) {
+  if (const Array* a = v.if_array()) {
+    out.push_back('[');
+    for (std::size_t k = 0; k < a->size(); ++k) {
+      if (k > 0) out.push_back(',');
+      put_canonical(out, (*a)[k]);
+    }
+    out.push_back(']');
+  } else if (const Object* o = v.if_object()) {
+    std::vector<std::pair<std::u16string, const Member*>> sorted;
+    sorted.reserve(o->size());
+    for (const Member& m : *o) sorted.emplace_back(utf16(m.key), &m);
+    std::ranges::sort(sorted, {}, &std::pair<std::u16string, const Member*>::first);
+    out.push_back('{');
+    for (std::size_t k = 0; k < sorted.size(); ++k) {
+      if (k > 0) out.push_back(',');
+      quote(out, sorted[k].second->key);
+      out.push_back(':');
+      put_canonical(out, sorted[k].second->value);
+    }
+    out.push_back('}');
+  } else if (const std::string* s = v.if_string()) {
+    quote(out, *s);
+  } else if (const double* x = v.if_number()) {
+    out += format_number(*x);
+  } else if (const bool* b = v.if_bool()) {
+    out += *b ? "true" : "false";
+  } else {
+    out += "null";
+  }
+}
+
+void put_pretty(std::string& out, const Value& v, int indent) {
+  const auto newline = [&](int level) {
+    out.push_back('\n');
+    out.append(static_cast<std::size_t>(2 * level), ' ');
+  };
+  if (const Array* a = v.if_array(); a && !a->empty()) {
+    out.push_back('[');
+    for (std::size_t k = 0; k < a->size(); ++k) {
+      if (k > 0) out.push_back(',');
+      newline(indent + 1);
+      put_pretty(out, (*a)[k], indent + 1);
+    }
+    newline(indent);
+    out.push_back(']');
+  } else if (const Object* o = v.if_object(); o && !o->empty()) {
+    out.push_back('{');
+    for (std::size_t k = 0; k < o->size(); ++k) {
+      if (k > 0) out.push_back(',');
+      newline(indent + 1);
+      quote(out, (*o)[k].key);
+      out += ": ";
+      put_pretty(out, (*o)[k].value, indent + 1);
+    }
+    newline(indent);
+    out.push_back('}');
+  } else {
+    put_canonical(out, v);  // scalars and empty containers
+  }
+}
+
 }  // namespace
 
 std::expected<Value, ParseError> parse(std::string_view text) { return Parser(text).document(); }
+
+std::string write(const Value& v) {
+  std::string out;
+  put_pretty(out, v, 0);
+  out.push_back('\n');
+  return out;
+}
+
+std::string canonical(const Value& v) {
+  std::string out;
+  put_canonical(out, v);
+  return out;
+}
+
+std::string format_number(double x) {
+  if (x == 0.0) return "0";
+  // Shortest round-trip digits and exponent, then ECMAScript's layout (ECMA-262
+  // Number::toString): k digits d, decimal point after n of them.
+  std::array<char, 40> buf{};
+  const auto r = std::to_chars(buf.data(), buf.data() + buf.size(), std::abs(x),
+                               std::chars_format::scientific);
+  const std::string_view sci(buf.data(), static_cast<std::size_t>(r.ptr - buf.data()));
+  const std::size_t e_at = sci.find('e');
+  std::string digits;
+  for (const char c : sci.substr(0, e_at)) {
+    if (c != '.') digits.push_back(c);
+  }
+  const int exponent = std::atoi(std::string(sci.substr(e_at + 1)).c_str());
+  const int k = static_cast<int>(digits.size());
+  const int n = exponent + 1;
+  std::string out = x < 0 ? "-" : "";
+  if (k <= n && n <= 21) {
+    out += digits;
+    out.append(static_cast<std::size_t>(n - k), '0');
+  } else if (0 < n && n <= 21) {
+    out += digits.substr(0, static_cast<std::size_t>(n));
+    out += '.';
+    out += digits.substr(static_cast<std::size_t>(n));
+  } else if (-6 < n && n <= 0) {
+    out += "0.";
+    out.append(static_cast<std::size_t>(-n), '0');
+    out += digits;
+  } else {
+    out += digits[0];
+    if (k > 1) {
+      out += '.';
+      out += digits.substr(1);
+    }
+    out += exponent > 0 ? "e+" : "e-";
+    out += std::to_string(std::abs(exponent));
+  }
+  return out;
+}
 
 }  // namespace nf::ir::json
