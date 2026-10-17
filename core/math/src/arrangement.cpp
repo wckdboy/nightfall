@@ -96,7 +96,7 @@ double swept_area(const NurbsCurve2& c, double tol) {
 
 // Winding number of the input around p: signed crossings of a ray from p. Rays that graze
 // a vertex or touch a curve tangentially are ambiguous; another direction is tried.
-std::optional<int> winding_at(const std::vector<NurbsCurve2>& input, Vec2 p, double tol) {
+std::optional<int> winding_at(std::span<const NurbsCurve2> input, Vec2 p, double tol) {
   for (int attempt = 0; attempt < 16; ++attempt) {
     const double angle = 0.7234 + attempt * 0.3979;  // arbitrary, irrational-ish directions
     const Vec2 dir{std::cos(angle), std::sin(angle)};
@@ -262,6 +262,84 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
     const auto w = winding_at(input, d[0] + n * (nearest / 2), tol);
     if (!w) return std::unexpected("winding number is ambiguous in every direction tried");
     face.winding = *w;
+  }
+  return out;
+}
+
+std::optional<int> winding_number(std::span<const NurbsCurve2> curves, Vec2 p) {
+  if (curves.empty()) return 0;
+  Vec2 lo = curves.front().points().front(), hi = lo;
+  for (const NurbsCurve2& c : curves) {
+    for (const Vec2 q : c.points()) {
+      lo = {std::min(lo.x, q.x), std::min(lo.y, q.y)};
+      hi = {std::max(hi.x, q.x), std::max(hi.y, q.y)};
+    }
+  }
+  const double tol = 1e-9 * std::max(length(hi - lo), 1e-300);
+  // On a curve the winding number is undefined; rays from there would disagree.
+  for (const NurbsCurve2& c : curves) {
+    if (closest_point(c, p).distance <= tol) return std::nullopt;
+  }
+  return winding_at(curves, p, tol);
+}
+
+std::expected<std::vector<Region>, std::string> regions(
+    std::span<const std::vector<NurbsCurve2>> paths, FillRule rule) {
+  auto arranged = arrange(paths);
+  if (!arranged) return std::unexpected(arranged.error());
+  const Arrangement& a = *arranged;
+  const auto filled = [&](int face) {
+    const int w = a.faces[at(face)].winding;
+    return rule == FillRule::kNonZero ? w != 0 : w % 2 != 0;
+  };
+  const auto boundary = [&](int h) {
+    const auto& he = a.half_edges[at(h)];
+    return filled(he.face) && !filled(a.half_edges[at(he.twin)].face);
+  };
+
+  // Boundary loops, filled side on the left. From a boundary half-edge, the loop continues
+  // with the first boundary half-edge clockwise of its twin at the target: next(twin(c)) is
+  // the outgoing half-edge just clockwise of c, so rotating that way finds it.
+  std::vector<bool> used(a.half_edges.size(), false);
+  std::vector<Loop> outers, holes;
+  std::vector<double> outer_areas;
+  for (std::size_t h0 = 0; h0 < a.half_edges.size(); ++h0) {
+    if (used[h0] || !boundary(static_cast<int>(h0))) continue;
+    Loop loop;
+    double area2 = 0.0;
+    double size = 0.0;
+    for (int h = static_cast<int>(h0); !used[at(h)];) {
+      used[at(h)] = true;
+      const NurbsCurve2& c = a.half_edges[at(h)].curve;
+      loop.curves.push_back(c);
+      size = std::max(size, extent(c));
+      int c_next = a.half_edges[at(h)].next;
+      while (!boundary(c_next)) c_next = a.half_edges[at(a.half_edges[at(c_next)].twin)].next;
+      h = c_next;
+    }
+    for (const NurbsCurve2& c : loop.curves) area2 += swept_area(c, 1e-6 * std::max(size, 1e-300));
+    if (area2 > 0) {
+      outers.push_back(std::move(loop));
+      outer_areas.push_back(area2 / 2);
+    } else {
+      holes.push_back(std::move(loop));
+    }
+  }
+
+  // Each hole belongs to the smallest outer loop around it.
+  std::vector<Region> out;
+  for (Loop& o : outers) out.push_back({std::move(o), {}});
+  for (Loop& hole : holes) {
+    const NurbsCurve2& c = hole.curves.front();
+    const Vec2 probe = c.point((c.domain_start() + c.domain_end()) / 2);
+    int best = -1;
+    for (std::size_t i = 0; i < out.size(); ++i) {
+      const auto w = winding_number(out[i].outer.curves, probe);
+      if (w && *w != 0 && (best < 0 || outer_areas[i] < outer_areas[at(best)]))
+        best = static_cast<int>(i);
+    }
+    if (best < 0) return std::unexpected("a hole lies outside every outer boundary");
+    out[at(best)].holes.push_back(std::move(hole));
   }
   return out;
 }

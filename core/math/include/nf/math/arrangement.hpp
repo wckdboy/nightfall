@@ -9,6 +9,7 @@
 #pragma once
 
 #include <expected>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -25,8 +26,11 @@ struct Arrangement {
   };
   struct Face {
     std::vector<int> half_edges;  // the boundary cycle, the face on the left of each
-    double area;                  // signed: > 0 bounded (counter-clockwise), ≤ 0 otherwise
-    int winding;                  // winding number of the input paths inside; 0 if unbounded
+    double area;                  // signed: > 0 for a counter-clockwise cycle around a bounded face
+    /// Winding number of the input in the face on the cycle's left: inside a bounded face,
+    /// or, for the outer cycle of a part nested inside another face, in that face; 0 for
+    /// the unbounded face.
+    int winding;
   };
   std::vector<Vec2> vertices;
   std::vector<HalfEdge> half_edges;
@@ -42,5 +46,30 @@ struct Arrangement {
 /// A single curve's own self-intersections (a cubic with a loop) are not split.
 [[nodiscard]] std::expected<Arrangement, std::string> arrange(
     std::span<const std::vector<NurbsCurve2>> paths);
+
+/// Winding number of closed curves around p (signed crossings along a ray, retried in other
+/// directions when one grazes a vertex or a tangent); nullopt for p on a curve (within 1e-9
+/// of the curves' size), where it is undefined.
+[[nodiscard]] std::optional<int> winding_number(std::span<const NurbsCurve2> curves, Vec2 p);
+
+enum class FillRule { kNonZero, kEvenOdd };
+
+/// A closed chain of curves: each starts where the previous ends, the last ends at the first.
+struct Loop {
+  std::vector<NurbsCurve2> curves;
+};
+
+/// A connected filled area: its outer boundary (counter-clockwise) and holes (clockwise).
+struct Region {
+  Loop outer;
+  std::vector<Loop> holes;
+};
+
+/// The filled areas of closed paths under an SVG fill rule, ready to extrude: the bounded
+/// faces of the arrangement whose winding number the rule fills, merged where they share an
+/// edge. Areas that touch only at a point are separate regions; a filled island inside a hole
+/// is a region of its own.
+[[nodiscard]] std::expected<std::vector<Region>, std::string> regions(
+    std::span<const std::vector<NurbsCurve2>> paths, FillRule rule);
 
 }  // namespace nf::math

@@ -22,7 +22,8 @@ if(NF_BUILD_TESTS)
     tests/query_tests.cpp
     tests/intersect_tests.cpp
     tests/fit_tests.cpp
-    tests/arrangement_tests.cpp)
+    tests/arrangement_tests.cpp
+    tests/region_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.

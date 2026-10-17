@@ -30,13 +30,14 @@ Evaluation and exact constructors come first; fitting and intersection after (RF
 | [#46](https://github.com/wckdboy/nightfall/issues/46) | 1.3 Exact constructors: lines, arcs, circles, polylines, Bézier | math | Done (#59) |
 | [#47](https://github.com/wckdboy/nightfall/issues/47) | 1.4 Knot insertion, degree elevation, splitting | math | Done (#60) |
 | [#48](https://github.com/wckdboy/nightfall/issues/48) | 1.5 SVG path data as exact NURBS | svg | Done (#62) |
-| [#61](https://github.com/wckdboy/nightfall/issues/61) | 1.5b SVG documents: shapes, transforms, units, viewBox | svg | In review (#65–#67) |
-| [#49](https://github.com/wckdboy/nightfall/issues/49) | 1.6 Planar regions from SVG (fill rules) | svg | |
-| [#50](https://github.com/wckdboy/nightfall/issues/50) | 1.7 SVG export | svg | In review (#64) |
+| [#61](https://github.com/wckdboy/nightfall/issues/61) | 1.5b SVG documents: shapes, transforms, units, viewBox | svg | Done (#65–#67) |
+| [#49](https://github.com/wckdboy/nightfall/issues/49) | 1.6 Planar regions from SVG (fill rules) | math | In review (#76, #77) |
+| [#74](https://github.com/wckdboy/nightfall/issues/74) | 1.6b Coincident edges in planar arrangements | math | |
+| [#50](https://github.com/wckdboy/nightfall/issues/50) | 1.7 SVG export | svg | Done (#64) |
 | [#63](https://github.com/wckdboy/nightfall/issues/63) | 1.7b DXF R12 export | svg | |
 | [#51](https://github.com/wckdboy/nightfall/issues/51) | 1.8 Equation curves | math | |
-| [#52](https://github.com/wckdboy/nightfall/issues/52) | 1.9 Curve fitting with error bounds | math | |
-| [#53](https://github.com/wckdboy/nightfall/issues/53) | 1.10 Curve queries: closest point, intersections, polylines | math | |
+| [#52](https://github.com/wckdboy/nightfall/issues/52) | 1.9 Curve fitting with error bounds | math | Done (#73) |
+| [#53](https://github.com/wckdboy/nightfall/issues/53) | 1.10 Curve queries: closest point, intersections, polylines | math | Done (#71, #72) |
 | [#54](https://github.com/wckdboy/nightfall/issues/54) | 1.11 NURBS surfaces: evaluation and constructors | math | |
 | [#55](https://github.com/wckdboy/nightfall/issues/55) | 1.12 Lossless conversion to and from OCCT `Geom` | kernel | |
 | [#56](https://github.com/wckdboy/nightfall/issues/56) | 1.13 Swift facade for libnf-math | app | |
@@ -54,3 +55,7 @@ Evaluation and exact constructors come first; fitting and intersection after (RF
   normalisation). SVG export (#64), the XML reader (#65), shared number grammar (#66) and SVG documents (#67) up for
   review; DXF split out as #63. Import convention: the root svg's user-space origin is the
   model origin, so Nightfall's own SVG round-trips unchanged.
+- 2026-10-17 — SVG documents, export, closest point, polylines, intersections and fitting
+  merged, each after Codex review (27 more findings fixed: rigorous approximation bounds,
+  piece-local tolerances, overflow safety, XML strictness). Planar arrangement (#76) and
+  regions from fill rules (#77) up for review; coincident edges deferred to #74.
