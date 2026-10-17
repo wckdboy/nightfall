@@ -6,7 +6,7 @@
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS schema/part-v1.schema.json)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/schema/part-v1.schema.json" NF_PART_SCHEMA)
 configure_file(src/schema_data.hpp.in schema_data.hpp @ONLY)
-add_library(nf_ir STATIC src/json.cpp src/document.cpp src/schema.cpp)
+add_library(nf_ir STATIC src/json.cpp src/document.cpp src/schema.cpp src/references.cpp)
 add_library(nf::ir ALIAS nf_ir)
 target_include_directories(nf_ir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nf_ir PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
@@ -19,3 +19,7 @@ if(NF_BUILD_TESTS)
   target_link_libraries(nf_ir_tests PRIVATE nf::ir nf::warnings Catch2::Catch2WithMain)
   catch_discover_tests(nf_ir_tests TEST_PREFIX "ir." EXTRA_ARGS --rng-seed=20261017)
 endif()
+
+# A document-validation baseline; geometry rebuild latency is measured in #92.
+add_executable(nf_ir_bench bench/document_bench.cpp)
+target_link_libraries(nf_ir_bench PRIVATE nf::ir nf::warnings)

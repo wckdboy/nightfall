@@ -7,7 +7,7 @@
 
 namespace nf::ir {
 
-/// A document diagnostic. Codes here are parse, schema or unknown_id; pointer is RFC 6901.
+/// A diagnostic: parse, schema, unknown_id or forward_reference; pointer is RFC 6901.
 /// JSON syntax errors use the root pointer and a byte offset; other errors name the field.
 struct Error {
   std::string code, message, pointer;
@@ -43,8 +43,8 @@ struct Feature {
 };
 
 /// The RFC 0005 v1 document. Numeric expressions and feature inputs stay as JSON:
-/// read_document enforces the published per-feature schemas. Expression semantics (#91),
-/// body/entity IDs and input references remain separate validation work in #90.
+/// read_document enforces the published per-feature schemas, ID namespaces and ordered
+/// feature/body/sketch/entity references. Expression semantics are evaluated in #91.
 /// References are metadata only: reading a document never opens a referenced path.
 struct Document {
   Units units;
@@ -61,11 +61,12 @@ inline constexpr std::size_t kMaxDocumentBytes = 16 * 1024 * 1024;
 
 /// Loads a v1 envelope from UTF-8 JSON, bounded by kMaxDocumentBytes and json::kMaxDepth.
 /// Checks the format/version first; rejects older (none supported yet) and newer versions
-/// without reinterpretation. Collects independent field errors, checks unique IDs within
-/// each envelope namespace and resolves history_end. Unknown keys must start with "x-";
+/// without reinterpretation. Collects independent errors, checks unique IDs and typed,
+/// backward-only input references, and resolves history_end. Unknown keys must start with "x-";
 /// UI and x- extension values are opaque. Feature inputs follow the published v1 schema.
 /// No geometry is evaluated or external file accessed.
 /// All nine top-level fields are required; meta and the three collections may be empty.
+/// Reports at most 128 diagnostics per validation stage.
 [[nodiscard]] std::expected<Document, Errors> read_document(std::string_view text);
 
 /// Checks an edited envelope and writes the current version in RFC field order, two-space

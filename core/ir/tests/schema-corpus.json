@@ -22485,5 +22485,1806 @@
         ]
       }
     }
+  },
+  {
+    "name": "unknown feature",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/edges/created_by"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "created_by": "absent"
+            },
+            "radius": 2
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "self feature",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "forward_reference",
+      "pointer": "/features/3/inputs/edges/created_by"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "created_by": "operation"
+            },
+            "radius": 2
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "unknown body",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/edges/faces_of"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "faces_of": "absent"
+            },
+            "radius": 2
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "unknown entity",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/edges/from"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "created_by": "base",
+              "from": "s/absent"
+            },
+            "radius": 2
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "unknown sketch entity",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/edges/from"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "created_by": "base",
+              "from": "absent/r"
+            },
+            "radius": 2
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "revolve axis s/center",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "schema",
+      "pointer": "/features/3/inputs/axis/entity"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "revolve",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "axis": {
+              "sketch": "s",
+              "entity": "center"
+            },
+            "angle": 90,
+            "result": {
+              "new": "revolved",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "revolve axis s/absent",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/axis/entity"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "revolve",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "axis": {
+              "sketch": "s",
+              "entity": "absent"
+            },
+            "angle": 90,
+            "result": {
+              "new": "revolved",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "hole point must be a point",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "schema",
+      "pointer": "/features/3/inputs/positions/0/entity"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "hole",
+          "inputs": {
+            "face": {
+              "created_by": "base"
+            },
+            "positions": [
+              {
+                "sketch": "s",
+                "entity": "axis"
+              }
+            ],
+            "diameter": 4,
+            "depth": 10
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "unknown imported file",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/3/inputs/reference"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "type": "import",
+          "inputs": {
+            "reference": "absent",
+            "result": {
+              "new": "imported",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "missing constraint entity",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/0/inputs/constraints/0/entities/0"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": [
+              {
+                "type": "fixed",
+                "entities": [
+                  "absent"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "missing SVG reference",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "unknown_id",
+      "pointer": "/features/0/inputs/entities/3/reference"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              },
+              {
+                "id": "logo_entity",
+                "type": "svg",
+                "reference": "absent"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "SVG reference has wrong kind",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "schema",
+      "pointer": "/features/0/inputs/entities/3/reference"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "step",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              },
+              {
+                "id": "logo_entity",
+                "type": "svg",
+                "reference": "logo"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "forward sketch exists later",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "forward_reference",
+      "pointer": "/features/1/inputs/profile/sketch"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "later"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "later",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [],
+            "constraints": []
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "sketch plane refers forward",
+    "schema_valid": true,
+    "valid": false,
+    "error": {
+      "code": "forward_reference",
+      "pointer": "/features/0/inputs/plane/created_by"
+    },
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "created_by": "base"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
+  },
+  {
+    "name": "suppressed dependency is an evaluation concern",
+    "schema_valid": true,
+    "valid": true,
+    "document": {
+      "format": "nightfall.part",
+      "version": 1,
+      "units": {
+        "length": "mm",
+        "angle": "deg"
+      },
+      "meta": {
+        "name": "Bracket"
+      },
+      "params": [
+        {
+          "name": "wall",
+          "value": "3 mm"
+        }
+      ],
+      "references": [
+        {
+          "id": "logo",
+          "kind": "svg",
+          "path": "logo.svg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "features": [
+        {
+          "id": "s",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  0,
+                  0
+                ],
+                "size": [
+                  40,
+                  20
+                ]
+              },
+              {
+                "id": "axis",
+                "type": "line",
+                "start": [
+                  0,
+                  0
+                ],
+                "end": [
+                  0,
+                  20
+                ]
+              },
+              {
+                "id": "center",
+                "type": "point",
+                "at": [
+                  20,
+                  10
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "base",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": "wall",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          },
+          "suppressed": true
+        },
+        {
+          "id": "tool",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "s"
+            },
+            "distance": 10,
+            "result": {
+              "new": "tool_body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "round",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "created_by": "base"
+            },
+            "radius": 1
+          }
+        }
+      ],
+      "history_end": null,
+      "ui": {}
+    }
   }
 ]

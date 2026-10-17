@@ -49,7 +49,15 @@ TEST_CASE("IR schema: native rules agree with the published schema corpus", "[ir
           std::ranges::any_of(result.errors, [&](const auto& e) { return e.pointer == pointer; }));
     }
     const auto loaded = read_document(json::write(*test.find("document")));
-    if (!valid) REQUIRE_FALSE(loaded.has_value());
+    const bool document_valid = *test.find("valid")->if_bool();
+    CHECK(loaded.has_value() == document_valid);
+    if (!loaded && test.find("error")) {
+      const auto& expected = *test.find("error");
+      CHECK(std::ranges::any_of(loaded.error(), [&](const auto& e) {
+        return e.pointer == *expected.find("pointer")->if_string() &&
+               e.code == *expected.find("code")->if_string();
+      }));
+    }
     if (loaded) {
       const auto written = write_document(*loaded);
       REQUIRE(written.has_value());
@@ -78,6 +86,13 @@ TEST_CASE("IR schema: links are retained only from matching alternatives", "[ir]
 
 TEST_CASE("IR schema: recursive selectors remain bounded and reject nested typos", "[ir][schema]") {
   Document doc;
+  Feature base;
+  base.id = "base";
+  base.type = "sketch";
+  base.inputs = json::Object{{"plane", json::Object{{"datum", "xy"}}},
+                             {"entities", json::Array{}},
+                             {"constraints", json::Array{}}};
+  doc.features.push_back(base);
   Feature f;
   f.id = "f";
   f.type = "fillet";
@@ -85,11 +100,10 @@ TEST_CASE("IR schema: recursive selectors remain bounded and reject nested typos
   for (int i = 0; i < 60; ++i) selector = json::Object{{"edges_of", std::move(selector)}};
   f.inputs = json::Object{{"edges", selector}, {"radius", 1.0}};
   doc.features.push_back(f);
-  // This stage checks shape only; the reference to base is checked separately in #90.
   REQUIRE(write_document(doc).has_value());
   selector = json::Object{{"created_by", "base"}, {"face_index", 7.0}};
   for (int i = 0; i < 60; ++i) selector = json::Object{{"edges_of", std::move(selector)}};
-  doc.features[0].inputs = json::Object{{"edges", std::move(selector)}, {"radius", 1.0}};
+  doc.features.back().inputs = json::Object{{"edges", std::move(selector)}, {"radius", 1.0}};
   const auto written = write_document(doc);
   REQUIRE_FALSE(written.has_value());
   CHECK(std::ranges::any_of(written.error(),

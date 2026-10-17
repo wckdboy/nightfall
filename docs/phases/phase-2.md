@@ -19,7 +19,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | Issue | Item | Scope | Status |
 | --- | --- | --- | --- |
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
-| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | In progress: JSON I/O and document envelope |
+| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir |  |
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel |  |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
@@ -46,3 +46,12 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 - 2026-10-17 — #90 native schema enforcement: load/save uses the embedded published schema,
   including recursive selectors and mutually exclusive operation forms. Native and Python
   checks share the corpus; reference annotations are collected for the semantic checker.
+- 2026-10-17 — #90 semantic checks enforce body/entity namespaces and typed backward references
+  across sketches, selectors, operations and external inputs, including rolled-back history.
+  The shared corpus has 184 cases. v1 is the first format: older/newer versions are refused;
+  there are no legacy files to migrate. Unit/expression evaluation remains #91, geometry #92.
+  `nf_ir_bench` measures complete document load/save for 30- and 300-feature histories.
+  Local Release medians (5 × 100, warm schema): 30 features load in 0.235 ms and edit/save
+  in 0.370 ms; 300 features in 3.015 ms and 3.690 ms. These do not measure geometry rebuilds.
+  `tools/check.sh`: 170/170 passed. ASan/UBSan: 169/170, no sanitizer diagnostics; the
+  unchanged closest-point timing test exceeded 2 s (4.805 s), then passed alone in 1.87 s.

@@ -321,6 +321,20 @@ TEST_CASE("IR document: parse errors and size limits are reported", "[ir][docume
   CHECK(result.error()[0].message.find("size limit") != std::string::npos);
 }
 
+TEST_CASE("IR document: invalid collections cannot flood diagnostics", "[ir][document]") {
+  Document doc;
+  for (int i = 0; i < 1000; ++i) {
+    Parameter param;
+    param.name = "INVALID";
+    param.value = true;
+    doc.params.push_back(std::move(param));
+  }
+  const auto result = write_document(doc);
+  REQUIRE_FALSE(result.has_value());
+  CHECK(result.error().size() == 128);
+  CHECK(result.error().front().pointer == "/params/0/name");
+}
+
 TEST_CASE("IR document: malformed mutations never crash or lose accepted data", "[ir][document]") {
   std::mt19937 rng(20261017);
   int accepted = 0;

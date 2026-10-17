@@ -36,7 +36,8 @@ class Reader {
  public:
   Errors errors;
   void fail(std::string pointer, std::string message, std::string code = "schema") {
-    errors.push_back({std::move(code), std::move(message), std::move(pointer), std::nullopt});
+    if (errors.size() < 128)
+      errors.push_back({std::move(code), std::move(message), std::move(pointer), std::nullopt});
   }
   bool object(const Value* v, const std::string& p, Names keys, Object& extensions) {
     if (!v || !v->if_object()) {
@@ -182,6 +183,8 @@ std::expected<Document, Errors> decode(const Value& root) {
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));
   auto schema = detail::check_schema(root);
   if (!schema.errors.empty()) return std::unexpected(std::move(schema.errors));
+  auto references = detail::check_links(d, schema.links);
+  if (!references.empty()) return std::unexpected(std::move(references));
   return d;
 }
 
