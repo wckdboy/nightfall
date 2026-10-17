@@ -1,10 +1,11 @@
 # RFC 0003: Process architecture: the kernel in an XPC service
 
-- **Status:** Review (opened 2026-10-17; earliest decision 2026-10-22 per WORKFLOW §3)
+- **Status:** Accepted
 - **Author(s):** wckdboy
 - **Phase:** 0
 - **Created:** 2026-10-17
-- **Decided:** —
+- **Decided:** 2026-10-17 by the maintainer, who waived the WORKFLOW §3 review period
+  (review findings were addressed first)
 
 ## Summary
 
