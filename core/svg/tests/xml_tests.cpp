@@ -77,6 +77,35 @@ TEST_CASE("malformed documents are errors with offsets", "[svg][xml]") {
   CHECK(error_at("<!DOCTYPE a [ <a/>") == 18);  // unterminated DOCTYPE
 }
 
+TEST_CASE("XML's finer rules are enforced", "[svg][xml]") {
+  // DOCTYPE literals may contain brackets and '>'.
+  CHECK(xml::parse("<!DOCTYPE svg [<!ENTITY x \"[\">]><svg/>").has_value());
+  CHECK(xml::parse("<!DOCTYPE svg [<!ENTITY x ']>'><!-- ] -->]><svg/>").has_value());
+  // Names cannot start with a digit, '-' or '.'.
+  CHECK(error_at("<1/>") == 1);
+  CHECK(error_at("<.a/>") == 1);
+  CHECK(error_at("<a -x='1'/>") == 3);
+  CHECK(xml::parse("<_a b.c-d1='1'/>").has_value());
+  // Character references must be XML characters.
+  CHECK(error_at("<a x='&#1;'/>") == 6);
+  CHECK(error_at("<a x='&#x1F;'/>") == 6);
+  CHECK(error_at("<a x='&#xFFFE;'/>") == 6);
+  CHECK(*parse("<a x='&#9;&#xA;&#xD;'/>").attribute("x") == "\t\n\r");
+  // Comments cannot contain "--" or end with "-".
+  CHECK(error_at("<a><!-- bad -- comment --></a>") == 12);
+  CHECK(error_at("<a><!-- x ---></a>") == 10);
+  CHECK(xml::parse("<a><!----></a>").has_value());
+}
+
+TEST_CASE("many attributes parse in linear time", "[svg][xml]") {
+  std::string tag = "<a";
+  for (int i = 0; i < 50'000; ++i) tag += " a" + std::to_string(i) + "='1'";
+  tag += "/>";
+  const auto r = xml::parse(tag);
+  REQUIRE(r.has_value());
+  CHECK(r->attributes.size() == 50'000);
+}
+
 TEST_CASE("nesting depth is bounded", "[svg][xml]") {
   std::string ok, deep;
   for (int i = 0; i < xml::kMaxDepth; ++i) ok += "<g>";

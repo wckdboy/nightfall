@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <unordered_set>
 
 namespace nf::svg::xml {
 
@@ -25,10 +26,19 @@ std::string_view Element::local_name() const {
 namespace {
 
 bool is_space(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+// XML NameStartChar / NameChar, with every non-ASCII byte accepted (UTF-8 is not decoded).
+bool is_name_start(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == ':' ||
+         static_cast<unsigned char>(c) >= 0x80;
+}
 bool is_name_char(char c) {
-  const auto u = static_cast<unsigned char>(c);
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' ||
-         c == '_' || c == ':' || c == '.' || u >= 0x80;
+  return is_name_start(c) || (c >= '0' && c <= '9') || c == '-' || c == '.';
+}
+
+// XML 1.0 Char: tab, LF, CR and U+0020 upward, minus surrogates and U+FFFE/U+FFFF.
+bool is_xml_char(std::uint32_t cp) {
+  return cp == 0x9 || cp == 0xA || cp == 0xD || (cp >= 0x20 && cp <= 0xD7FF) ||
+         (cp >= 0xE000 && cp <= 0xFFFD) || (cp >= 0x10000 && cp <= 0x10FFFF);
 }
 
 void append_utf8(std::string& out, std::uint32_t cp) {
@@ -70,7 +80,7 @@ class Reader {
     for (;;) {
       while (pos_ < s_.size() && is_space(s_[pos_])) ++pos_;
       if (starts("<!--")) {
-        if (!skip_past("<!--", "-->")) return false;
+        if (!comment()) return false;
       } else if (starts("<?")) {
         if (!skip_past("<?", "?>")) return false;
       } else if (prolog && starts("<!DOCTYPE")) {
@@ -85,6 +95,17 @@ class Reader {
     int brackets = 0;
     for (pos_ += 9; pos_ < s_.size(); ++pos_) {
       const char c = s_[pos_];
+      if (c == '"' || c == '\'') {  // literals may contain brackets and '>'
+        const std::size_t close = s_.find(c, pos_ + 1);
+        if (close == std::string_view::npos) break;
+        pos_ = close;
+        continue;
+      }
+      if (starts("<!--")) {
+        if (!comment()) return false;
+        --pos_;  // the loop's ++pos_ moves past the comment
+        continue;
+      }
       if (c == '[') ++brackets;
       if (c == ']') --brackets;
       if (c == '>' && brackets <= 0) {
@@ -99,6 +120,7 @@ class Reader {
     if (depth > kMaxDepth) return fail("elements nested too deeply"), false;
     e.offset = pos_++;  // '<'
     if (!name(e.name)) return false;
+    std::unordered_set<std::string> seen;  // duplicate check in linear time
     for (;;) {
       const bool spaced = skip_space();
       if (at('/')) {
@@ -112,12 +134,12 @@ class Reader {
         break;
       }
       if (!spaced) return fail("expected whitespace before an attribute"), false;
-      if (!attribute(e)) return false;
+      if (!attribute(e, seen)) return false;
     }
     return content(e, depth);
   }
 
-  bool attribute(Element& e) {
+  bool attribute(Element& e, std::unordered_set<std::string>& seen) {
     std::string key, value;
     const std::size_t at_key = pos_;
     if (!name(key)) return false;
@@ -142,7 +164,7 @@ class Reader {
       ++pos_;
     }
     ++pos_;
-    if (e.attribute(key) != nullptr) {
+    if (!seen.insert(key).second) {
       pos_ = at_key;
       return fail("duplicate attribute"), false;
     }
@@ -169,7 +191,7 @@ class Reader {
         return true;
       }
       if (starts("<!--")) {
-        if (!skip_past("<!--", "-->")) return false;
+        if (!comment()) return false;
       } else if (starts("<![CDATA[")) {
         if (!skip_past("<![CDATA[", "]]>")) return false;
       } else if (starts("<?")) {
@@ -215,7 +237,7 @@ class Reader {
         }
         cp = cp * (hex ? 16u : 10u) + static_cast<std::uint32_t>(d);
       }
-      if (ok && cp != 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF)) {
+      if (ok && is_xml_char(cp)) {
         append_utf8(out, cp);
         return true;
       }
@@ -226,9 +248,21 @@ class Reader {
 
   bool name(std::string& out) {
     const std::size_t start = pos_;
+    if (pos_ >= s_.size() || !is_name_start(s_[pos_])) return fail("expected a name"), false;
     while (pos_ < s_.size() && is_name_char(s_[pos_])) ++pos_;
-    if (pos_ == start) return fail("expected a name"), false;
     out.assign(s_.substr(start, pos_ - start));
+    return true;
+  }
+
+  // XML comments may not contain "--" or end with "-".
+  bool comment() {
+    const std::size_t dashes = s_.find("--", pos_ + 4);
+    if (dashes == std::string_view::npos) return fail("unterminated comment"), false;
+    if (dashes + 2 >= s_.size() || s_[dashes + 2] != '>') {
+      pos_ = dashes;
+      return fail("\"--\" inside a comment"), false;
+    }
+    pos_ = dashes + 3;
     return true;
   }
 
