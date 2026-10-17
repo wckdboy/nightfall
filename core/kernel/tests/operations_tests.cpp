@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "nf/kernel/kernel.hpp"
 #include "nf/math/constructors.hpp"
+#include "snapshot.hpp"
 
 #include <limits>
 #include <numbers>
@@ -123,6 +124,11 @@ TEST_CASE("rigid transforms preserve source snapshots and trace every face and e
   input.axis_direction = {};
   CHECK_FALSE(kernel->transform(source.shape, input));
   CHECK_THAT(source.shape->measures().volume, WithinAbs(6000, 1e-8));
+  // Reinspect the actual B-rep, not just its cached measurements, after success and failure.
+  const auto original = std::dynamic_pointer_cast<const detail::Snapshot>(source.shape);
+  const auto remeasured = detail::snapshot(original->geometry).value();
+  CHECK_THAT(remeasured->measures().centroid.x, WithinAbs(5, 1e-10));
+  CHECK_THAT(remeasured->measures().volume, WithinAbs(6000, 1e-8));
   auto repeated = kernel->transform(source.shape, RigidTransform{});
   REQUIRE(repeated);
   CHECK_THAT(repeated->shape->measures().centroid.x, WithinAbs(5, 1e-10));

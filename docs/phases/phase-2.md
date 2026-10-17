@@ -117,3 +117,9 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   planes and prepare symmetric/directed extrusions and rigid transforms. Open/ambiguous
   chains and unsupported constraints/selectors/modes return field diagnostics. OCCT checks
   pass 240/240 (15.86 s); incremental document execution follows these tested adapters.
+- 2026-10-17 — #92 executes complete IR documents through the production backend with
+  current-body hashes, bounded geometry caching, rollback/suppression, atomic multi-body
+  publication and explicit downstream failure states. Operation-local names rebind on cache
+  reuse; retained history is rejected when an evicted upstream snapshot has been rebuilt.
+  Tests exercise 30-feature histories and verify unused/equivalent-unit edits do no kernel
+  work. OCCT checks pass 252/252 (14.51 s); measured rebuild latency follows separately.

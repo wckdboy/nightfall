@@ -1,0 +1,252 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+// SPDX-License-Identifier: Apache-2.0
+#include "evaluator.hpp"
+
+#include <algorithm>
+#include <set>
+
+#include "geometry_cache.hpp"
+#include "model_inputs.hpp"
+#include "nf/ir/inputs.hpp"
+#include "nf/ir/parameters.hpp"
+
+namespace nf::kernel_service {
+namespace {
+using ir::json::Value;
+struct Output {
+  std::optional<Sketch> sketch;
+  std::vector<kernel::OperationResult> operations;
+  std::vector<kernel::ShapePtr> bindings;
+  std::size_t bytes = sizeof(Output);
+};
+using Cache = GeometryCache<Output>;
+using Targets = std::map<std::string, std::vector<std::string>>;
+[[noreturn]] void fail(std::string code, std::string message, std::string pointer) {
+  throw ir::Errors{{std::move(code), std::move(message), std::move(pointer), {}}};
+}
+template <class T, class E>
+T take(std::expected<T, E> value) {
+  if (!value) {
+    if constexpr (std::is_same_v<E, ir::Errors>)
+      throw value.error();
+    else if constexpr (std::is_same_v<E, ir::Error>)
+      throw ir::Errors{value.error()};
+    else
+      fail(value.error().code, value.error().message, "/inputs");
+  }
+  return std::move(*value);
+}
+const std::string& string(const Value& value) { return *value.if_string(); }
+void selector_targets(const Value& value, const Targets& previous, std::set<std::string>& ids) {
+  if (const auto* array = value.if_array()) {
+    for (const auto& item : *array) selector_targets(item, previous, ids);
+  } else if (const auto* object = value.if_object()) {
+    for (const auto& member : *object) {
+      if (member.key.starts_with("x-")) continue;
+      if (member.key == "faces_of")
+        ids.insert(string(member.value));
+      else if (member.key == "created_by") {
+        if (const auto found = previous.find(string(member.value)); found != previous.end())
+          ids.insert(found->second.begin(), found->second.end());
+      } else
+        selector_targets(member.value, previous, ids);
+    }
+  }
+}
+std::vector<std::string> targets(const ir::Feature& feature, const Targets& previous) {
+  const auto& inputs = feature.inputs;
+  if (const auto* result = inputs.find("result")) {
+    for (const auto* key : {"new", "join", "cut", "intersect"})
+      if (const auto* id = result->find(key)) return {string(*id)};
+  }
+  if (feature.type == "sketch") return {};
+  if (const auto* body = inputs.find("body")) return {string(*body)};
+  if (const auto* target = inputs.find("target")) return {string(*target)};
+  if (const auto* bodies = inputs.find("bodies")) {
+    std::vector<std::string> result;
+    for (const auto& id : *bodies->if_array()) result.push_back(string(id));
+    return result;
+  }
+  std::set<std::string> ids;
+  if (const auto* features = inputs.find("features"))
+    for (const auto& id : *features->if_array()) {
+      const auto found = previous.find(string(id));
+      if (found != previous.end()) ids.insert(found->second.begin(), found->second.end());
+    }
+  selector_targets(inputs, previous, ids);
+  return {ids.begin(), ids.end()};
+}
+std::vector<NamedEntity> names(const BodyState* input, const kernel::OperationResult& operation,
+                               const std::string& feature) {
+  std::vector<NamedEntity> result;
+  if (input) {
+    for (const auto& name : input->names) {
+      const auto found = std::ranges::find_if(operation.history, [&](const auto& h) {
+        return h.before && h.before->same_as(*name.entity);
+      });
+      if (found == operation.history.end()) fail("kernel", "incomplete naming history", "/inputs");
+      if (!found->deleted && found->modified.empty())
+        fail("kernel", "history omitted a surviving entity", "/inputs");
+      if (!found->deleted)
+        for (const auto& entity : found->modified)
+          result.push_back({name.feature, name.role, entity});
+    }
+  }
+  for (const auto& generated : operation.generated)
+    result.push_back({feature, generated.role, generated.entity});
+  for (const auto& name : result)
+    if (!name.entity || name.entity->owner() != operation.shape)
+      fail("kernel", "naming history belongs to a different snapshot", "/inputs");
+  return result;
+}
+std::size_t sketch_bytes(const Sketch& sketch) {
+  std::size_t bytes = sizeof(Sketch);
+  for (const auto& path : sketch.paths) {
+    bytes += sizeof(path);
+    for (const auto& curve : path)
+      bytes += sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
+               (curve.weights().size() + curve.knots().size()) * sizeof(double);
+  }
+  return bytes;
+}
+}  // namespace
+
+struct Evaluator::State {
+  kernel::IKernel& kernel;
+  Cache cache;
+  State(kernel::IKernel& backend, Limits limits)
+      : kernel(backend), cache({limits.entries, limits.estimated_bytes}) {}
+};
+Evaluator::Evaluator(kernel::IKernel& kernel, Limits limits)
+    : state_(std::make_unique<State>(kernel, limits)) {}
+Evaluator::~Evaluator() = default;
+void Evaluator::set_cache_limits(Limits limits) {
+  state_->cache.set_limits({limits.entries, limits.estimated_bytes});
+}
+void Evaluator::clear_cache() { state_->cache.clear(); }
+Evaluator::Usage Evaluator::cache_usage() const {
+  const auto stats = state_->cache.stats();
+  return {stats.entries, stats.estimated_bytes};
+}
+bool Evaluation::ok() const {
+  return std::ranges::none_of(features,
+                              [](const auto& f) { return f.status == FeatureStatus::kFailed; });
+}
+
+std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view source) {
+  auto document = ir::read_document(source);
+  if (!document) return std::unexpected(document.error());
+  auto parameters = ir::evaluate_parameters(document->params);
+  if (!parameters) return std::unexpected(parameters.error());
+  const auto version = "evaluator/1;roles/1;" + std::string(state_->kernel.identity());
+  Evaluation result;
+  result.features.reserve(document->features.size());
+  Targets previous;
+  std::map<std::string, std::size_t> features;
+  std::map<std::string, std::shared_ptr<const Output>> sketches;
+  bool rolled_back = false;
+  for (std::size_t index = 0; index < document->features.size(); ++index) {
+    const auto& feature = document->features[index];
+    result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
+    auto& record = result.features.back();
+    const auto affected = targets(feature, previous);
+    previous.emplace(feature.id, affected);
+    features.emplace(feature.id, index);
+    const bool skip = rolled_back;
+    if (document->history_end == feature.id) rolled_back = true;
+    if (skip) {
+      record.status = FeatureStatus::kRolledBack;
+      continue;
+    }
+    if (feature.suppressed.value_or(false)) {
+      record.status = FeatureStatus::kSuppressed;
+      if (const auto* output = feature.inputs.find("result"); output && output->find("new"))
+        result.bodies[string(*output->find("new"))].unavailable = "input_suppressed";
+      continue;
+    }
+    try {
+      const auto program = take(ir::FeatureInputs::compile(feature));
+      const auto inputs = take(program.evaluate(document->units, parameters->values));
+      std::map<std::string, ir::Hash> dependencies;  // RFC 6901 lexicographic pointer order
+      std::vector<kernel::ShapePtr> bindings;
+      std::shared_ptr<const Output> sketch;
+      if (feature.type == "extrude") {
+        const auto& id = string(*inputs.find("profile")->find("sketch"));
+        const auto& upstream = result.features[features.at(id)];
+        if (!upstream.hash)
+          fail(upstream.status == FeatureStatus::kSuppressed ? "input_suppressed" : "input_failed",
+               "profile sketch is unavailable: " + id, "/inputs/profile/sketch");
+        dependencies.emplace("/inputs/profile/sketch", *upstream.hash);
+        sketch = sketches.at(id);
+      } else if (feature.type == "transform") {
+        for (std::size_t i = 0; i < affected.size(); ++i) {
+          const auto& body = result.bodies.at(affected[i]);
+          const auto pointer = "/inputs/bodies/" + std::to_string(i);
+          if (!body.shape || !body.hash)
+            fail(body.unavailable, "body is unavailable: " + affected[i], pointer);
+          dependencies.emplace(pointer, *body.hash);
+          bindings.push_back(body.shape);
+        }
+      } else if (feature.type != "sketch") {
+        fail("kernel", "feature is not implemented: " + feature.type, "/type");
+      }
+      std::vector<ir::Hash> upstream;
+      for (const auto& [pointer, hash] : dependencies) upstream.push_back(hash);
+      const auto key = ir::feature_hash(version, feature.type, inputs, upstream);
+      auto output = state_->cache.find(key);
+      if (output && output->bindings != bindings) {
+        output.reset();
+        ++result.binding_misses;
+      }
+      const bool cached = static_cast<bool>(output);
+      if (!output) {
+        auto built = std::make_shared<Output>();
+        built->bindings = bindings;
+        built->bytes += bindings.size() * sizeof(kernel::ShapePtr);
+        if (feature.type == "sketch") {
+          built->sketch = take(prepare_sketch(inputs));
+          built->bytes += sketch_bytes(*built->sketch);
+        } else if (feature.type == "extrude") {
+          const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
+          ++result.kernel_calls;
+          built->operations.push_back(take(state_->kernel.extrude(operation)));
+        } else {
+          const auto operation = take(prepare_transform(inputs));
+          for (const auto& input : bindings) {
+            ++result.kernel_calls;
+            built->operations.push_back(take(state_->kernel.transform(input, operation)));
+          }
+        }
+        for (const auto& operation : built->operations) built->bytes += operation.estimated_bytes;
+        output = std::move(built);
+      }
+      std::vector<BodyState> published;
+      for (std::size_t i = 0; i < output->operations.size(); ++i) {
+        const auto& operation = output->operations[i];
+        if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
+        const auto* input = feature.type == "transform" ? &result.bodies.at(affected[i]) : nullptr;
+        published.push_back({operation.shape,
+                             ir::body_hash(input ? input->hash : std::nullopt, key),
+                             names(input, operation, feature.id),
+                             {}});
+      }
+      // Publish complete geometry and naming together, after every operation/history succeeds.
+      for (std::size_t i = 0; i < published.size(); ++i)
+        result.bodies[affected[i]] = std::move(published[i]);
+      if (output->sketch) sketches[feature.id] = output;
+      if (cached)
+        ++result.cache_hits;
+      else
+        (void)state_->cache.insert(key, output, output->bytes);
+      record.hash = key;
+      record.status = cached ? FeatureStatus::kCached : FeatureStatus::kBuilt;
+    } catch (ir::Errors& errors) {
+      for (auto& error : errors)
+        error.pointer = "/features/" + std::to_string(index) + error.pointer;
+      record.errors = std::move(errors);
+      for (const auto& id : affected) result.bodies[id] = {{}, {}, {}, "input_failed"};
+    }
+  }
+  return result;
+}
+}  // namespace nf::kernel_service
