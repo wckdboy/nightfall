@@ -50,6 +50,8 @@ struct Measures {
   double area = 0.0;    ///< mm²
   int faces = 0;
   int edges = 0;
+  Vec3 bbox_min;  ///< Axis-aligned bounding box (mm), as tight as the kernel computes it.
+  Vec3 bbox_max;
 };
 
 /// Thrown when a kernel operation fails or is unsupported.
@@ -72,6 +74,10 @@ class Kernel {
   /// Cylinder along +Z with its base circle centred at `base_center`.
   virtual Body cylinder(Vec3 base_center, double radius, double height) = 0;
   virtual Body sphere(Vec3 center, double radius) = 0;
+
+  /// One solid from a STEP file (RFC 0001 F13). OCCT reads it directly; SMLib through
+  /// OCCT → .brep → USD → SMLib (RFC 0002). Throws KernelError on failure.
+  virtual Body import_step(const std::string& path) = 0;
 
   /// Copy of `body` rotated by `degrees` (right-handed) about the line through `point`
   /// along `axis`.

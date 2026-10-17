@@ -34,9 +34,13 @@ The process is in `docs/process/WORKFLOW.md`. It is binding. The short version:
 
 ## Key decisions already made (see RFCs and the build plan)
 
-- Kernel: SMLib via usd-brep is the lead candidate; OCCT is fallback and STEP translator.
-  Final choice comes from the Phase 0 bake-off (RFC 0001).
+- Kernel: **OpenCASCADE 7.9.3 is the primary kernel** (RFC 0001 bake-off: OCCT 77.7 vs
+  SMLib 51.1). SMLib stays buildable for re-evaluation at the next usd-brep release.
+  OCCT is LGPL-2.1: dynamic linking only.
+- OpenUSD + usd-brep's USD modules (RFC 0002) carry exact solids into/out of USD.
+- OCCT and OpenUSD headers never share a translation unit (OCCT's `Handle` macro).
 - Feature IR (JSON, versioned) is the source of truth; geometry is a cache.
 - References to faces and edges are selectors, never indices.
-- The kernel runs out of process (XPC). Feature code never includes kernel headers.
+- The kernel runs out of process (XPC, RFC 0003) behind a plain-C bridge; a watchdog in the
+  service reports the hung feature and exits. Feature code never includes kernel headers.
 - AI edits the IR through typed tools; providers are swappable; MCP is exposed via `nf mcp`.

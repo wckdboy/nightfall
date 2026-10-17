@@ -17,6 +17,7 @@
 #include <string_view>
 #include <vector>
 
+#include "abc_parts.hpp"
 #include "runner.hpp"
 
 namespace {
@@ -42,28 +43,54 @@ int usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string kernel_name;
-  std::string out_path;
-  std::string only_part;
+  std::string kernel_name, out_path, only_part, abc_plan, abc_dir, make_plan_from;
   int repeat = 0;
-  auto parts = nf::bakeoff::reference_parts();
+  bool list = false;
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
-    if (arg == "--kernel" && i + 1 < argc) {
+    const bool has_value = i + 1 < argc;
+    if (arg == "--kernel" && has_value) {
       kernel_name = argv[++i];
-    } else if (arg == "--out" && i + 1 < argc) {
+    } else if (arg == "--out" && has_value) {
       out_path = argv[++i];
-    } else if (arg == "--repeat" && i + 1 < argc) {
+    } else if (arg == "--repeat" && has_value) {
       repeat = std::atoi(argv[++i]);
       if (repeat < 1) return usage();
-    } else if (arg == "--part" && i + 1 < argc) {
+    } else if (arg == "--part" && has_value) {
       only_part = argv[++i];
+    } else if (arg == "--abc" && has_value) {
+      abc_plan = argv[++i];
+    } else if (arg == "--abc-dir" && has_value) {
+      abc_dir = argv[++i];
+    } else if (arg == "--make-abc-plan" && has_value) {
+      make_plan_from = argv[++i];
     } else if (arg == "--list") {
-      for (const auto& p : parts) std::cout << p.name << ' ' << p.category << '\n';
-      return 0;
+      list = true;
     } else {
       return usage();
     }
+  }
+
+  // RFC 0001 F13: the ABC plan is computed once, with OCCT, and committed.
+  if (!make_plan_from.empty()) {
+    auto occt = make_kernel("occt");
+    if (!occt || abc_dir.empty() || out_path.empty()) return usage();
+    std::vector<std::string> skipped;
+    const auto plan = nf::bakeoff::make_abc_plan(*occt, make_plan_from, abc_dir, skipped);
+    nf::bakeoff::write_abc_plan(out_path, plan);
+    std::fprintf(stderr, "ABC plan: %zu models, %zu skipped (OCCT could not import)\n", plan.size(),
+                 skipped.size());
+    for (const auto& id : skipped) std::fprintf(stderr, "  skipped %s\n", id.c_str());
+    return 0;
+  }
+
+  if (!abc_plan.empty() && abc_dir.empty()) return usage();
+  auto parts = abc_plan.empty()
+                   ? nf::bakeoff::reference_parts()
+                   : nf::bakeoff::abc_parts(nf::bakeoff::read_abc_plan(abc_plan), abc_dir);
+  if (list) {
+    for (const auto& p : parts) std::cout << p.name << ' ' << p.category << '\n';
+    return 0;
   }
   if (!only_part.empty()) {
     std::erase_if(parts, [&](const auto& p) { return p.name != only_part; });

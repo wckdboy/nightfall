@@ -27,6 +27,7 @@ class FakeKernel final : public Kernel {
   Body cylinder(Vec3, double, double) override { return op("cylinder"); }
   Body sphere(Vec3, double) override { return op("sphere"); }
   Body rotate(Body, Vec3, Vec3, double) override { return op("rotate"); }
+  Body import_step(const std::string&) override { return op("import_step"); }
   Body cone(Vec3, double, double, double) override { return op("cone"); }
   Body torus(Vec3, double, double) override { return op("torus"); }
   Body extrude(const std::vector<Vec2>&, double, double) override { return op("extrude"); }

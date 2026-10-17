@@ -31,6 +31,8 @@
 #include <Geom2d_Line.hxx>
 #include <Geom2d_TrimmedCurve.hxx>
 #include <Geom_CylindricalSurface.hxx>
+#include <IFSelect_ReturnStatus.hxx>
+#include <STEPControl_Reader.hxx>
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
 #include <TopExp.hxx>
@@ -99,6 +101,16 @@ class OcctKernel final : public Kernel {
 
   Body sphere(Vec3 center, double radius) override {
     return guarded([&] { return BRepPrimAPI_MakeSphere(to_pnt(center), radius).Shape(); });
+  }
+
+  Body import_step(const std::string& path) override {
+    return guarded([&] {
+      STEPControl_Reader reader;
+      if (reader.ReadFile(path.c_str()) != IFSelect_RetDone || reader.TransferRoots() == 0) {
+        throw KernelError("STEP read failed: " + path);
+      }
+      return reader.OneShape();
+    });
   }
 
   Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) override {
@@ -254,6 +266,14 @@ class OcctKernel final : public Kernel {
       TopExp::MapShapes(shape, TopAbs_EDGE, edges);
       m.faces = faces.Extent();
       m.edges = edges.Extent();
+      Bnd_Box box;
+      BRepBndLib::AddOptimal(shape, box, false, false);
+      if (!box.IsVoid()) {
+        double x0, y0, z0, x1, y1, z1;
+        box.Get(x0, y0, z0, x1, y1, z1);
+        m.bbox_min = {x0, y0, z0};
+        m.bbox_max = {x1, y1, z1};
+      }
     } catch (const Standard_Failure& e) {
       throw KernelError(std::string("measure: ") + e.GetMessageString());
     }

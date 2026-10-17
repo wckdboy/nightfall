@@ -2,13 +2,13 @@
 
 - **Weeks:** 1–4
 - **Milestone:** `Phase 0` on GitHub
-- **Status:** In progress
+- **Status:** Gate passed 2026-10-17
 
 ## Gate
 
 All of these, with evidence linked:
 
-- [ ] RFC 0001 accepted with bake-off numbers and a kernel decision
+- [x] RFC 0001 accepted with bake-off numbers and a kernel decision: **OCCT primary** (OCCT 77.7, SMLib 51.1 = 65.8 % < 90 %)
 - [x] A box appears in a Metal view, built through an XPC service from a JSON IR ([evidence](https://github.com/wckdboy/nightfall/blob/spike/8-9-xpc-viewport/docs/phases/evidence/phase0-xpc-metal-spike.png))
 - [x] CI builds and tests on macOS on every PR; nightly sanitizer build green
 - [x] `main` protected per WORKFLOW.md §2 (required: `hygiene`, `build-and-test (macOS arm64)`)
@@ -31,9 +31,10 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#28](https://github.com/wckdboy/nightfall/issues/28) | Corpus: profile, revolve, sweep, variable-radius parts (to 20) | kernel | Done (#30) |
 | [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Done (#24) |
 | [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | Done (#26) |
-| [#36](https://github.com/wckdboy/nightfall/issues/36) | Bake-off runner: per-part processes, timing, sanitizer pass, scoring | kernel | In review |
-| [#38](https://github.com/wckdboy/nightfall/issues/38) | Build OpenUSD + usd-brep USD modules (RFC 0002) | third_party | In review |
-| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Corpus done (#37); ABC next |
+| [#36](https://github.com/wckdboy/nightfall/issues/36) | Bake-off runner: per-part processes, timing, sanitizer pass, scoring | kernel | Done (#37) |
+| [#40](https://github.com/wckdboy/nightfall/issues/40) | ABC half of the bake-off + decision | kernel | Done (#41) |
+| [#38](https://github.com/wckdboy/nightfall/issues/38) | Build OpenUSD + usd-brep USD modules (RFC 0002) | third_party | Done (#39) |
+| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Done (#41) |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Done (spike branch; RFC 0003 #35) |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Done (spike branch; RFC 0003 #35) |
 | [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | Done (first run green) |
@@ -64,3 +65,5 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   Corpus bake-off with both kernels instrumented (#36): OCCT 87.0, SMLib 69.1 (corpus only;
   history measured, warm in-process timing).
 - 2026-10-17 — RFC 0002 and RFC 0003 accepted (review period waived by the maintainer).
+- 2026-10-17 — Full bake-off (reference + ABC): OCCT 77.7, SMLib 51.1. **OCCT is the primary kernel**
+  (RFC 0001 accepted). Phase 0 gate passed.
