@@ -19,9 +19,10 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | Issue | Item | Scope | Status |
 | --- | --- | --- | --- |
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
-| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
-| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/revolve/transform/boolean evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
+| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation merged in #103; v1 is the first format |
+| [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds merged in #103 |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Done: evaluator/cache and local benchmark merged in #103; further operation/selector coverage remains open |
+| [#104](https://github.com/wckdboy/nightfall/issues/104) | Exact curved sketch profiles: arcs, ellipses and NURBS splines | kernel | Implemented with regression tests and local benchmark evidence |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -160,6 +161,32 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   load. Hygiene checks and the independent 202-case schema cross-check pass. Nightfall code is
   instrumented; OCCT remains the pinned Release shared-library build.
 
+- 2026-10-18 — The feature-IR/evaluator stack is integrated through [PR #103](https://github.com/wckdboy/nightfall/pull/103),
+  main commit `4fe1319`. Its tree matches the validated `369938b` exactly. All five GitHub check
+  groups passed; the maintainer explicitly authorized the merge in the project conversation.
+  Superseded stacked PRs #97/#100/#101/#102 are closed with their source branches retained.
+  Issues #90/#91/#92/#98/#99 and their Plane counterparts are complete. The full Phase 2 gate
+  remains open; subsequent capability work uses dedicated issues.
+
+- 2026-10-18 — #104 adds exact signed arcs, rotated ellipses and clamped rational/non-rational
+  NURBS splines to the existing sketch schema. Mixed line/arc/spline chains may be unordered
+  or reversed; both endpoints are checked for open/ambiguous junctions. Exact span decomposition
+  prevents region probes from landing on spline corners. Knot/pole/weight errors carry field
+  pointers; initial sketch-curve, spline-pole and profile-span work limits are each 4,096.
+  Sixteen regressions cover semicylinders (200π mm³), placed ellipses (72π mm³), a rational
+  circle, a closed polyline spline, a sphere (4000π/3 mm³), holes/region picks, parameter edits,
+  equivalent-unit cache reuse, failed dependencies and malformed/bounded inputs. Review found
+  accepted near-coincident joins could remain disconnected in region detection; explicit bridges
+  now preserve the original curves and connect those endpoints. Bridges below OCCT's vertex
+  precision use vertex welding, avoiding degenerate edges. Regressions cover line/line,
+  line/arc and arc/arc gaps of 5e-7 and 5e-8 mm, including the closing junction. Volume
+  tolerances are 1e-8–1e-5 mm³; centroid tolerances are 1e-7 mm. No schema/API/dependency change.
+  Full Release `tools/check.sh --preset occt` passes 303/303 (17.91 s), with hygiene and the
+  independent 202-case schema cross-check passing. The CI ASan/UBSan kernel/evaluator/cache
+  selection passes 89/89 (27.77 s), with no diagnostics or retries. Nightfall code is instrumented;
+  OCCT remains the pinned Release shared-library build. The prior integrated tree also passed
+  the full 287-test sanitizer suite; this slice reruns the affected geometry/service selection.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -247,3 +274,26 @@ for the existing cases are recorded below rather than assuming earlier timings s
 The sleeve meets the local 100 ms criterion in every sample. The boolean case's tail exceeds
 100 ms in this run; these measurements do not establish a universal latency bound. Broader
 reference-part coverage, remote CI/review of this slice and full Phase 2 sign-off remain open.
+
+### Curved profile rebuild evidence
+
+2026-10-18, same Apple M3 Pro / Release OCCT 7.9.3 and 30-sample methodology. The new elliptic
+tube has two nested ellipses rotated 35°, an extrusion and 28 transforms. Changing `depth`
+changes both ellipse major radii and extrusion distance: outer radii `(depth/3, 5)` mm, inner
+radii `(depth/6, 2.5)` mm. Every sample verifies volume `1.25π × depth²` mm³, centroid and
+execution counts. Profile and all downstream geometry rebuild on each unique depth edit.
+
+| Elliptic tube | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 9.366 | 9.906 | 10.113 | 29 / 0 |
+| Profile + depth edit | 9.467 | 10.593 | 11.907 | 29 / 0 |
+| Last transform edit | 0.656 | 0.707 | 0.731 | 1 / 29 |
+| Unused parameter edit | 0.609 | 0.688 | 0.760 | 0 / 30 |
+
+The cache retains 96 entries / 18,732,720 estimated bytes after profile/depth edits (not RSS).
+Final benchmark after the review fix: same-run depth-edit median/p95/max is
+plate 1.966/2.518/4.987 ms, bored plate 9.781/11.660/18.681 ms,
+boolean-cut plate 47.112/50.712/51.059 ms, sleeve 6.318/7.494/7.524 ms. Every sample is under
+100 ms in this run; earlier slower tails remain documented above. Timing variation is not
+an optimization claim or a universal bound. Includes parsing, validation, geometry and naming;
+excludes serialization, IPC and tessellation. Full phase sign-off remains open.

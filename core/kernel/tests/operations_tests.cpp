@@ -154,6 +154,22 @@ TEST_CASE("backend identity includes tolerances and rejects invalid configuratio
   CHECK_FALSE(make_occt_kernel(Tolerance{1e-6, std::numeric_limits<double>::quiet_NaN()}));
 }
 
+TEST_CASE("production profiles connect short bridges within the modeling tolerance") {
+  auto kernel = make_occt_kernel().value();
+  for (const double gap : {5e-7, 5e-8}) {
+    CAPTURE(gap);
+    Region region{{{make_line(Vec2{0, 0}, {10, 0}), make_line(Vec2{10, 0}, {10, gap}),
+                    make_line(Vec2{10, gap}, {10, 20}), make_line(Vec2{10, 20}, {0, 20}),
+                    make_line(Vec2{0, 20}, {0, 0})}},
+                  {}};
+    const auto result = kernel->extrude({{}, {region}, {0, 0, 4}});
+    REQUIRE(result);
+    CHECK_THAT(result->shape->measures().volume, WithinAbs(800, 1e-5));
+    for (const auto& generated : result->generated)
+      CHECK(generated.entity->owner() == result->shape);
+  }
+}
+
 TEST_CASE("exact rational cylinders retain analytic measures over different scales") {
   auto kernel = make_occt_kernel().value();
   for (double radius : {0.1, 1.0, 10.0, 100.0}) {

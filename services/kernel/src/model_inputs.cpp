@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "model_inputs.hpp"
 
+#include <numbers>
 #include <set>
 
 #include "nf/math/constructors.hpp"
+#include "nf/math/refine.hpp"
 
 namespace nf::kernel_service {
 namespace {
@@ -59,31 +61,82 @@ std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::stri
   }
   return result;
 }
-void join_lines(std::vector<std::pair<Vec2, Vec2>> lines, Sketch& sketch) {
-  while (!lines.empty()) {
-    const auto [start, second] = lines.back();
-    lines.pop_back();
-    auto end = second;
-    std::vector<math::NurbsCurve2> path{math::make_line(start, end)};
+void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
+  // Check both ends before walking: stopping at the first closed loop could hide a
+  // multi-way junction at its starting vertex. Closed single curves are separate paths.
+  std::vector<std::pair<Vec2, Vec2>> ends;
+  for (const auto& curve : curves)
+    ends.emplace_back(curve.point(curve.domain_start()), curve.point(curve.domain_end()));
+  for (std::size_t i = 0; i < ends.size(); ++i) {
+    for (const auto p : {ends[i].first, ends[i].second}) {
+      std::size_t matches = 0;
+      for (std::size_t j = 0; j < ends.size(); ++j) {
+        if (i == j) continue;
+        matches += math::near(p, ends[j].first, kTolerance);
+        matches += math::near(p, ends[j].second, kTolerance);
+      }
+      if (matches == 0) fail("/entities", "curve chain is open");
+      if (matches != 1) fail("/entities", "curve junction is ambiguous");
+    }
+  }
+  while (!curves.empty()) {
+    const auto start = curves.back().point(curves.back().domain_start());
+    auto end = curves.back().point(curves.back().domain_end());
+    std::vector<math::NurbsCurve2> path{std::move(curves.back())};
+    curves.pop_back();
     while (!math::near(start, end, kTolerance)) {
-      auto found = lines.end();
+      auto found = curves.end();
       bool reverse = false;
-      for (auto it = lines.begin(); it != lines.end(); ++it) {
-        const bool a = math::near(it->first, end, kTolerance),
-                   b = math::near(it->second, end, kTolerance);
+      for (auto it = curves.begin(); it != curves.end(); ++it) {
+        const bool a = math::near(it->point(it->domain_start()), end, kTolerance),
+                   b = math::near(it->point(it->domain_end()), end, kTolerance);
         if (!a && !b) continue;
-        if (found != lines.end()) fail("/entities", "line junction is ambiguous");
+        if (found != curves.end()) fail("/entities", "curve junction is ambiguous");
         found = it;
         reverse = b;
       }
-      if (found == lines.end()) fail("/entities", "line chain is open");
-      const auto next = reverse ? found->first : found->second;
-      path.push_back(math::make_line(end, next));
-      end = next;
-      lines.erase(found);
+      if (found == curves.end()) fail("/entities", "curve chain is open");
+      auto next = reverse ? math::reverse(*found) : *found;
+      const auto next_start = next.point(next.domain_start());
+      // Keep the original curves exact and explicitly connect tolerance-matched ends.
+      // Arrangement vertex welding may use a tighter, drawing-relative tolerance.
+      if (end != next_start) path.push_back(math::make_line(end, next_start));
+      path.push_back(std::move(next));
+      end = path.back().point(path.back().domain_end());
+      curves.erase(found);
     }
+    if (end != start) path.push_back(math::make_line(end, start));
     sketch.paths.push_back(std::move(path));
   }
+}
+math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
+                         std::size_t& control_points) {
+  const auto& poles = *field(entity, "control_points").if_array();
+  if (poles.size() > 4096 - control_points)
+    fail(pointer + "/control_points", "sketch exceeds the initial 4096-spline-pole work limit");
+  control_points += poles.size();
+  const auto degree = static_cast<int>(number(field(entity, "degree")));
+  const auto& values = *field(entity, "knots").if_array();
+  if (values.size() != poles.size() + static_cast<std::size_t>(degree) + 1)
+    fail(pointer + "/knots", "knot count must equal control point count + degree + 1");
+  std::vector<double> knots, weights;
+  for (const auto& v : values) knots.push_back(number(v));
+  auto kv = math::KnotVector::make(std::move(knots), degree);
+  if (!kv) fail(pointer + "/knots", kv.error());
+  if (!std::isfinite(kv->domain_start() + kv->domain_end()) ||
+      !std::isfinite(kv->domain_end() - kv->domain_start()))
+    fail(pointer + "/knots", "spline domain exceeds finite arithmetic for reversal and splitting");
+  if (const auto* w = entity.find("weights")) {
+    if (w->if_array()->size() != poles.size())
+      fail(pointer + "/weights", "need one weight per control point");
+    for (const auto& v : *w->if_array()) weights.push_back(number(v));
+  }
+  std::vector<Vec2> points;
+  for (const auto& p : poles) points.push_back(point2(p));
+  auto curve = math::NurbsCurve2::make(std::move(*kv), std::move(points), std::move(weights));
+  if (!curve)
+    fail(pointer + (entity.find("weights") ? "/weights" : "/control_points"), curve.error());
+  return std::move(*curve);
 }
 }  // namespace
 
@@ -105,9 +158,16 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
     } else {
       fail("/plane", "selector-based sketch planes are not implemented");
     }
-    std::vector<std::pair<Vec2, Vec2>> lines;
+    std::vector<math::NurbsCurve2> segments;
+    const auto add_curve = [&](math::NurbsCurve2 curve) {
+      if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
+                     kTolerance))
+        sketch.paths.push_back({std::move(curve)});
+      else
+        segments.push_back(std::move(curve));
+    };
     const auto& entities = *field(inputs, "entities").if_array();
-    std::size_t curves = 0;
+    std::size_t curves = 0, control_points = 0;
     for (std::size_t i = 0; i < entities.size(); ++i) {
       const auto& entity = entities[i];
       const auto pointer = "/entities/" + std::to_string(i);
@@ -117,6 +177,29 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
         const auto radius = number(field(entity, "radius"));
         if (!(radius > kTolerance.linear)) fail(pointer + "/radius", "radius is too small");
         sketch.paths.push_back({math::make_circle(point2(field(entity, "center")), radius)});
+      } else if (type == "arc") {
+        const auto radius = number(field(entity, "radius"));
+        if (!(radius > kTolerance.linear)) fail(pointer + "/radius", "radius is too small");
+        constexpr auto turn = 2 * std::numbers::pi;
+        const auto sweep = number(field(entity, "sweep_angle"));
+        if (!(std::abs(sweep) > kTolerance.angular && std::abs(sweep) <= turn))
+          fail(pointer + "/sweep_angle", "arc sweep must be nonzero and at most one full turn");
+        const auto start = std::remainder(number(field(entity, "start_angle")), turn);
+        auto curve =
+            math::make_arc(point2(field(entity, "center")), radius, radius, 0,
+                           sweep > 0 ? start : start + sweep, sweep > 0 ? start + sweep : start);
+        add_curve(sweep > 0 ? std::move(curve) : math::reverse(curve));
+      } else if (type == "ellipse") {
+        const auto radii = point2(field(entity, "radii"));
+        if (!(radii.x > kTolerance.linear && radii.y > kTolerance.linear))
+          fail(pointer + "/radii", "ellipse radii must be positive");
+        const auto* rotation = entity.find("rotation");
+        add_curve(
+            math::make_arc(point2(field(entity, "center")), radii.x, radii.y,
+                           rotation ? std::remainder(number(*rotation), 2 * std::numbers::pi) : 0,
+                           0, 2 * std::numbers::pi));
+      } else if (type == "spline") {
+        add_curve(spline(entity, pointer, control_points));
       } else if (type == "rect") {
         const auto p = point2(field(entity, "corner")), size = point2(field(entity, "size"));
         if (!(size.x > kTolerance.linear && size.y > kTolerance.linear))
@@ -134,12 +217,12 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
       } else if (type == "line") {
         const auto a = point2(field(entity, "start")), b = point2(field(entity, "end"));
         if (math::near(a, b, kTolerance)) fail(pointer, "zero-length line");
-        lines.emplace_back(a, b);
+        segments.push_back(math::make_line(a, b));
       } else {
         fail(pointer + "/type", "sketch entity is not implemented: " + type);
       }
     }
-    join_lines(std::move(lines), sketch);
+    join_curves(std::move(segments), sketch);
     return sketch;
   });
 }
@@ -155,7 +238,20 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
     auto rule = math::FillRule::kEvenOdd;
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
       rule = math::FillRule::kNonZero;
-    auto regions = math::regions(sketch.paths, rule);
+    // Arrangement probes must lie on a smooth span, not an interior spline corner.
+    // Exact Bézier decomposition also exposes intersections between different spans.
+    std::vector<std::vector<math::NurbsCurve2>> paths;
+    std::size_t spans = 0;
+    for (const auto& path : sketch.paths) {
+      paths.emplace_back();
+      for (const auto& curve : path) {
+        auto pieces = math::decompose(curve);
+        spans += pieces.size();
+        if (spans > 4096) fail("/profile", "profile exceeds the initial 4096-span work limit");
+        paths.back().insert(paths.back().end(), pieces.begin(), pieces.end());
+      }
+    }
+    auto regions = math::regions(paths, rule);
     if (!regions) fail("/profile", regions.error());
     if (const auto* picks = profile.find("regions")) {
       std::set<std::size_t> selected;

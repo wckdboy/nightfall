@@ -20,6 +20,7 @@ struct Part {
   ir::Document document;
   double area, center_x;
   std::size_t transforms = 28, cold_calls = 29, depth_calls = 29, depth_hits = 1;
+  bool scale_profile_with_depth = false;
 };
 void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
@@ -30,7 +31,8 @@ void verify(const Evaluation& result, const Part& part, double depth, double tai
     throw std::runtime_error("unexpected evaluator status or execution count");
   const auto& m = result.bodies.at("plate").shape->measures();
   const auto translation = 3 * static_cast<double>(part.transforms - 1) + tail;
-  if (std::abs(m.volume - part.area * depth) > 1e-5 ||
+  const auto profile_scale = part.scale_profile_with_depth ? depth / 30 : 1;
+  if (std::abs(m.volume - part.area * profile_scale * depth) > 1e-5 ||
       std::abs(m.centroid.x - (part.center_x + translation)) > 1e-6 ||
       std::abs(m.centroid.z - depth / 2) > 1e-6)
     throw std::runtime_error("analytic geometry verification failed");
@@ -102,6 +104,12 @@ int main() {
     sleeve.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
       "axis":{"origin":[0,0,0],"direction":"z"},"angle":360,
       "result":{"new":"plate","body_type":"brep"}})");
+    auto elliptical = plate;
+    elliptical.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+      {"id":"outer","type":"ellipse","center":[0,0],"radii":["depth / 3",5],"rotation":35},
+      {"id":"inner","type":"ellipse","center":[0,0],"radii":["depth / 6",2.5],"rotation":35}],
+      "constraints":[]})")
+                                        .value();
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -121,7 +129,8 @@ int main() {
     for (const auto& part :
          {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
-          Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0}})
+          Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
+          Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})
         measure(*backend, part, mode);
   } catch (const std::exception& error) {

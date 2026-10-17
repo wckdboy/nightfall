@@ -64,11 +64,22 @@ See [the expression API](core/ir/include/nf/ir/expression.hpp) and
 
 The service's [document evaluator](services/kernel/src/evaluator.hpp) executes sketches,
 B-rep extrusions/revolutions, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
-It supports rectangle, circle, polygon and closed-line profiles, holes, interior-point selection,
-datum/explicit planes and symmetric extrusion. Content hashes and a bounded cache preserve
-unchanged geometry. Rollback, suppression and failures have explicit states; unsupported
+It supports rectangles, circles, signed arcs, rotated ellipses, NURBS splines, polygons and mixed
+closed profiles, holes, interior-point selection, datum/explicit planes and symmetric extrusion.
+Content hashes and a bounded cache preserve unchanged geometry. Rollback, suppression and
+failures have explicit states; unsupported
 constraints, selectors and modeling operations report errors. This is the headless kernel
 path; native app integration and the remaining v1 operations are still in progress.
+
+Arc entities use `center`, `radius`, `start_angle` and a signed `sweep_angle` up to one full turn;
+ellipses use `center`, `radii` and optional `rotation`. Splines retain their clamped knot vector,
+degree (1–9), `control_points` and optional positive `weights`. Coordinates and angles accept
+unit-aware expressions. Unordered line/arc/spline segments join at unambiguous endpoints within
+the modeling tolerance, with explicit bridges preserving the original curves; open chains report
+errors. Bridges below OCCT's vertex precision are handled by vertex welding. Exact knot-span
+decomposition handles spline corners before region
+detection. Initial work limits are 4,096 sketch curves, 4,096 spline control points per sketch
+and 4,096 profile spans; oversized inputs report errors before arrangement work.
 
 Booleans union, subtract or intersect a target with the union of its tool bodies. Tools are
 consumed on success unless `keep_tools` is true; failed operations preserve the tools and
@@ -84,7 +95,8 @@ partial turns retain start/end cap provenance. Profile control hulls must stay o
 of the axis, touching it if needed; potentially overlapping sweeps are rejected. Sketch-line
 and selector axes remain unimplemented.
 
-To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates; turned sleeve):
+To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve
+and parametric elliptic tube):
 
 ```sh
 third_party/build-occt.sh
