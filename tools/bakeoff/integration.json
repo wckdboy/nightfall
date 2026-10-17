@@ -1,0 +1,17 @@
+{
+  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB. CI minutes are COLD builds on GitHub's macos-26 runner (the RFC's '\u2264 15 min CI build' is read as the uncached build: a cache can always be lost; cached runs are ~1 min for both).",
+  "occt": {
+    "builds_from_unmodified_upstream": true,
+    "ci_build_minutes": 31.0,
+    "ci_build_source": "main run 38966858579, step 'Build OCCT': 1861 s (#26)",
+    "shipped_megabytes": 47.2,
+    "shipped_source": "transitive closure of the 18 linked toolkits = 26 dylibs, 45.0 MiB (STEP pulls in TKCAF/TKV3d/TKService etc.)"
+  },
+  "smlib": {
+    "builds_from_unmodified_upstream": true,
+    "ci_build_minutes": 4.7,
+    "ci_build_source": "smlib job on #14: 4m40s including the SM_API suite",
+    "shipped_megabytes": 9.96,
+    "shipped_source": "libSMLib.dylib + libSM_API.dylib (9.5 MiB). STEP import additionally needs OCCT (.brep) and OpenUSD (RFC 0002), not counted here: the metric is per kernel."
+  }
+}

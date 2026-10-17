@@ -50,6 +50,7 @@
 #include <gp_Vec.hxx>
 
 #include <cmath>
+#include <initializer_list>
 #include <memory>
 #include <numbers>
 #include <string>
@@ -80,8 +81,9 @@ class OcctKernel final : public Kernel {
  public:
   std::string_view name() const override { return "occt"; }
   std::string version() const override { return OCC_VERSION_COMPLETE; }
-  // BRepBuilderAPI_MakeShape::Generated/Modified/IsDeleted on every builder used here.
-  HistorySupport history_support() const override { return HistorySupport::kYes; }
+  // Measured, not declared: a fillet and a boolean are probed for whether every result face
+  // and edge traces back through Modified/Generated (RFC 0001 F12).
+  HistorySupport history_support() const override { return probe_history(); }
 
   Body box(Vec3 origin, Vec3 size) override {
     return guarded(
@@ -259,6 +261,55 @@ class OcctKernel final : public Kernel {
   }
 
  private:
+  template <typename Builder>
+  static int untraced(Builder& builder, std::initializer_list<TopoDS_Shape> inputs,
+                      TopAbs_ShapeEnum kind) {
+    TopTools_IndexedMapOfShape traced;
+    for (const TopoDS_Shape& input : inputs) {
+      for (const TopAbs_ShapeEnum sub : {TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX}) {
+        TopTools_IndexedMapOfShape subs;
+        TopExp::MapShapes(input, sub, subs);
+        for (int i = 1; i <= subs.Extent(); ++i) {
+          if (!builder.IsDeleted(subs(i)) && builder.Modified(subs(i)).IsEmpty())
+            traced.Add(subs(i));
+          for (const TopoDS_Shape& m : builder.Modified(subs(i))) traced.Add(m);
+          for (const TopoDS_Shape& g : builder.Generated(subs(i))) traced.Add(g);
+        }
+      }
+    }
+    TopTools_IndexedMapOfShape result;
+    TopExp::MapShapes(builder.Shape(), kind, result);
+    int missing = 0;
+    for (int i = 1; i <= result.Extent(); ++i) missing += traced.Contains(result(i)) ? 0 : 1;
+    return missing;
+  }
+
+  // yes = faces and edges traceable through both probes; partial = faces only, or only some
+  // operations; no = nothing traceable (RFC 0001 normalization).
+  static HistorySupport probe_history() {
+    try {
+      const TopoDS_Shape box = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape();
+      BRepFilletAPI_MakeFillet fillet(box);
+      TopTools_IndexedMapOfShape edges;
+      TopExp::MapShapes(box, TopAbs_EDGE, edges);
+      fillet.Add(2.0, TopoDS::Edge(edges(1)));
+      fillet.Build();
+      const TopoDS_Shape plate = BRepPrimAPI_MakeBox(12.0, 12.0, 1.5).Shape();
+      const TopoDS_Shape tool =
+          BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(6, 6, -1), gp::DZ()), 1.0, 3.5).Shape();
+      BRepAlgoAPI_Cut cut(plate, tool);
+      if (!fillet.IsDone() || !cut.IsDone()) return HistorySupport::kNo;
+      const bool faces = untraced(fillet, {box}, TopAbs_FACE) == 0 &&
+                         untraced(cut, {plate, tool}, TopAbs_FACE) == 0;
+      const bool all_edges = untraced(fillet, {box}, TopAbs_EDGE) == 0 &&
+                             untraced(cut, {plate, tool}, TopAbs_EDGE) == 0;
+      if (faces && all_edges) return HistorySupport::kYes;
+      return faces ? HistorySupport::kPartial : HistorySupport::kNo;
+    } catch (const Standard_Failure&) {
+      return HistorySupport::kNo;
+    }
+  }
+
   // Runs an OCCT builder, converting OCCT exceptions and null results into KernelError.
   template <typename F>
   Body guarded(F&& make) {

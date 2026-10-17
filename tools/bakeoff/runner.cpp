@@ -163,7 +163,7 @@ std::string to_json(const RunReport& report) {
   append_string(out, report.kernel);
   out += ",\"version\":";
   append_string(out, report.version);
-  out += ",\"history_support_declared\":";
+  out += ",\"history_support\":";
   append_string(out, history_name(report.history));
   out += ",\"relative_tolerance\":";
   append_number(out, kRelativeTolerance);

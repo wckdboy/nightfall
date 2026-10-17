@@ -9,7 +9,7 @@
 All of these, with evidence linked:
 
 - [ ] RFC 0001 accepted with bake-off numbers and a kernel decision
-- [ ] A box appears in a Metal view, built through an XPC service from a JSON IR
+- [x] A box appears in a Metal view, built through an XPC service from a JSON IR ([evidence](https://github.com/wckdboy/nightfall/blob/spike/8-9-xpc-viewport/docs/phases/evidence/phase0-xpc-metal-spike.png))
 - [x] CI builds and tests on macOS on every PR; nightly sanitizer build green
 - [x] `main` protected per WORKFLOW.md §2 (required: `hygiene`, `build-and-test (macOS arm64)`)
 
@@ -27,15 +27,16 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#6](https://github.com/wckdboy/nightfall/issues/6) | Bake-off harness: kernel interface, JSON runner, reference parts | kernel | Done (#20) |
 | [#21](https://github.com/wckdboy/nightfall/issues/21) | Bake-off OCCT driver and `nf_bakeoff` CLI | kernel | Done (#22) |
 | [#16](https://github.com/wckdboy/nightfall/issues/16) | Bake-off SMLib driver | kernel | Done (#23) |
-| [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 14 analytic parts | kernel | In review |
-| [#28](https://github.com/wckdboy/nightfall/issues/28) | Corpus: profile, revolve, sweep, variable-radius parts (to 20) | kernel | In review |
+| [#17](https://github.com/wckdboy/nightfall/issues/17) | Bake-off reference corpus: 14 analytic parts | kernel | Done (#29) |
+| [#28](https://github.com/wckdboy/nightfall/issues/28) | Corpus: profile, revolve, sweep, variable-radius parts (to 20) | kernel | Done (#30) |
 | [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Done (#24) |
 | [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | Done (#26) |
-| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Not started |
-| [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Not started |
-| [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Not started |
+| [#36](https://github.com/wckdboy/nightfall/issues/36) | Bake-off runner: per-part processes, timing, sanitizer pass, scoring | kernel | In review |
+| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Corpus done; ABC waits on RFC 0002 (#33) |
+| [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Done (spike branch; RFC 0003 #35) |
+| [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Done (spike branch; RFC 0003 #35) |
 | [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | Done (first run green) |
-| [#11](https://github.com/wckdboy/nightfall/issues/11) | Layering check: no AppKit below `app/` | ci | In review |
+| [#11](https://github.com/wckdboy/nightfall/issues/11) | Layering check: no AppKit below `app/` | ci | Done (#27) |
 
 ## Log
 
@@ -57,3 +58,7 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   driver (#23), ABC manifest (#24). OCCT CI cache shared via `main` (#26): occt job 28m52s ->
   45 s. Remaining for the gate: corpus (#17), bake-off run (#7), XPC + viewport spikes (#8, #9),
   nightly green (#10), layering check (#11).
+- 2026-10-17 — XPC + Metal spike done (#8, #9); RFC 0003 (process architecture, #35) and RFC
+  0002 (OpenUSD, #33; 197/200 ABC models translate into SMLib) in review until 2026-10-22.
+  Corpus bake-off with both kernels instrumented (#36): OCCT 87.0, SMLib 69.1 (corpus only;
+  history measured, warm in-process timing).

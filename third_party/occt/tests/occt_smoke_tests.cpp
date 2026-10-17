@@ -14,7 +14,9 @@
 #include <IFSelect_ReturnStatus.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
+#include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Shape.hxx>
@@ -28,6 +30,7 @@
 #include <cmath>
 #include <numbers>
 #include <optional>
+#include <vector>
 
 using Catch::Matchers::WithinRel;
 
@@ -112,4 +115,58 @@ TEST_CASE("STEP round-trip preserves a filleted solid", "[occt][step]") {
   const TopoDS_Shape loaded = reader.OneShape();
   REQUIRE(is_valid(loaded));
   CHECK_THAT(volume(loaded), WithinRel(volume(original), kRelTol));
+}
+
+// RFC 0001 "operation history": can every face and edge of a result be traced to the input
+// sub-shape or operation that produced it? Traced = an input sub-shape kept unchanged, any
+// image from Modified(), or anything Generated() from an input sub-shape.
+namespace {
+
+template <typename Builder>
+int untraced(Builder& builder, const std::vector<TopoDS_Shape>& inputs, TopAbs_ShapeEnum kind) {
+  TopTools_IndexedMapOfShape traced;
+  for (const TopoDS_Shape& input : inputs) {
+    for (const TopAbs_ShapeEnum sub : {TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX}) {
+      TopTools_IndexedMapOfShape subs;
+      TopExp::MapShapes(input, sub, subs);
+      for (int i = 1; i <= subs.Extent(); ++i) {
+        const TopoDS_Shape& s = subs(i);
+        if (!builder.IsDeleted(s) && builder.Modified(s).IsEmpty()) traced.Add(s);
+        for (const TopoDS_Shape& m : builder.Modified(s)) traced.Add(m);
+        for (const TopoDS_Shape& g : builder.Generated(s)) traced.Add(g);
+      }
+    }
+  }
+  TopTools_IndexedMapOfShape result;
+  TopExp::MapShapes(builder.Shape(), kind, result);
+  int missing = 0;
+  for (int i = 1; i <= result.Extent(); ++i) missing += traced.Contains(result(i)) ? 0 : 1;
+  return missing;
+}
+
+}  // namespace
+
+TEST_CASE("OCCT traces every face, but not every edge, through a fillet", "[occt][history]") {
+  const TopoDS_Shape box = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape();
+  const auto edge = z_edge_at_origin(box);
+  REQUIRE(edge.has_value());
+  BRepFilletAPI_MakeFillet fillet(box);
+  fillet.Add(2.0, *edge);
+  fillet.Build();
+  REQUIRE(fillet.IsDone());
+  CHECK(fillet.Generated(*edge).Extent() == 1);  // the new cylindrical face
+  CHECK(untraced(fillet, {box}, TopAbs_FACE) == 0);
+  // Measured gap (RFC 0001 F12): the fillet reports face history but not edge history, so
+  // OCCT scores "partial". If this starts failing, OCCT improved: rescore history.
+  CHECK(untraced(fillet, {box}, TopAbs_EDGE) > 0);
+}
+
+TEST_CASE("OCCT traces every face and edge through a boolean cut", "[occt][history]") {
+  const TopoDS_Shape plate = BRepPrimAPI_MakeBox(12.0, 12.0, 1.5).Shape();
+  const TopoDS_Shape tool =
+      BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(6, 6, -1), gp::DZ()), 1.0, 3.5).Shape();
+  BRepAlgoAPI_Cut cut(plate, tool);
+  REQUIRE(cut.IsDone());
+  CHECK(untraced(cut, {plate, tool}, TopAbs_FACE) == 0);
+  CHECK(untraced(cut, {plate, tool}, TopAbs_EDGE) == 0);
 }

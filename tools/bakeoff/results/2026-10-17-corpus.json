@@ -1,0 +1,1467 @@
+{
+ "corpus": "reference parts only (ABC pending RFC 0002, #7)",
+ "correctness_excludes": "consensus parts (two kernels cannot settle which is right)",
+ "date": "2026-10-17",
+ "history_support": {
+  "occt": "partial",
+  "smlib": "no"
+ },
+ "integration_inputs": {
+  "_note": "RFC 0001 integration-cost inputs. Sizes in decimal MB. CI minutes are COLD builds on GitHub's macos-26 runner (the RFC's '\u2264 15 min CI build' is read as the uncached build: a cache can always be lost; cached runs are ~1 min for both).",
+  "occt": {
+   "builds_from_unmodified_upstream": true,
+   "ci_build_minutes": 31.0,
+   "ci_build_source": "main run 38966858579, step 'Build OCCT': 1861 s (#26)",
+   "shipped_megabytes": 47.2,
+   "shipped_source": "transitive closure of the 18 linked toolkits = 26 dylibs, 45.0 MiB (STEP pulls in TKCAF/TKV3d/TKService etc.)"
+  },
+  "smlib": {
+   "builds_from_unmodified_upstream": true,
+   "ci_build_minutes": 4.7,
+   "ci_build_source": "smlib job on #14: 4m40s including the SM_API suite",
+   "shipped_megabytes": 9.96,
+   "shipped_source": "libSMLib.dylib + libSM_API.dylib (9.5 MiB). STEP import additionally needs OCCT (.brep) and OpenUSD (RFC 0002), not counted here: the metric is per kernel."
+  }
+ },
+ "performance_shared_parts": [
+  "block",
+  "coincident_union",
+  "counterbore",
+  "filleted_edge",
+  "flush_pocket",
+  "frustum",
+  "helical_spring",
+  "hemisphere",
+  "hole_grid",
+  "knob",
+  "l_bracket",
+  "open_box_shell",
+  "plate_with_hole",
+  "rounded_box",
+  "sphere",
+  "spur_gear",
+  "steinmetz",
+  "through_slot",
+  "torus",
+  "variable_fillet"
+ ],
+ "repeat": 5,
+ "results": {
+  "occt": {
+   "block": {
+    "category": "primitive",
+    "part": {
+     "area": 2200,
+     "area_ok": true,
+     "build_ms": 0.013959,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "block",
+     "success": true,
+     "valid": true,
+     "volume": 5999.999999999999,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.013959,
+     0.014042
+    ]
+   },
+   "coincident_union": {
+    "category": "boolean",
+    "part": {
+     "area": 1000,
+     "area_ok": true,
+     "build_ms": 0.751125,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 20,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "coincident_union",
+     "success": true,
+     "valid": true,
+     "volume": 1999.9999999999993,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.751125,
+     0.730875
+    ]
+   },
+   "counterbore": {
+    "category": "boolean",
+    "part": {
+     "area": 3182.2123739082085,
+     "area_ok": true,
+     "build_ms": 2.98925,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 18,
+     "error": "",
+     "faces": 9,
+     "judged_by": "analytic",
+     "name": "counterbore",
+     "success": true,
+     "valid": true,
+     "volume": 8516.194731347172,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     2.98925,
+     3.137542
+    ]
+   },
+   "filleted_edge": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.5309649148735,
+     "area_ok": true,
+     "build_ms": 0.391167,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "filleted_edge",
+     "success": true,
+     "valid": true,
+     "volume": 5974.2477796076855,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.391167,
+     0.390084
+    ]
+   },
+   "flush_pocket": {
+    "category": "boolean",
+    "part": {
+     "area": 1800,
+     "area_ok": true,
+     "build_ms": 0.710416,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "flush_pocket",
+     "success": true,
+     "valid": true,
+     "volume": 3499.9999999999986,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.710416,
+     0.646292
+    ]
+   },
+   "frustum": {
+    "category": "primitive",
+    "part": {
+     "area": 876.8447436748183,
+     "area_ok": true,
+     "build_ms": 0.006583,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "frustum",
+     "success": true,
+     "valid": true,
+     "volume": 1642.0057602762652,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.006583,
+     0.006458
+    ]
+   },
+   "helical_spring": {
+    "category": "sweep",
+    "part": {
+     "area": 1989.183568206797,
+     "area_ok": true,
+     "build_ms": 9.568459,
+     "built": true,
+     "category": "sweep",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "helical_spring",
+     "success": true,
+     "valid": true,
+     "volume": 991.4501925446327,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     9.568459,
+     9.48675
+    ]
+   },
+   "hemisphere": {
+    "category": "boolean",
+    "part": {
+     "area": 235.61944901923454,
+     "area_ok": true,
+     "build_ms": 0.84675,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 2,
+     "judged_by": "analytic",
+     "name": "hemisphere",
+     "success": true,
+     "valid": true,
+     "volume": 261.79938779914943,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.84675,
+     0.862709
+    ]
+   },
+   "hole_grid": {
+    "category": "boolean",
+    "part": {
+     "area": 416.5486677646163,
+     "area_ok": true,
+     "build_ms": 32.667542,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 60,
+     "error": "",
+     "faces": 22,
+     "judged_by": "analytic",
+     "name": "hole_grid",
+     "success": true,
+     "valid": true,
+     "volume": 173.58849917653782,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     32.667542,
+     30.289292
+    ]
+   },
+   "knob": {
+    "category": "boolean",
+    "part": {
+     "area": 1113.7249685898412,
+     "area_ok": true,
+     "build_ms": 2.801167,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 8,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "knob",
+     "success": true,
+     "valid": true,
+     "volume": 2278.701871403796,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     2.801167,
+     2.860375
+    ]
+   },
+   "l_bracket": {
+    "category": "fillet",
+    "part": {
+     "area": 1937.8362787842316,
+     "area_ok": true,
+     "build_ms": 4.365,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 36,
+     "error": "",
+     "faces": 16,
+     "judged_by": "analytic",
+     "name": "l_bracket",
+     "success": true,
+     "valid": true,
+     "volume": 2546.216829764999,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.365,
+     4.978625
+    ]
+   },
+   "open_box_shell": {
+    "category": "shell",
+    "part": {
+     "area": 3552,
+     "area_ok": true,
+     "build_ms": 1.347292,
+     "built": true,
+     "category": "shell",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "open_box_shell",
+     "success": true,
+     "valid": true,
+     "volume": 3391.9999999999986,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.347292,
+     1.328125
+    ]
+   },
+   "plate_with_hole": {
+    "category": "boolean",
+    "part": {
+     "area": 363.5342917352885,
+     "area_ok": true,
+     "build_ms": 1.303167,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "plate_with_hole",
+     "success": true,
+     "valid": true,
+     "volume": 213.34928119853362,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.303167,
+     1.308583
+    ]
+   },
+   "rounded_box": {
+    "category": "fillet",
+    "part": {
+     "area": 4726.265361880023,
+     "area_ok": true,
+     "build_ms": 2.703084,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 56,
+     "error": "",
+     "faces": 26,
+     "judged_by": "analytic",
+     "name": "rounded_box",
+     "success": true,
+     "valid": true,
+     "volume": 23340.8493750551,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     2.703084,
+     2.69825
+    ]
+   },
+   "sphere": {
+    "category": "primitive",
+    "part": {
+     "area": 314.15926535897927,
+     "area_ok": true,
+     "build_ms": 0.003583,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "sphere",
+     "success": true,
+     "valid": true,
+     "volume": 523.598775598299,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.003583,
+     0.003625
+    ]
+   },
+   "spur_gear": {
+    "category": "extrude",
+    "part": {
+     "area": 2122.601996125105,
+     "area_ok": true,
+     "build_ms": 4.487791,
+     "built": true,
+     "category": "extrude",
+     "consensus_reason": "",
+     "edges": 1224,
+     "error": "",
+     "faces": 410,
+     "judged_by": "analytic",
+     "name": "spur_gear",
+     "success": true,
+     "valid": true,
+     "volume": 3459.181370783916,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.487791,
+     4.443875
+    ]
+   },
+   "steinmetz": {
+    "category": "boolean",
+    "part": {
+     "area": 399.9999999999236,
+     "area_ok": true,
+     "build_ms": 8.228291,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 7,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "steinmetz",
+     "success": true,
+     "valid": true,
+     "volume": 666.666666666404,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     8.228291,
+     8.177584
+    ]
+   },
+   "through_slot": {
+    "category": "boolean",
+    "part": {
+     "area": 1400,
+     "area_ok": true,
+     "build_ms": 1.019708,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "through_slot",
+     "success": true,
+     "valid": true,
+     "volume": 2499.9999999999995,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.019708,
+     1.088
+    ]
+   },
+   "torus": {
+    "category": "primitive",
+    "part": {
+     "area": 1184.3525281307225,
+     "area_ok": true,
+     "build_ms": 0.003084,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 2,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "torus",
+     "success": true,
+     "valid": true,
+     "volume": 1776.5287921960849,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.003084,
+     0.003625
+    ]
+   },
+   "variable_fillet": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.121869470596,
+     "area_ok": null,
+     "build_ms": 3.973959,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "variable-radius fillet has no closed-form volume",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "consensus",
+     "name": "variable_fillet",
+     "success": true,
+     "valid": true,
+     "volume": 5971.571200415519,
+     "volume_ok": null
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x?  (libTKGeomAlgo.7.9.3.dylib:arm64+0x?)",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__memory/uninitialized_algorithms.h:556:81: runtime error: reference binding to misaligned address 0x? for type 'IntWalk_WalkingData', which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::Perform(NCollection_Sequence<IntSurf_PathPoint> const&, NCollection_Sequence<IntSurf_InteriorPoint> const&, IntPatch_TheSurfFunction&, opencascade::handle<Adaptor3d_Surface> const&, bool)+",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:1153:10: runtime error: reference binding to misaligned address 0x? for type 'value_type' (aka 'IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::ComputeOpenLine(NCollection_Sequence<double> const&, NCollection_Sequence<double> const&, NCollection_Sequence<IntSurf_PathPoint> const&, IntPatch_TheSurfFunction&, bool&)+0x? (libTKGeomAl",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:415:12: runtime error: reference binding to misaligned address 0x? for type 'value_type' (aka 'IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x? in IntPatch_TheIWalking::ComputeOpenLine(NCollection_Sequence<double> const&, NCollection_Sequence<double> const&, NCollection_Sequence<IntSurf_PathPoint> const&, IntPatch_TheSurfFunction&, bool&)+0x? (libTKGeomAl",
+       "kind": "ubsan",
+       "report": "<sdk>/c++/v1/__vector/vector.h:420:12: runtime error: reference binding to misaligned address 0x? for type 'const value_type' (aka 'const IntWalk_WalkingData'), which requires 8 byte alignment"
+      },
+      {
+       "frame": "#0 0x?  (libTKGeomAlgo.7.9.3.dylib:arm64+0x?)",
+       "kind": "ubsan",
+       "report": "third_party/src/occt/src/NCollection/NCollection_OccAllocator.hxx:148:25: runtime error: constructor call on misaligned address 0x? for type 'IntWalk_WalkingData', which requires 8 byte alignment"
+      }
+     ],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.973959,
+     3.973709
+    ]
+   }
+  },
+  "smlib": {
+   "block": {
+    "category": "primitive",
+    "part": {
+     "area": 2200,
+     "area_ok": true,
+     "build_ms": 0.162333,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "block",
+     "success": true,
+     "valid": true,
+     "volume": 6000,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.162333,
+     0.171083
+    ]
+   },
+   "coincident_union": {
+    "category": "boolean",
+    "part": {
+     "area": 1000,
+     "area_ok": true,
+     "build_ms": 0.790166,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 12,
+     "error": "",
+     "faces": 6,
+     "judged_by": "analytic",
+     "name": "coincident_union",
+     "success": true,
+     "valid": true,
+     "volume": 2000,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.790166,
+     0.772875
+    ]
+   },
+   "counterbore": {
+    "category": "boolean",
+    "part": {
+     "area": 3182.223146847462,
+     "area_ok": false,
+     "build_ms": 4.170042,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 18,
+     "error": "",
+     "faces": 9,
+     "judged_by": "analytic",
+     "name": "counterbore",
+     "success": false,
+     "valid": true,
+     "volume": 8516.194731534562,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.170042,
+     4.14025
+    ]
+   },
+   "filleted_edge": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.5309772882474,
+     "area_ok": true,
+     "build_ms": 1.109084,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "filleted_edge",
+     "success": true,
+     "valid": true,
+     "volume": 5974.247779605437,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.109084,
+     1.112125
+    ]
+   },
+   "flush_pocket": {
+    "category": "boolean",
+    "part": {
+     "area": 1800,
+     "area_ok": true,
+     "build_ms": 0.594083,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "flush_pocket",
+     "success": true,
+     "valid": true,
+     "volume": 3500,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.594083,
+     0.588042
+    ]
+   },
+   "frustum": {
+    "category": "primitive",
+    "part": {
+     "area": 876.8416124982923,
+     "area_ok": false,
+     "build_ms": 0.857292,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "frustum",
+     "success": false,
+     "valid": true,
+     "volume": 1642.0057669062612,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.857292,
+     0.834542
+    ]
+   },
+   "helical_spring": {
+    "category": "sweep",
+    "part": {
+     "area": 1989.2262043190112,
+     "area_ok": false,
+     "build_ms": 35.553042,
+     "built": true,
+     "category": "sweep",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 3,
+     "judged_by": "analytic",
+     "name": "helical_spring",
+     "success": false,
+     "valid": true,
+     "volume": 991.4435183486088,
+     "volume_ok": false
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     35.553042,
+     35.307167
+    ]
+   },
+   "hemisphere": {
+    "category": "boolean",
+    "part": {
+     "area": 235.61515826654696,
+     "area_ok": false,
+     "build_ms": 1.374291,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 3,
+     "error": "",
+     "faces": 2,
+     "judged_by": "analytic",
+     "name": "hemisphere",
+     "success": false,
+     "valid": true,
+     "volume": 261.79937179087136,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.374291,
+     1.381625
+    ]
+   },
+   "hole_grid": {
+    "category": "boolean",
+    "part": {
+     "area": 416.5305294949541,
+     "area_ok": false,
+     "build_ms": 33.97225,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 60,
+     "error": "",
+     "faces": 22,
+     "judged_by": "analytic",
+     "name": "hole_grid",
+     "success": false,
+     "valid": true,
+     "volume": 173.5884986962632,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     33.97225,
+     33.756458
+    ]
+   },
+   "knob": {
+    "category": "boolean",
+    "part": {
+     "area": 1113.7855286847955,
+     "area_ok": false,
+     "build_ms": 7.055458,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 8,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "knob",
+     "success": false,
+     "valid": true,
+     "volume": 2278.701839924324,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     7.055458,
+     7.029209
+    ]
+   },
+   "l_bracket": {
+    "category": "fillet",
+    "part": {
+     "area": 1937.8369707222246,
+     "area_ok": true,
+     "build_ms": 4.070917,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "l_bracket",
+     "success": true,
+     "valid": true,
+     "volume": 2546.2168179744535,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     4.070917,
+     4.044667
+    ]
+   },
+   "open_box_shell": {
+    "category": "shell",
+    "part": {
+     "area": 3552,
+     "area_ok": true,
+     "build_ms": 3.389542,
+     "built": true,
+     "category": "shell",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 11,
+     "judged_by": "analytic",
+     "name": "open_box_shell",
+     "success": true,
+     "valid": true,
+     "volume": 3391.9999999999995,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.389542,
+     3.364417
+    ]
+   },
+   "plate_with_hole": {
+    "category": "boolean",
+    "part": {
+     "area": 363.5338556964246,
+     "area_ok": false,
+     "build_ms": 2.056667,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "analytic",
+     "name": "plate_with_hole",
+     "success": false,
+     "valid": true,
+     "volume": 213.34928117177682,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in SmProtoEdge::RemoveProtoVertex(SmProtoVertex*) SmProtoTopology.cpp:3371",
+       "kind": "asan",
+       "report": "ERROR: AddressSanitizer: heap-use-after-free on address 0x? at pc 0x? bp 0x? sp 0x?"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     2.056667,
+     2.058875
+    ]
+   },
+   "rounded_box": {
+    "category": "fillet",
+    "part": {
+     "area": 4726.2696140770995,
+     "area_ok": true,
+     "build_ms": 14.115792,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "",
+     "edges": 48,
+     "error": "",
+     "faces": 26,
+     "judged_by": "analytic",
+     "name": "rounded_box",
+     "success": true,
+     "valid": true,
+     "volume": 23340.849390024436,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     14.115792,
+     14.004667
+    ]
+   },
+   "sphere": {
+    "category": "primitive",
+    "part": {
+     "area": 314.2101128477634,
+     "area_ok": false,
+     "build_ms": 0.605875,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 1,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "sphere",
+     "success": false,
+     "valid": true,
+     "volume": 523.5987778292728,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.605875,
+     0.697959
+    ]
+   },
+   "spur_gear": {
+    "category": "extrude",
+    "part": {
+     "area": 2122.601996125105,
+     "area_ok": true,
+     "build_ms": 180.771375,
+     "built": true,
+     "category": "extrude",
+     "consensus_reason": "",
+     "edges": 1224,
+     "error": "",
+     "faces": 410,
+     "judged_by": "analytic",
+     "name": "spur_gear",
+     "success": true,
+     "valid": true,
+     "volume": 3459.1813707839137,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     180.771375,
+     132.915792
+    ]
+   },
+   "steinmetz": {
+    "category": "boolean",
+    "part": {
+     "area": 399.9995668149887,
+     "area_ok": false,
+     "build_ms": 7.837375,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 7,
+     "error": "",
+     "faces": 5,
+     "judged_by": "analytic",
+     "name": "steinmetz",
+     "success": false,
+     "valid": true,
+     "volume": 666.6666271330839,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     7.837375,
+     7.874958
+    ]
+   },
+   "through_slot": {
+    "category": "boolean",
+    "part": {
+     "area": 1400,
+     "area_ok": true,
+     "build_ms": 0.823541,
+     "built": true,
+     "category": "boolean",
+     "consensus_reason": "",
+     "edges": 24,
+     "error": "",
+     "faces": 10,
+     "judged_by": "analytic",
+     "name": "through_slot",
+     "success": true,
+     "valid": true,
+     "volume": 2500,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     0.823541,
+     0.788083
+    ]
+   },
+   "torus": {
+    "category": "primitive",
+    "part": {
+     "area": 1184.6101682997503,
+     "area_ok": false,
+     "build_ms": 1.254584,
+     "built": true,
+     "category": "primitive",
+     "consensus_reason": "",
+     "edges": 2,
+     "error": "",
+     "faces": 1,
+     "judged_by": "analytic",
+     "name": "torus",
+     "success": false,
+     "valid": true,
+     "volume": 1776.52880538324,
+     "volume_ok": true
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [],
+     "status": "ok"
+    },
+    "status": "ok",
+    "timings_ms": [
+     1.254584,
+     1.343208
+    ]
+   },
+   "variable_fillet": {
+    "category": "fillet",
+    "part": {
+     "area": 2172.1210102750065,
+     "area_ok": null,
+     "build_ms": 3.809458,
+     "built": true,
+     "category": "fillet",
+     "consensus_reason": "variable-radius fillet has no closed-form volume",
+     "edges": 15,
+     "error": "",
+     "faces": 7,
+     "judged_by": "consensus",
+     "name": "variable_fillet",
+     "success": true,
+     "valid": true,
+     "volume": 5972.099479232127,
+     "volume_ok": null
+    },
+    "repeat_statuses": [
+     "ok",
+     "ok"
+    ],
+    "sanitizer": {
+     "findings": [
+      {
+       "frame": "#0 0x? in N_GetRealMatrixData NL_Math.cpp:4145",
+       "kind": "ubsan",
+       "report": "third_party/src/usd-brep/source/SMLib/src/NL_Math.cpp:4145:17: runtime error: load of value 1866565280, which is not a valid value for type 'NL_MATRIXTYPE' (aka 'matrixtype')"
+      }
+     ],
+     "status": "signal 6"
+    },
+    "status": "ok",
+    "timings_ms": [
+     3.809458,
+     3.830709
+    ]
+   }
+  }
+ },
+ "sanitizer_pass": true,
+ "scores": {
+  "occt": {
+   "correctness": 100.0,
+   "fillet_quality": 100.0,
+   "geomean_time_ratio_vs_fastest": 1.031984194058033,
+   "integration_cost": 70,
+   "median_ms_shared": 1.32179175,
+   "memory_errors_per_1000_operations": 0.0,
+   "operation_history": 50.0,
+   "operation_success": 100.0,
+   "performance": 100.00000000000001,
+   "ub_reports_per_1000_operations": 50.0,
+   "weighted": 87.0
+  },
+  "smlib": {
+   "correctness": 71.05263157894737,
+   "fillet_quality": 100.0,
+   "geomean_time_ratio_vs_fastest": 4.320461998276831,
+   "integration_cost": 100,
+   "median_ms_shared": 2.71737525,
+   "memory_errors_per_1000_operations": 250.0,
+   "operation_history": 0.0,
+   "operation_success": 100.0,
+   "performance": 48.64222377825809,
+   "ub_reports_per_1000_operations": 50.0,
+   "weighted": 69.07474869361528
+  }
+ },
+ "unit": "one reference part = one operation script"
+}

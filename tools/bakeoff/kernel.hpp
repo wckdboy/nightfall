@@ -64,7 +64,8 @@ class Kernel {
 
   [[nodiscard]] virtual std::string_view name() const = 0;
   [[nodiscard]] virtual std::string version() const = 0;
-  /// Declared capability. Whether it holds is measured separately (#17).
+  /// Measured where the kernel exposes history (a probe traces result faces and edges);
+  /// kNo where it exposes none.
   [[nodiscard]] virtual HistorySupport history_support() const = 0;
 
   virtual Body box(Vec3 origin, Vec3 size) = 0;
