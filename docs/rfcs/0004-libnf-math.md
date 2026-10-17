@@ -6,6 +6,10 @@
 - **Created:** 2026-10-17
 - **Decided:** —
 
+**Depends on:** RFC 0001's decision (OCCT primary, recorded in #41). This RFC is accepted only
+after that decision is merged; if it changed, the "delegated" column would target the other kernel
+while libnf-math's kernel-free scope stays the same.
+
 ## Summary
 
 libnf-math is Nightfall's own C++23 NURBS library: exact curve and surface types, their
