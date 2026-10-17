@@ -19,10 +19,14 @@
 namespace nf::kernel {
 
 /// Same knots (as distinct values with multiplicities), poles and weights; rational exactly
-/// when the libnf-math value is.
-[[nodiscard]] Handle(Geom_BSplineCurve) to_occt(const math::NurbsCurve3& curve);
-[[nodiscard]] Handle(Geom2d_BSplineCurve) to_occt(const math::NurbsCurve2& curve);
-[[nodiscard]] Handle(Geom_BSplineSurface) to_occt(const math::NurbsSurface& surface);
+/// when the libnf-math value is. An error when OCCT cannot hold the data, e.g. distinct
+/// knots closer than OCCT's Epsilon, which libnf-math allows; never an exception.
+[[nodiscard]] std::expected<Handle(Geom_BSplineCurve), std::string> to_occt(
+    const math::NurbsCurve3& curve);
+[[nodiscard]] std::expected<Handle(Geom2d_BSplineCurve), std::string> to_occt(
+    const math::NurbsCurve2& curve);
+[[nodiscard]] std::expected<Handle(Geom_BSplineSurface), std::string> to_occt(
+    const math::NurbsSurface& surface);
 
 /// The same B-spline as libnf-math data: knots expanded from multiplicities, poles, weights
 /// (rescaled by a power of two at most, which is exact). Periodic OCCT B-splines are first

@@ -3,9 +3,12 @@
 
 #include "nf/kernel/occt_geom.hpp"
 
+#include <cmath>
+#include <optional>
 #include <span>
 #include <vector>
 
+#include <Standard_Failure.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColStd_Array2OfReal.hxx>
@@ -26,6 +29,27 @@ struct OcctKnots {
   TColStd_Array1OfReal knots;
   TColStd_Array1OfInteger mults;
 };
+
+// OCCT requires distinct knots to differ by more than Epsilon of the previous one.
+std::optional<std::string> occt_spacing(const KnotVector& kv) {
+  for (std::size_t i = 1; i < kv.size(); ++i) {
+    if (kv[i] != kv[i - 1] && std::abs(kv[i] - kv[i - 1]) <= Epsilon(std::abs(kv[i - 1]))) {
+      return "knots " + std::to_string(i - 1) + " and " + std::to_string(i) +
+             " are distinct but closer than OCCT can represent";
+    }
+  }
+  return std::nullopt;
+}
+
+// Runs an OCCT construction, turning its exceptions into errors.
+template <typename F>
+auto guarded(F make) -> std::expected<decltype(make()), std::string> {
+  try {
+    return make();
+  } catch (const Standard_Failure& e) {
+    return std::unexpected(std::string("OCCT: ") + e.GetMessageString());
+  }
+}
 
 OcctKnots to_occt_knots(const KnotVector& kv) {
   std::vector<double> values;
@@ -73,28 +97,36 @@ TColStd_Array1OfReal weights_1d(std::span<const double> w) {
 
 }  // namespace
 
-Handle(Geom_BSplineCurve) to_occt(const math::NurbsCurve3& c) {
+std::expected<Handle(Geom_BSplineCurve), std::string> to_occt(const math::NurbsCurve3& c) {
+  if (auto e = occt_spacing(c.knots())) return std::unexpected(*e);
   const auto k = to_occt_knots(c.knots());
   TColgp_Array1OfPnt poles(1, static_cast<int>(c.points().size()));
   for (std::size_t i = 0; i < c.points().size(); ++i) {
     const Vec3 p = c.points()[i];
     poles.SetValue(static_cast<int>(i) + 1, gp_Pnt(p.x, p.y, p.z));
   }
-  if (!c.rational()) return new Geom_BSplineCurve(poles, k.knots, k.mults, c.degree());
-  return new Geom_BSplineCurve(poles, weights_1d(c.weights()), k.knots, k.mults, c.degree());
+  return guarded([&]() -> Handle(Geom_BSplineCurve) {
+    if (!c.rational()) return new Geom_BSplineCurve(poles, k.knots, k.mults, c.degree());
+    return new Geom_BSplineCurve(poles, weights_1d(c.weights()), k.knots, k.mults, c.degree());
+  });
 }
 
-Handle(Geom2d_BSplineCurve) to_occt(const math::NurbsCurve2& c) {
+std::expected<Handle(Geom2d_BSplineCurve), std::string> to_occt(const math::NurbsCurve2& c) {
+  if (auto e = occt_spacing(c.knots())) return std::unexpected(*e);
   const auto k = to_occt_knots(c.knots());
   TColgp_Array1OfPnt2d poles(1, static_cast<int>(c.points().size()));
   for (std::size_t i = 0; i < c.points().size(); ++i) {
     poles.SetValue(static_cast<int>(i) + 1, gp_Pnt2d(c.points()[i].x, c.points()[i].y));
   }
-  if (!c.rational()) return new Geom2d_BSplineCurve(poles, k.knots, k.mults, c.degree());
-  return new Geom2d_BSplineCurve(poles, weights_1d(c.weights()), k.knots, k.mults, c.degree());
+  return guarded([&]() -> Handle(Geom2d_BSplineCurve) {
+    if (!c.rational()) return new Geom2d_BSplineCurve(poles, k.knots, k.mults, c.degree());
+    return new Geom2d_BSplineCurve(poles, weights_1d(c.weights()), k.knots, k.mults, c.degree());
+  });
 }
 
-Handle(Geom_BSplineSurface) to_occt(const math::NurbsSurface& s) {
+std::expected<Handle(Geom_BSplineSurface), std::string> to_occt(const math::NurbsSurface& s) {
+  if (auto e = occt_spacing(s.knots_u())) return std::unexpected(*e);
+  if (auto e = occt_spacing(s.knots_v())) return std::unexpected(*e);
   const auto ku = to_occt_knots(s.knots_u()), kv = to_occt_knots(s.knots_v());
   const int n = s.count_u(), m = s.count_v();
   TColgp_Array2OfPnt poles(1, n, 1, m);
@@ -108,9 +140,12 @@ Handle(Geom_BSplineSurface) to_occt(const math::NurbsSurface& s) {
     }
   }
   const int p = s.knots_u().degree(), q = s.knots_v().degree();
-  if (!s.rational())
-    return new Geom_BSplineSurface(poles, ku.knots, kv.knots, ku.mults, kv.mults, p, q);
-  return new Geom_BSplineSurface(poles, weights, ku.knots, kv.knots, ku.mults, kv.mults, p, q);
+  return guarded([&]() -> Handle(Geom_BSplineSurface) {
+    if (!s.rational()) {
+      return new Geom_BSplineSurface(poles, ku.knots, kv.knots, ku.mults, kv.mults, p, q);
+    }
+    return new Geom_BSplineSurface(poles, weights, ku.knots, kv.knots, ku.mults, kv.mults, p, q);
+  });
 }
 
 std::expected<math::NurbsCurve3, std::string> from_occt(const Geom_BSplineCurve& curve) {

@@ -58,7 +58,7 @@ TEST_CASE("3D curves round-trip exactly and evaluate alike in OCCT", "[kernel][o
   const bool rational = GENERATE(false, true);
   const auto seed = GENERATE(take(4, random(1u, 1000000u)));
   const auto c = random_curve<Vec3>(seed, degree, rational);
-  const Handle(Geom_BSplineCurve) occ = kernel::to_occt(c);
+  const Handle(Geom_BSplineCurve) occ = kernel::to_occt(c).value();
   CHECK(occ->Degree() == degree);
   CHECK(occ->IsRational() == rational);
   const auto back = kernel::from_occt(*occ);
@@ -76,7 +76,7 @@ TEST_CASE("3D curves round-trip exactly and evaluate alike in OCCT", "[kernel][o
 TEST_CASE("2D curves round-trip exactly", "[kernel][occt]") {
   const auto seed = GENERATE(take(4, random(1u, 1000000u)));
   const auto c = random_curve<Vec2>(seed, 3, true);
-  const Handle(Geom2d_BSplineCurve) occ = kernel::to_occt(c);
+  const Handle(Geom2d_BSplineCurve) occ = kernel::to_occt(c).value();
   const auto back = kernel::from_occt(*occ);
   REQUIRE(back.has_value());
   CHECK(std::ranges::equal(back->knots().knots(), c.knots().knots()));
@@ -91,7 +91,7 @@ TEST_CASE("surfaces round-trip exactly and evaluate alike in OCCT", "[kernel][oc
       math::make_arc(Vec3{0, 0, 0}, Vec3{0, 0, -1}, Vec3{1, 0, 0}, 2, 2, 0, std::numbers::pi);
   const math::NurbsSurface sphere =
       math::revolve(profile, Vec3{0, 0, 0}, Vec3{0, 0, 1}, 2 * std::numbers::pi);
-  const Handle(Geom_BSplineSurface) occ = kernel::to_occt(sphere);
+  const Handle(Geom_BSplineSurface) occ = kernel::to_occt(sphere).value();
   const auto back = kernel::from_occt(*occ);
   REQUIRE(back.has_value());
   CHECK(std::ranges::equal(back->knots_u().knots(), sphere.knots_u().knots()));
@@ -155,4 +155,16 @@ TEST_CASE("OCCT-made B-splines: periodic ones are clamped, high degrees refused"
   mults.SetValue(2, 13);
   const Handle(Geom_BSplineCurve) high = new Geom_BSplineCurve(poles, knots, mults, 12);
   CHECK_FALSE(kernel::from_occt(*high).has_value());
+}
+
+TEST_CASE("knots OCCT cannot hold are an error, not an exception", "[kernel][occt]") {
+  // Distinct knots one ulp apart: valid in libnf-math, below OCCT's Epsilon (review finding).
+  const double k = 0.5, next = std::nextafter(0.5, 1.0);
+  const auto kv = KnotVector::make({0, 0, k, next, 1, 1}, 1).value();
+  const auto c3 = math::NurbsCurve3::make(kv, {{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 1}}).value();
+  const auto r3 = kernel::to_occt(c3);
+  REQUIRE_FALSE(r3.has_value());
+  CHECK_FALSE(r3.error().empty());
+  const auto c2 = math::NurbsCurve2::make(kv, {{0, 0}, {1, 0}, {1, 1}, {0, 1}}).value();
+  CHECK_FALSE(kernel::to_occt(c2).has_value());
 }
