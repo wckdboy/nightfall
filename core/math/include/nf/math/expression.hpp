@@ -22,6 +22,30 @@ class Expression {
   /// products ("2t" is an error). Errors name the problem and its byte offset.
   [[nodiscard]] static std::expected<Expression, std::string> parse(std::string_view text);
 
+  struct ParseError {
+    std::string message;
+    std::size_t offset;
+  };
+  /// Postfix instructions for dimension-aware interpretation by libnf-ir (RFC 0005).
+  /// kNum's text is its optional unit suffix; kName's is an identifier; kFunc's a function.
+  /// Every instruction records its source byte offset. Unary operations consume one stack
+  /// value; arithmetic consumes two (left, right). A valid program leaves exactly one value.
+  struct Instruction {
+    enum class Kind { kNum, kName, kAdd, kSub, kMul, kDiv, kPow, kNeg, kFunc } kind;
+    double value;
+    std::string text;
+    std::size_t offset;
+  };
+  using Program = std::vector<Instruction>;
+  /// The same precedence and functions as parse(), with identifiers and numeric suffixes.
+  /// Names (including t, pi and e) remain symbolic; the caller resolves them. Suffixes are
+  /// identifiers attached only to numbers ("2 mm", "90deg"), not implicit multiplication.
+  /// Both parsers limit source to 64 KiB, nodes to 4096 and recursion/tree depth to 128.
+  [[nodiscard]] static std::expected<Program, ParseError> compile_named(std::string_view text);
+  /// Shared real-valued function implementation with IEEE results (including NaN/infinity).
+  /// Unknown names return NaN; the dimension-aware interpreter checks non-finite results.
+  [[nodiscard]] static double apply_function(std::string_view name, double value);
+
   /// The value at t (IEEE semantics: may be infinite or NaN).
   [[nodiscard]] double operator()(double t) const;
 

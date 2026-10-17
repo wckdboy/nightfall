@@ -16,10 +16,12 @@
 namespace nf::math {
 
 struct Expression::Node {
-  enum class Kind { kNum, kT, kAdd, kSub, kMul, kDiv, kPow, kNeg, kFunc } kind;
+  using Kind = Instruction::Kind;
+  Kind kind;
   double value = 0.0;
   std::string func;
   std::shared_ptr<const Node> a, b;
+  std::size_t offset = 0, depth = 1;
 };
 
 namespace {
@@ -36,8 +38,12 @@ constexpr std::array<std::string_view, 13> kFunctions{"sin",  "cos",  "tan",  "a
 // ')'
 class Parser {
  public:
-  explicit Parser(std::string_view s) : s_(s) {}
-  std::expected<NodePtr, std::string> run() {
+  explicit Parser(std::string_view s, bool named = false) : s_(s), named_(named) {}
+  std::expected<NodePtr, Expression::ParseError> run() {
+    if (s_.size() > 65536) {
+      fail("expression source limit exceeded");
+      return std::unexpected(*error_);
+    }
     NodePtr e = expr();
     space();
     if (!error_ && pos_ != s_.size()) fail("unexpected '" + std::string(1, s_[pos_]) + "'");
@@ -46,32 +52,51 @@ class Parser {
   }
 
  private:
-  NodePtr make(Node::Kind k, NodePtr a = {}, NodePtr b = {}) {
-    return std::make_shared<const Node>(Node{k, 0.0, {}, std::move(a), std::move(b)});
+  NodePtr make(Node::Kind k, NodePtr a = {}, NodePtr b = {}, std::size_t at = 0, double value = 0,
+               std::string name = {}) {
+    if (error_) return {};
+    const auto depth = 1 + std::max(a ? a->depth : 0, b ? b->depth : 0);
+    if (++nodes_ > 4096 || depth > 128) {
+      fail("expression complexity limit exceeded");
+      return {};
+    }
+    return std::make_shared<const Node>(
+        Node{k, value, std::move(name), std::move(a), std::move(b), at, depth});
   }
   NodePtr expr() {
     NodePtr left = term();
     for (space(); !error_ && (peek('+') || peek('-')); space()) {
-      const bool plus = s_[pos_++] == '+';
-      left = make(plus ? Node::Kind::kAdd : Node::Kind::kSub, left, term());
+      const auto at = pos_++;
+      left = make(s_[at] == '+' ? Node::Kind::kAdd : Node::Kind::kSub, left, term(), at);
     }
     return left;
   }
   NodePtr term() {
     NodePtr left = unary();
     for (space(); !error_ && (peek('*') || peek('/')); space()) {
-      const bool times = s_[pos_++] == '*';
-      left = make(times ? Node::Kind::kMul : Node::Kind::kDiv, left, unary());
+      const auto at = pos_++;
+      left = make(s_[at] == '*' ? Node::Kind::kMul : Node::Kind::kDiv, left, unary(), at);
     }
     return left;
   }
   NodePtr unary() {
+    struct Guard {
+      std::size_t& depth;
+      ~Guard() { --depth; }
+    } guard{depth_};
+    if (++depth_ > 128) return fail("expression recursion limit exceeded"), nullptr;
     space();
-    if (peek('-')) return ++pos_, make(Node::Kind::kNeg, unary());
+    if (peek('-')) {
+      const auto at = pos_++;
+      return make(Node::Kind::kNeg, unary(), {}, at);
+    }
     if (peek('+')) return ++pos_, unary();
     NodePtr base = atom();
     space();
-    if (!error_ && peek('^')) return ++pos_, make(Node::Kind::kPow, base, unary());
+    if (!error_ && peek('^')) {
+      const auto at = pos_++;
+      return make(Node::Kind::kPow, base, unary(), at);
+    }
     return base;
   }
   NodePtr atom() {
@@ -87,6 +112,7 @@ class Parser {
     }
     if (pos_ < s_.size() &&
         (std::isdigit(static_cast<unsigned char>(s_[pos_])) || s_[pos_] == '.')) {
+      const auto at = pos_;
       static const locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
       const std::string rest(s_.substr(pos_));
       char* stop = nullptr;
@@ -97,45 +123,58 @@ class Parser {
         return fail("invalid number"), nullptr;
       }
       pos_ += static_cast<std::size_t>(stop - rest.c_str());
-      auto n = std::make_shared<Node>(Node{Node::Kind::kNum, v, {}, {}, {}});
-      return n;
+      space();
+      const auto suffix = named_ ? identifier() : std::string_view{};
+      return make(Node::Kind::kNum, {}, {}, at, v, std::string(suffix));
     }
     const std::size_t start = pos_;
-    while (pos_ < s_.size() && std::isalpha(static_cast<unsigned char>(s_[pos_]))) ++pos_;
-    const std::string_view name = s_.substr(start, pos_ - start);
-    if (name == "t") return make(Node::Kind::kT);
-    if (name == "pi")
-      return std::make_shared<Node>(Node{Node::Kind::kNum, std::numbers::pi, {}, {}, {}});
-    if (name == "e")
-      return std::make_shared<Node>(Node{Node::Kind::kNum, std::numbers::e, {}, {}, {}});
-    if (std::ranges::contains(kFunctions, name)) {
-      space();
+    const auto name = identifier();
+    space();
+    if (!named_ && name == "t") return make(Node::Kind::kName, {}, {}, start, 0, "t");
+    if (!named_ && (name == "pi" || name == "e"))
+      return make(Node::Kind::kNum, {}, {}, start,
+                  name == "pi" ? std::numbers::pi : std::numbers::e);
+    if (std::ranges::contains(kFunctions, name) && (!named_ || peek('('))) {
       if (!peek('(')) return fail("expected '(' after " + std::string(name)), nullptr;
       ++pos_;
       NodePtr arg = expr();
       space();
       if (!peek(')')) return fail("expected ')'"), nullptr;
       ++pos_;
-      return std::make_shared<Node>(Node{Node::Kind::kFunc, 0.0, std::string(name), arg, {}});
+      return make(Node::Kind::kFunc, arg, {}, start, 0, std::string(name));
     }
+    if (named_ && !name.empty() && !peek('('))
+      return make(Node::Kind::kName, {}, {}, start, 0, std::string(name));
     pos_ = start;
     return fail(name.empty() ? "expected a value" : "unknown name '" + std::string(name) + "'"),
            nullptr;
+  }
+  std::string_view identifier() {
+    const auto start = pos_;
+    const auto letter = [](char c) { return (c >= 'a' && c <= 'z') || c == '_'; };
+    if (pos_ < s_.size() && letter(s_[pos_])) {
+      do {
+        ++pos_;
+      } while (pos_ < s_.size() && (letter(s_[pos_]) || (s_[pos_] >= '0' && s_[pos_] <= '9')));
+    }
+    if (pos_ - start > 64) fail("identifier length limit exceeded");
+    return s_.substr(start, pos_ - start);
   }
   void space() {
     while (pos_ < s_.size() && std::isspace(static_cast<unsigned char>(s_[pos_]))) ++pos_;
   }
   bool peek(char c) const { return pos_ < s_.size() && s_[pos_] == c; }
   void fail(std::string m) {
-    if (!error_) error_ = m + " at " + std::to_string(pos_);
+    if (!error_) error_ = Expression::ParseError{std::move(m), pos_};
   }
 
   std::string_view s_;
-  std::size_t pos_ = 0;
-  std::optional<std::string> error_;
+  bool named_;
+  std::size_t pos_ = 0, depth_ = 0, nodes_ = 0;
+  std::optional<Expression::ParseError> error_;
 };
 
-double call(const std::string& f, double x) {
+double call(std::string_view f, double x) {
   if (f == "sin") return std::sin(x);
   if (f == "cos") return std::cos(x);
   if (f == "tan") return std::tan(x);
@@ -148,7 +187,7 @@ double call(const std::string& f, double x) {
   if (f == "exp") return std::exp(x);
   if (f == "log") return std::log(x);
   if (f == "sqrt") return std::sqrt(x);
-  return std::abs(x);
+  return f == "abs" ? std::abs(x) : NAN;
 }
 
 double eval(const Node& n, double t) {
@@ -156,7 +195,7 @@ double eval(const Node& n, double t) {
   switch (n.kind) {
     case K::kNum:
       return n.value;
-    case K::kT:
+    case K::kName:
       return t;
     case K::kAdd:
       return eval(*n.a, t) + eval(*n.b, t);
@@ -211,7 +250,7 @@ std::optional<Poly> poly_raw(const Node& n) {
   switch (n.kind) {
     case K::kNum:
       return Poly{n.value};
-    case K::kT:
+    case K::kName:
       return Poly{0.0, 1.0};
     case K::kNeg: {
       auto a = poly(*n.a);
@@ -323,9 +362,26 @@ std::optional<Trig> trig_raw(const Node& n) {
 
 std::expected<Expression, std::string> Expression::parse(std::string_view text) {
   auto root = Parser(text).run();
-  if (!root) return std::unexpected(root.error());
+  if (!root)
+    return std::unexpected(root.error().message + " at " + std::to_string(root.error().offset));
   return Expression(std::move(*root));
 }
+
+std::expected<Expression::Program, Expression::ParseError> Expression::compile_named(
+    std::string_view text) {
+  const auto root = Parser(text, true).run();
+  if (!root) return std::unexpected(root.error());
+  Program program;
+  const auto append = [&](const auto& self, const Node& n) -> void {
+    if (n.a) self(self, *n.a);
+    if (n.b) self(self, *n.b);
+    program.push_back({n.kind, n.value, n.func, n.offset});
+  };
+  append(append, **root);
+  return program;
+}
+
+double Expression::apply_function(std::string_view name, double value) { return call(name, value); }
 
 double Expression::operator()(double t) const { return eval(*root_, t); }
 
