@@ -26,7 +26,7 @@ struct BodyState {
   kernel::ShapePtr shape;
   std::optional<ir::Hash> hash;
   std::vector<NamedEntity> names;
-  std::string unavailable;  // input_failed or input_suppressed; never a stale executable shape
+  std::string unavailable;  // failed/consumed: input_failed; suppressed: input_suppressed
 };
 struct Evaluation {
   std::vector<FeatureState> features;
@@ -37,7 +37,8 @@ struct Evaluation {
 
 /// Per-document, serialized service evaluator (RFC 0007). The borrowed kernel must outlive it.
 /// Parses/validates before kernel work; then evaluates sketches, new B-rep extrusions and
-/// rigid transforms. Unsupported features are explicit errors; independent branches continue.
+/// rigid transforms and solid booleans. Booleans modify their target and retire tools unless
+/// keep_tools is true. Unsupported features are explicit errors; independent branches continue.
 /// No files are opened, no cache is persisted, and returned geometry survives cache eviction.
 class Evaluator {
  public:

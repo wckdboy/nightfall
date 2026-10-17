@@ -63,14 +63,19 @@ See [the expression API](core/ir/include/nf/ir/expression.hpp) and
 [parameter evaluation](core/ir/include/nf/ir/parameters.hpp).
 
 The service's [document evaluator](services/kernel/src/evaluator.hpp) executes sketches,
-new B-rep extrusions and rigid transforms using dynamically linked OCCT 7.9.3. It supports
-rectangle, circle, polygon and closed-line profiles, holes, interior-point region selection,
+new B-rep extrusions, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
+It supports rectangle, circle, polygon and closed-line profiles, holes, interior-point selection,
 datum/explicit planes and symmetric extrusion. Content hashes and a bounded cache preserve
 unchanged geometry. Rollback, suppression and failures have explicit states; unsupported
 constraints, selectors and modeling operations report errors. This is the headless kernel
 path; native app integration and the remaining v1 operations are still in progress.
 
-To run the real 30-feature geometry benchmark (plain and bored plates):
+Booleans union, subtract or intersect a target with the union of its tool bodies. Tools are
+consumed on success unless `keep_tools` is true; failed operations preserve the tools and
+invalidate the target for downstream execution. Empty or non-solid results are errors.
+Face provenance survives cuts, cache reuse and subsequent transforms.
+
+To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates):
 
 ```sh
 third_party/build-occt.sh

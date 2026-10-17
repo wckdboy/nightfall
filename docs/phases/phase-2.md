@@ -21,7 +21,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/transform evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/transform/boolean evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -128,6 +128,14 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   bounds. New geometry still receives full OCCT validation; rotations recompute bounds.
   Tests independently remeasure moved B-reps and their unchanged sources. The benchmark below
   meets the local 30-feature latency criterion; the full Phase 2 gate remains open.
+- 2026-10-17 — #92 adds exact solid union, subtraction and intersection, with tools treated
+  as a union. OCCT runs in non-destructive mode and validates the complete result. History
+  covers every input face/edge, binds cutting faces with their output orientation and records
+  new intersection edges. Tests check unchanged source B-rep serialization, circular holes,
+  cavities, split solids, disjoint and empty results. The evaluator hashes current target/tool
+  states, publishes naming before consuming tools, supports `keep_tools`, and rejects stale
+  histories after eviction. Fourteen new regression cases cover geometry, tool lifecycle,
+  failures, cache rebinding, rollback and suppression; remaining operations/selectors are pending.
 
 ## Rebuild benchmark evidence
 
@@ -163,3 +171,27 @@ run passed 251/252 (228.96 s), with no sanitizer diagnostics; the unchanged clos
 2-second timing assertion took 5.136 s, then passed alone in 1.94 s. OCCT itself uses the
 pinned release build; Nightfall code is instrumented. CI now runs the geometry sanitizer
 selection on OCCT pull requests/nightly builds. Remote CI and maintainer review remain pending.
+
+### Solid boolean rebuild evidence
+
+The same machine/configuration and 30-sample methodology now also measure a 30-feature part
+with two sketches, two extrusions, one circular through-cut and 25 transforms. The cutter
+extends beyond the plate throughout the depth range. Every sample checks the exact volume
+`(200 - 4π) × depth` mm³, centroid and kernel/cache counts. The tool is consumed by the cut.
+
+| Boolean-cut plate | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 53.098 | 56.046 | 56.488 | 28 / 0 |
+| Depth edit | 49.975 | 53.884 | 57.060 | 27 / 3 |
+| Last transform edit | 0.692 | 0.714 | 0.721 | 1 / 29 |
+| Unused parameter edit | 0.657 | 0.691 | 0.702 | 0 / 30 |
+
+The 96-entry/64 MiB estimated cache retains 18,700,280 estimated bytes after the depth edits;
+this remains an ownership estimate, not RSS. The same run measured plain/bored depth-edit
+medians of 2.081/9.556 ms. Timing variation across local runs is not itself an optimization claim.
+`tools/check.sh --preset occt` passes 266/266 tests (13.26 s), with all hygiene checks and the
+202-case independent schema cross-check passing.
+The full `tools/check.sh --preset asan` run also passes 266/266 (188.30 s), including all
+new geometry/evaluator tests, with no sanitizer diagnostics or retries. Nightfall code is
+ASan/UBSan-instrumented; the OCCT shared libraries remain the pinned Release build. Remote
+CI and maintainer review are pending; this extends the local latency evidence only.

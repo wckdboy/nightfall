@@ -63,11 +63,12 @@ struct RigidTransform {
   math::Vec3 translation, axis_origin, axis_direction{0, 0, 1};
   double angle = 0;
 };
+enum class BooleanOp { kUnion, kSubtract, kIntersect };
 struct ProfileEdge {
   std::size_t region, loop, curve;  // loop 0 = outer; subsequent loops are holes
 };
 struct Generated {
-  std::string role;  // operation-local cap_start, cap_end or side; never a feature ID
+  std::string role;  // local cap_start, cap_end, side or intersection; never a feature ID
   EntityPtr entity;
   std::optional<ProfileEdge> from;
 };
@@ -91,12 +92,17 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform;
+    bool extrude, rigid_transform, booleans;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> transform(
       const ShapePtr&, const RigidTransform&) = 0;
+  /// Combine target with the union of nonempty tools: union, target minus tools, or common.
+  /// Empty/non-solid results fail. History covers every input face/edge, including unchanged
+  /// survivors; new intersection edges have the local role "intersection". Inputs stay intact.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> boolean_operation(
+      const ShapePtr& target, const std::vector<ShapePtr>& tools, BooleanOp) = 0;
 };
 
 /// Pinned dynamically linked OCCT backend. Tolerances must be finite, positive and no smaller

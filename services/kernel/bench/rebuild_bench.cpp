@@ -19,8 +19,9 @@ struct Part {
   const char* name;
   ir::Document document;
   double area, center_x;
+  std::size_t transforms = 28, cold_calls = 29, depth_calls = 29;
 };
-void verify(const Evaluation& result, double area, double depth, double center_x, double tail,
+void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
   for (const auto& feature : result.features)
     for (const auto& error : feature.errors)
@@ -28,8 +29,9 @@ void verify(const Evaluation& result, double area, double depth, double center_x
   if (!result.ok() || result.kernel_calls != calls || result.cache_hits != hits)
     throw std::runtime_error("unexpected evaluator status or execution count");
   const auto& m = result.bodies.at("plate").shape->measures();
-  if (std::abs(m.volume - area * depth) > 1e-5 ||
-      std::abs(m.centroid.x - (center_x + 81 + tail)) > 1e-6 ||
+  const auto translation = 3 * static_cast<double>(part.transforms - 1) + tail;
+  if (std::abs(m.volume - part.area * depth) > 1e-5 ||
+      std::abs(m.centroid.x - (part.center_x + translation)) > 1e-6 ||
       std::abs(m.centroid.z - depth / 2) > 1e-6)
     throw std::runtime_error("analytic geometry verification failed");
 }
@@ -38,7 +40,7 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
   Evaluator evaluator(backend, {96, 64 * 1024 * 1024});
   auto document = part.document;
   auto warm = evaluator.evaluate(test::source(document)).value();
-  verify(warm, part.area, 30, part.center_x, 3, 29, 0);
+  verify(warm, part, 30, 3, part.cold_calls, 0);
   std::vector<double> milliseconds;
   std::size_t calls = 0, hits = 0;
   for (int sample = 0; sample < kSamples; ++sample) {
@@ -58,9 +60,15 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
     auto evaluation = evaluator.evaluate(text);
     const auto stop = std::chrono::steady_clock::now();
     if (!evaluation) throw std::runtime_error("document validation failed");
-    calls = mode == "unused edit" ? 0 : mode == "last transform edit" ? 1 : 29;
-    hits = mode == "cold" ? 0 : mode == "depth edit" ? 1 : mode == "unused edit" ? 30 : 29;
-    verify(*evaluation, part.area, depth, part.center_x, tail, calls, hits);
+    calls = mode == "unused edit"           ? 0
+            : mode == "last transform edit" ? 1
+            : mode == "depth edit"          ? part.depth_calls
+                                            : part.cold_calls;
+    hits = mode == "cold"          ? 0
+           : mode == "depth edit"  ? 30 - part.depth_calls
+           : mode == "unused edit" ? 30
+                                   : 29;
+    verify(*evaluation, part, depth, tail, calls, hits);
     milliseconds.push_back(std::chrono::duration<double, std::milli>(stop - start).count());
   }
   std::ranges::sort(milliseconds);
@@ -86,6 +94,16 @@ int main() {
       {"id":"h1","type":"circle","center":[10,10],"radius":2},
       {"id":"h2","type":"circle","center":[30,10],"radius":2}],"constraints":[]})")
                                    .value();
+    auto cut = plate;
+    cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
+    cut.features.insert(cut.features.begin() + 2,
+                        {test::feature("hole_profile", "sketch", R"({"plane":{"origin":[0,0,-5],
+        "normal":[0,0,1],"x_direction":[1,0,0]},"entities":[
+        {"id":"c","type":"circle","center":[5,10],"radius":2}],"constraints":[]})"),
+                         test::feature("tool", "extrude", R"({"profile":{"sketch":"hole_profile"},
+        "distance":100,"result":{"new":"drill","body_type":"brep"}})"),
+                         test::feature("cut", "boolean",
+                                       R"({"op":"subtract","target":"plate","tools":["drill"]})")});
     std::puts(
         "30-feature real B-rep rebuilds; 30 samples per case; parse/validation/evaluation "
         "included.");
@@ -93,7 +111,8 @@ int main() {
         "Unique edits; analytic volume/centroid and execution counts checked for every sample. No "
         "IPC/tessellation.");
     for (const auto& part :
-         {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20}})
+         {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
+          Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})
         measure(*backend, part, mode);
   } catch (const std::exception& error) {

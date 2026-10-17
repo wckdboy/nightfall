@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "nf/kernel/kernel.hpp"
 
+#include <BRepAlgoAPI_BooleanOperation.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -10,10 +11,14 @@
 #include <BRep_Builder.hxx>
 #include <Precision.hxx>
 #include <Standard_Version.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Pln.hxx>
 
+#include <algorithm>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -59,14 +64,14 @@ class OcctKernel final : public IKernel {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
-             << ";solid-v1;rigid=located-invariants-v1;names=1;mass="
+             << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;names=1;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
-  Capabilities capabilities() const noexcept override { return {true, true}; }
+  Capabilities capabilities() const noexcept override { return {true, true, true}; }
 
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
     return guarded([&] {
@@ -144,6 +149,86 @@ class OcctKernel final : public IKernel {
       }
       result.estimated_bytes +=
           result.history.size() * (sizeof(History) + 2 * sizeof(detail::Subshape) + 64);
+      return result;
+    });
+  }
+
+  std::expected<OperationResult, KernelError> boolean_operation(const ShapePtr& target,
+                                                                const std::vector<ShapePtr>& tools,
+                                                                BooleanOp op) override {
+    return guarded([&] {
+      if (tools.empty()) fail("boolean needs at least one tool solid");
+      BRepAlgoAPI_BooleanOperation operation;
+      switch (op) {
+        case BooleanOp::kUnion:
+          operation.SetOperation(BOPAlgo_FUSE);
+          break;
+        case BooleanOp::kSubtract:
+          operation.SetOperation(BOPAlgo_CUT);
+          break;
+        case BooleanOp::kIntersect:
+          operation.SetOperation(BOPAlgo_COMMON);
+          break;
+        default:
+          fail("unknown boolean operation");
+      }
+      std::vector<detail::SnapshotPtr> sources;
+      auto operand = [&](const ShapePtr& input) {
+        const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+        if (!source) fail("boolean shape belongs to an incompatible backend");
+        if (std::ranges::find(sources, source) == sources.end()) sources.push_back(source);
+        return source->geometry;
+      };
+      TopTools_ListOfShape arguments, operands;
+      arguments.Append(operand(target));
+      for (const auto& tool : tools) operands.Append(operand(tool));
+      operation.SetArguments(arguments);
+      operation.SetTools(operands);
+      operation.SetNonDestructive(true);
+      operation.SetRunParallel(false);
+      operation.SetToFillHistory(true);
+      operation.SetFuzzyValue(tolerance_.linear);
+      operation.Build();
+      if (!operation.IsDone() || operation.HasErrors()) {
+        std::ostringstream errors;
+        operation.DumpErrors(errors);
+        fail("solid boolean failed: " + errors.str());
+      }
+      // Safe-input unification merges its own history into the boolean's history.
+      operation.SimplifyResult(true, true, tolerance_.angular);
+      auto shape = checked(operation.Shape());
+      OperationResult result{shape, {}, {}, shape->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      auto member = [&](const TopoDS_Shape& geometry) {
+        const auto index = members.FindIndex(geometry);
+        if (!index) fail("boolean history refers outside its output");
+        // Use the output orientation, particularly for reversed cutting-tool faces.
+        return detail::entity(shape, members(index));
+      };
+      TopTools_MapOfShape generated;
+      for (const auto& source : sources) {
+        result.estimated_bytes += source->estimated_bytes();
+        for (const auto& before : detail::entities(source)) {
+          const auto& geometry = static_cast<const detail::Subshape&>(*before).geometry;
+          History h{before, {}, {}, operation.IsDeleted(geometry)};
+          for (const auto& after : operation.Modified(geometry))
+            h.modified.push_back(member(after));
+          if (!h.deleted && h.modified.empty()) h.modified.push_back(member(geometry));
+          for (const auto& after : operation.Generated(geometry)) {
+            if (after.ShapeType() != TopAbs_EDGE && after.ShapeType() != TopAbs_FACE) continue;
+            h.generated.push_back(member(after));
+            if (generated.Add(after))
+              result.generated.push_back({"intersection", member(after), {}});
+          }
+          result.estimated_bytes +=
+              sizeof(History) + sizeof(detail::Subshape) + 64 +
+              (h.modified.size() + h.generated.size()) * (sizeof(detail::Subshape) + 64);
+          result.history.push_back(std::move(h));
+        }
+      }
+      result.estimated_bytes +=
+          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
       return result;
     });
   }

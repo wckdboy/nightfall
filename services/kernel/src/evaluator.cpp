@@ -76,10 +76,20 @@ std::vector<std::string> targets(const ir::Feature& feature, const Targets& prev
   selector_targets(inputs, previous, ids);
   return {ids.begin(), ids.end()};
 }
-std::vector<NamedEntity> names(const BodyState* input, const kernel::OperationResult& operation,
+std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
+                               const kernel::OperationResult& operation,
                                const std::string& feature) {
   std::vector<NamedEntity> result;
-  if (input) {
+  auto append = [&](const std::string& producer, const std::string& role,
+                    const kernel::EntityPtr& entity) {
+    if (!entity || entity->owner() != operation.shape)
+      fail("kernel", "naming history belongs to a different snapshot", "/inputs");
+    if (std::ranges::none_of(result, [&](const auto& name) {
+          return name.feature == producer && name.role == role && name.entity->same_as(*entity);
+        }))
+      result.push_back({producer, role, entity});
+  };
+  for (const auto* input : inputs) {
     for (const auto& name : input->names) {
       const auto found = std::ranges::find_if(operation.history, [&](const auto& h) {
         return h.before && h.before->same_as(*name.entity);
@@ -88,15 +98,11 @@ std::vector<NamedEntity> names(const BodyState* input, const kernel::OperationRe
       if (!found->deleted && found->modified.empty())
         fail("kernel", "history omitted a surviving entity", "/inputs");
       if (!found->deleted)
-        for (const auto& entity : found->modified)
-          result.push_back({name.feature, name.role, entity});
+        for (const auto& entity : found->modified) append(name.feature, name.role, entity);
     }
   }
   for (const auto& generated : operation.generated)
-    result.push_back({feature, generated.role, generated.entity});
-  for (const auto& name : result)
-    if (!name.entity || name.entity->owner() != operation.shape)
-      fail("kernel", "naming history belongs to a different snapshot", "/inputs");
+    append(feature, generated.role, generated.entity);
   return result;
 }
 std::size_t sketch_bytes(const Sketch& sketch) {
@@ -138,7 +144,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/1;roles/1;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/2;roles/2;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -169,6 +175,14 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       const auto inputs = take(program.evaluate(document->units, parameters->values));
       std::map<std::string, ir::Hash> dependencies;  // RFC 6901 lexicographic pointer order
       std::vector<kernel::ShapePtr> bindings;
+      std::vector<std::string> tools;
+      auto bind = [&](const std::string& id, const std::string& pointer) {
+        const auto& body = result.bodies.at(id);
+        if (!body.shape || !body.hash)
+          fail(body.unavailable, "body is unavailable: " + id, pointer);
+        dependencies.emplace(pointer, *body.hash);
+        bindings.push_back(body.shape);
+      };
       std::shared_ptr<const Output> sketch;
       if (feature.type == "extrude") {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -179,13 +193,16 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         dependencies.emplace("/inputs/profile/sketch", *upstream.hash);
         sketch = sketches.at(id);
       } else if (feature.type == "transform") {
-        for (std::size_t i = 0; i < affected.size(); ++i) {
-          const auto& body = result.bodies.at(affected[i]);
-          const auto pointer = "/inputs/bodies/" + std::to_string(i);
-          if (!body.shape || !body.hash)
-            fail(body.unavailable, "body is unavailable: " + affected[i], pointer);
-          dependencies.emplace(pointer, *body.hash);
-          bindings.push_back(body.shape);
+        for (std::size_t i = 0; i < affected.size(); ++i)
+          bind(affected[i], "/inputs/bodies/" + std::to_string(i));
+      } else if (feature.type == "boolean") {
+        bind(affected.front(), "/inputs/target");
+        for (const auto& tool : *inputs.find("tools")->if_array()) {
+          const auto& id = string(tool);
+          const auto pointer = "/inputs/tools/" + std::to_string(tools.size());
+          if (id == affected.front()) fail("kernel", "target cannot also be a tool", pointer);
+          bind(id, pointer);
+          tools.push_back(id);
         }
       } else if (feature.type != "sketch") {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
@@ -210,6 +227,14 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
           ++result.kernel_calls;
           built->operations.push_back(take(state_->kernel.extrude(operation)));
+        } else if (feature.type == "boolean") {
+          const auto& op = string(*inputs.find("op"));
+          const auto kind = op == "union"      ? kernel::BooleanOp::kUnion
+                            : op == "subtract" ? kernel::BooleanOp::kSubtract
+                                               : kernel::BooleanOp::kIntersect;
+          ++result.kernel_calls;
+          built->operations.push_back(take(state_->kernel.boolean_operation(
+              bindings.front(), {bindings.begin() + 1, bindings.end()}, kind)));
         } else {
           const auto operation = take(prepare_transform(inputs));
           for (const auto& input : bindings) {
@@ -224,15 +249,23 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
-        const auto* input = feature.type == "transform" ? &result.bodies.at(affected[i]) : nullptr;
+        const auto* input = (feature.type == "transform" || feature.type == "boolean")
+                                ? &result.bodies.at(affected[i])
+                                : nullptr;
+        std::vector<const BodyState*> named_inputs;
+        if (input) named_inputs.push_back(input);
+        for (const auto& tool : tools) named_inputs.push_back(&result.bodies.at(tool));
         published.push_back({operation.shape,
                              ir::body_hash(input ? input->hash : std::nullopt, key),
-                             names(input, operation, feature.id),
+                             names(named_inputs, operation, feature.id),
                              {}});
       }
       // Publish complete geometry and naming together, after every operation/history succeeds.
       for (std::size_t i = 0; i < published.size(); ++i)
         result.bodies[affected[i]] = std::move(published[i]);
+      const auto* keep = inputs.find("keep_tools");
+      if (!keep || !*keep->if_bool())
+        for (const auto& tool : tools) result.bodies[tool] = {{}, {}, {}, "input_failed"};
       if (output->sketch) sketches[feature.id] = output;
       if (cached)
         ++result.cache_hits;

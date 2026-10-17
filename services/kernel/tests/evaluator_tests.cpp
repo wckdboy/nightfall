@@ -183,6 +183,13 @@ class FaultKernel final : public kernel::IKernel {
       const kernel::Extrusion& input) override {
     return backend.extrude(input);
   }
+  std::expected<kernel::OperationResult, kernel::KernelError> boolean_operation(
+      const kernel::ShapePtr& target, const std::vector<kernel::ShapePtr>& tools,
+      kernel::BooleanOp op) override {
+    auto result = backend.boolean_operation(target, tools, op);
+    if (result && lose_history) result->history.clear();
+    return result;
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> transform(
       const kernel::ShapePtr& shape, const kernel::RigidTransform& input) override {
     if (++transforms == fail_on)
@@ -235,6 +242,32 @@ TEST_CASE("incomplete operation history is an error before cache admission") {
   auto retried = evaluator.evaluate(source(part())).value();
   REQUIRE(retried.ok());
   CHECK(retried.kernel_calls == 1);
+}
+
+TEST_CASE("boolean naming failure publishes nothing and leaves tools available for retry") {
+  auto real = kernel::make_occt_kernel().value();
+  FaultKernel kernel(*real);
+  kernel.lose_history = true;
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  auto document = part(2);
+  document.features.push_back(feature("tool", "extrude", R"({"profile":{"sketch":"outline"},
+    "distance":20,"result":{"new":"tool_body","body_type":"brep"}})"));
+  document.features.push_back(
+      feature("cut", "boolean", R"({"op":"subtract","target":"plate","tools":["tool_body"]})"));
+  auto failed = evaluator.evaluate(source(document)).value();
+  REQUIRE_FALSE(failed.ok());
+  REQUIRE_FALSE(failed.features.back().errors.empty());
+  CHECK(failed.features.back().errors.front().message == "incomplete naming history");
+  CHECK_FALSE(failed.bodies.at("plate").shape);
+  CHECK(failed.bodies.at("tool_body").shape);
+  CHECK(evaluator.cache_usage().entries == 3);
+  kernel.lose_history = false;
+  auto retried = evaluator.evaluate(source(document)).value();
+  REQUIRE(retried.ok());
+  CHECK(retried.kernel_calls == 1);
+  CHECK(retried.cache_hits == 3);
+  CHECK_FALSE(retried.bodies.at("tool_body").shape);
+  CHECK_THAT(retried.bodies.at("plate").shape->measures().volume, WithinAbs(2000, 1e-7));
 }
 
 TEST_CASE("unsupported modifiers invalidate their intended current bodies") {
