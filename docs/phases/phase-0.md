@@ -32,7 +32,8 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
 | [#18](https://github.com/wckdboy/nightfall/issues/18) | ABC dataset sample manifest (200 STEP models) | evals | Done (#24) |
 | [#25](https://github.com/wckdboy/nightfall/issues/25) | Share the OCCT CI cache via `main`; cancel superseded runs | ci | Done (#26) |
 | [#36](https://github.com/wckdboy/nightfall/issues/36) | Bake-off runner: per-part processes, timing, sanitizer pass, scoring | kernel | In review |
-| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Corpus done; ABC waits on RFC 0002 (#33) |
+| [#38](https://github.com/wckdboy/nightfall/issues/38) | Build OpenUSD + usd-brep USD modules (RFC 0002) | third_party | In review |
+| [#7](https://github.com/wckdboy/nightfall/issues/7) | Run the bake-off, write results into RFC 0001 | kernel | Corpus done (#37); ABC next |
 | [#8](https://github.com/wckdboy/nightfall/issues/8) | XPC service spike: JSON IR → kernel → mesh | kernel | Done (spike branch; RFC 0003 #35) |
 | [#9](https://github.com/wckdboy/nightfall/issues/9) | Metal viewport spike showing the mesh | viewport | Done (spike branch; RFC 0003 #35) |
 | [#10](https://github.com/wckdboy/nightfall/issues/10) | Nightly ASan/UBSan workflow | ci | Done (first run green) |
@@ -62,3 +63,4 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   0002 (OpenUSD, #33; 197/200 ABC models translate into SMLib) in review until 2026-10-22.
   Corpus bake-off with both kernels instrumented (#36): OCCT 87.0, SMLib 69.1 (corpus only;
   history measured, warm in-process timing).
+- 2026-10-17 — RFC 0002 and RFC 0003 accepted (review period waived by the maintainer).

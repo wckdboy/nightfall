@@ -23,4 +23,4 @@ __pycache__/
 
 # Local kernel checkouts (third_party fetches these; never commit them)
 /third_party/src/
-/third_party/install/
+/third_party/install
