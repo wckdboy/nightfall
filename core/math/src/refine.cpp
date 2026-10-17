@@ -255,6 +255,23 @@ std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> spli
   return std::pair{std::move(*l), std::move(*rr)};
 }
 
+template <typename Point>
+NurbsCurve<Point> reverse(const NurbsCurve<Point>& curve) {
+  const std::span<const double> U = curve.knots().knots();
+  const double sum = curve.domain_start() + curve.domain_end();
+  std::vector<double> knots(U.size());
+  std::ranges::transform(U.rbegin(), U.rend(), knots.begin(), [&](double u) { return sum - u; });
+  // Reflection keeps the end knots exact, so the clamped invariants hold.
+  std::ranges::fill_n(knots.begin(), curve.degree() + 1, curve.domain_start());
+  std::ranges::fill_n(knots.end() - curve.degree() - 1, curve.degree() + 1, curve.domain_end());
+  std::vector<Point> points(curve.points().rbegin(), curve.points().rend());
+  std::vector<double> weights;
+  if (curve.rational()) weights.assign(curve.weights().rbegin(), curve.weights().rend());
+  return NurbsCurve<Point>::make(KnotVector::make(std::move(knots), curve.degree()).value(),
+                                 std::move(points), std::move(weights))
+      .value();
+}
+
 template std::expected<NurbsCurve2, std::string> insert_knot(const NurbsCurve2&, double, int);
 template std::expected<NurbsCurve3, std::string> insert_knot(const NurbsCurve3&, double, int);
 template std::expected<NurbsCurve2, std::string> elevate_degree(const NurbsCurve2&, int);
@@ -263,5 +280,8 @@ template std::expected<std::pair<NurbsCurve2, NurbsCurve2>, std::string> split(c
                                                                                double);
 template std::expected<std::pair<NurbsCurve3, NurbsCurve3>, std::string> split(const NurbsCurve3&,
                                                                                double);
+
+template NurbsCurve2 reverse(const NurbsCurve2&);
+template NurbsCurve3 reverse(const NurbsCurve3&);
 
 }  // namespace nf::math

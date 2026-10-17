@@ -33,4 +33,8 @@ template <typename Point>
 [[nodiscard]] std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> split(
     const NurbsCurve<Point>& curve, double u);
 
+/// The same curve traversed the other way on the same domain: C'(u) = C(a + b − u).
+template <typename Point>
+[[nodiscard]] NurbsCurve<Point> reverse(const NurbsCurve<Point>& curve);
+
 }  // namespace nf::math
