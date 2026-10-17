@@ -36,7 +36,8 @@ std::vector<Hom<Point>> to_hom(const NurbsCurve<Point>& c) {
 
 template <typename Point>
 std::expected<NurbsCurve<Point>, std::string> from_hom(std::vector<double> knots, int degree,
-                                                       const std::vector<Hom<Point>>& h) {
+                                                       const std::vector<Hom<Point>>& h,
+                                                       bool rational) {
   auto kv = KnotVector::make(std::move(knots), degree);
   if (!kv) return std::unexpected(kv.error());
   std::vector<Point> points;
@@ -47,6 +48,9 @@ std::expected<NurbsCurve<Point>, std::string> from_hom(std::vector<double> knots
     points.push_back(q.p / q.w);
     weights.push_back(q.w);
   }
+  // Refining a non-rational curve keeps its weights 1 mathematically; rounding must not
+  // turn it rational.
+  if (!rational) weights.clear();
   return NurbsCurve<Point>::make(std::move(*kv), std::move(points), std::move(weights));
 }
 
@@ -73,7 +77,7 @@ std::expected<NurbsCurve<Point>, std::string> insert_knot(const NurbsCurve<Point
   const int p = curve.degree();
   const std::span<const double> U = curve.knots().knots();
   const int s = multiplicity(U, u);
-  if (s + times > p) return std::unexpected("multiplicity would exceed the degree");
+  if (times > p - s) return std::unexpected("multiplicity would exceed the degree");
 
   const int k = curve.knots().find_span(u);
   const int r = times;
@@ -102,7 +106,7 @@ std::expected<NurbsCurve<Point>, std::string> insert_knot(const NurbsCurve<Point
     Q[at(k + r - j - s)] = R[at(p - j - s)];
   }
   for (int i = L + 1; i < k - s; ++i) Q[at(i)] = R[at(i - L)];
-  return from_hom(std::move(UQ), p, Q);
+  return from_hom(std::move(UQ), p, Q, curve.rational());
 }
 
 // The NURBS Book A5.9: split into Bézier segments, elevate each, and remove the knots the
@@ -111,8 +115,10 @@ template <typename Point>
 std::expected<NurbsCurve<Point>, std::string> elevate_degree(const NurbsCurve<Point>& curve,
                                                              int by) {
   if (by < 1) return std::unexpected("degree elevation must be at least 1");
+  if (by > KnotVector::kMaxDegree - curve.degree()) {
+    return std::unexpected("degree would exceed kMaxDegree");
+  }
   const int p = curve.degree(), t = by, ph = p + t, ph2 = ph / 2;
-  if (ph > KnotVector::kMaxDegree) return std::unexpected("degree would exceed kMaxDegree");
   constexpr std::size_t kN = KnotVector::kMaxDegree + 1;
   const auto at = [](int i) { return static_cast<std::size_t>(i); };
 
@@ -213,7 +219,7 @@ std::expected<NurbsCurve<Point>, std::string> elevate_degree(const NurbsCurve<Po
   }
   Uh.resize(at(kind + ph + 1));
   Qw.resize(at(cind));
-  return from_hom(std::move(Uh), ph, Qw);
+  return from_hom(std::move(Uh), ph, Qw, curve.rational());
 }
 
 template <typename Point>
@@ -242,9 +248,9 @@ std::expected<std::pair<NurbsCurve<Point>, NurbsCurve<Point>>, std::string> spli
   const std::vector<Hom<Point>> left(H.begin(), H.begin() + static_cast<std::ptrdiff_t>(a));
   const std::vector<Hom<Point>> right(H.begin() + static_cast<std::ptrdiff_t>(a) - 1, H.end());
 
-  auto l = from_hom(std::move(left_knots), p, left);
+  auto l = from_hom(std::move(left_knots), p, left, curve.rational());
   if (!l) return std::unexpected(l.error());
-  auto rr = from_hom(std::move(right_knots), p, right);
+  auto rr = from_hom(std::move(right_knots), p, right, curve.rational());
   if (!rr) return std::unexpected(rr.error());
   return std::pair{std::move(*l), std::move(*rr)};
 }

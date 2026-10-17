@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <random>
 #include <vector>
@@ -140,6 +141,22 @@ TEST_CASE("refinement keeps a circle exact", "[refine]") {
   }
 }
 
+TEST_CASE("refinement keeps non-rational curves non-rational", "[refine]") {
+  const std::vector<Vec3> pts{{0, 0, 0}, {1, 2, 0}, {3, -1, 1}, {4, 0, 2}};
+  const NurbsCurve3 c = make_bezier(pts);
+  REQUIRE_FALSE(c.rational());
+  for (int by = 1; by <= 6; ++by) {
+    const auto e = elevate_degree(c, by);
+    REQUIRE(e.has_value());
+    CHECK_FALSE(e->rational());
+    CHECK(std::ranges::all_of(e->weights(), [](double w) { return w == 1.0; }));
+  }
+  const auto line = elevate_degree(make_bezier(std::vector<Vec3>{{0, 0, 0}, {1, 1, 1}}), 5);
+  CHECK_FALSE(line->rational());
+  CHECK_FALSE(insert_knot(c, 0.3, 2)->rational());
+  CHECK_FALSE(split(c, 0.6)->first.rational());
+}
+
 TEST_CASE("refinement rejects invalid requests", "[refine]") {
   const NurbsCurve3 c = random_curve(3, 7);
   CHECK_FALSE(insert_knot(c, 0.0).has_value());     // domain end
@@ -150,5 +167,9 @@ TEST_CASE("refinement rejects invalid requests", "[refine]") {
   CHECK_FALSE(elevate_degree(c, 7).has_value());    // degree > kMaxDegree
   CHECK_FALSE(split(c, 1.0).has_value());           // domain end
   CHECK_FALSE(split(c, std::nan("")).has_value());  // not a number
-  CHECK(elevate_degree(c, 6).has_value());          // exactly kMaxDegree
+  CHECK(elevate_degree(c, 6).has_value());
+  CHECK_FALSE(elevate_degree(c, std::numeric_limits<int>::max()).has_value());  // no overflow
+  const double existing = c.knots()[4];
+  CHECK_FALSE(
+      insert_knot(c, existing, std::numeric_limits<int>::max()).has_value());  // exactly kMaxDegree
 }
