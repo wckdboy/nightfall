@@ -91,3 +91,12 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Full ASan/UBSan checks pass 210/210 (297.64 s), with no sanitizer diagnostics.
   The cache is a tested service component; feature execution and provenance integration remain
   pending, and no production geometry-rebuild gate is claimed.
+  Release medians (5 × 100, prepared feature programs): parameter edit, input evaluation and
+  chained hashing take 86.8 µs for 30 features and 1,425.0 µs for 300. These exclude geometry
+  execution. Full document load/edit-save takes 282.3/344.8 µs for 30 features and
+  2,895.9/4,137.0 µs for 300; chained parameter evaluation takes 18.8/334.1 µs respectively.
+- 2026-10-17 — Draft [RFC 0007](../rfcs/0007-kernel-evaluator-contract.md) supplies the
+  production `IKernel` contract explicitly deferred by RFC 0001: immutable ownership, typed
+  operations, current-body dependencies, safe cached-provenance binding and a staged
+  executable evaluator. This is a proposal; acceptance is required before that interface
+  is implemented. RFC 0006 remains reserved for Nightfall Script (#93).

@@ -19,3 +19,6 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 | [0003](0003-process-architecture.md) | Process architecture: the kernel in an XPC service | Accepted |
 | [0004](0004-libnf-math.md) | libnf-math: a kernel-free NURBS math core | Accepted |
 | [0005](0005-feature-ir.md) | Feature IR schema v1 | Accepted |
+| [0007](0007-kernel-evaluator-contract.md) | Production kernel interface and incremental evaluator | Draft |
+
+RFC 0006 is reserved for Nightfall Script by RFC 0005 (#93).
