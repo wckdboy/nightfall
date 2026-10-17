@@ -95,6 +95,17 @@ struct Bezier {
   }
 };
 
+// Diagonal of the control points' bounding box: a curve's size, for relative tolerances.
+template <typename Point>
+double control_size(const NurbsCurve<Point>& c) {
+  Point lo = c.points().front(), hi = lo;
+  for (const Point& q : c.points()) {
+    lo = min_each(lo, q);
+    hi = max_each(hi, q);
+  }
+  return safe_diagonal(lo, hi);
+}
+
 // One piece per non-empty knot span.
 template <typename Point>
 std::vector<Bezier<Point>> bezier_pieces(const NurbsCurve<Point>& curve) {

@@ -36,17 +36,6 @@ double box_distance(Vec3 p, Vec3 lo, Vec3 hi) {
                     std::max({lo.z - p.z, 0.0, p.z - hi.z}));
 }
 
-// Diagonal of the control points' box: the curve's size for relative tolerances.
-template <typename Point>
-double size_of(const NurbsCurve<Point>& c) {
-  Point lo = c.points().front(), hi = lo;
-  for (const Point& q : c.points()) {
-    lo = detail::min_each(lo, q);
-    hi = detail::max_each(hi, q);
-  }
-  return detail::safe_diagonal(lo, hi);
-}
-
 }  // namespace
 
 template <typename Point>
@@ -78,7 +67,7 @@ Closest<Point> closest_point(const NurbsCurve<Point>& curve, Point p) {
   // Subdivide only to isolate candidates: the box bound is first-order in a piece's size
   // while distance grows quadratically near a minimum, so pieces are refined to 1e-3 of the
   // curve's size and finished by Newton, with the piece's ends as fallbacks.
-  const double small = 1e-3 * size_of(curve);
+  const double small = 1e-3 * detail::control_size(curve);
   std::vector<Bezier<Point>> stack = detail::bezier_pieces(curve);
   long budget = 200'000;  // pieces examined; a safety net, far above what curves need
   while (!stack.empty() && budget-- > 0) {
@@ -106,7 +95,7 @@ std::vector<CurvePoint<Point>> polyline(const NurbsCurve<Point>& curve, double t
   if (!(tolerance > 0 && std::isfinite(tolerance))) {
     throw std::invalid_argument("polyline tolerance must be positive and finite");
   }
-  const double size = size_of(curve);
+  const double size = detail::control_size(curve);
   tolerance = std::max(tolerance, 1e-12 * size);
   const double scale = std::ldexp(1.0, -std::max(0, std::ilogb(std::max(size, 1.0))));
   std::vector<CurvePoint<Point>> out{{curve.domain_start(), curve.point(curve.domain_start())}};
