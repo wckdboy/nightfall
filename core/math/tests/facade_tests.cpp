@@ -40,6 +40,9 @@ TEST_CASE("invalid input gives an invalid curve, never an exception", "[facade]"
   CHECK_FALSE(Curve2::circle({0, 0}, 0).valid());
   CHECK_FALSE(Curve2::circle({0, 0}, nan).valid());
   CHECK_FALSE(Curve2::arc({0, 0}, 1, 1, 0, 1, 0).valid());
+  CHECK_FALSE(Curve2::arc({0, 0}, 0, 1, 0, 0, 1).valid());  // radii must be positive
+  CHECK_FALSE(Curve2::arc({0, 0}, 1, -2, 0, 0, 1).valid());
+  CHECK_FALSE(Curve2::arc({0, 0}, nan, 1, 0, 0, 1).valid());
   CHECK_FALSE(Curve2::bezier({{0, 0}}).valid());
   CHECK_FALSE(Curve2::line({0, 0}, {nan, 1}).valid());
   CHECK_FALSE(Curve2::nurbs(3, {0, 1}, {{0, 0}}, {}).valid());

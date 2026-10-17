@@ -107,6 +107,7 @@ Curve2 Curve2::line(Point2 a, Point2 b) {
   return r;
 }
 Curve2 Curve2::arc(Point2 center, double rx, double ry, double rotation, double start, double end) {
+  if (!(rx > 0 && ry > 0 && std::isfinite(rx) && std::isfinite(ry))) return {};
   Curve2 r;
   r.impl_ = std::make_shared<const Impl>(Impl{attempt<math::NurbsCurve2>(
       [&] { return math::make_arc(in(center), rx, ry, rotation, start, end); })});
