@@ -45,7 +45,10 @@ std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry) {
     result->geometry = std::move(geometry);
     auto& m = result->measured;
     GProp_GProps volume, area;
-    BRepGProp::VolumeProperties(result->geometry, volume, kMassRelativeAccuracy, true);
+    const auto error = BRepGProp::VolumePropertiesGK(result->geometry, volume,
+                                                     kMassRelativeAccuracy, true, true, true);
+    if (error < 0 || !std::isfinite(error))
+      return std::unexpected(KernelError{"kernel", "volume integration failed"});
     BRepGProp::SurfaceProperties(result->geometry, area, kMassRelativeAccuracy);
     m.volume = volume.Mass();
     m.area = area.Mass();

@@ -107,3 +107,8 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   snapshot validation. Analytic tests cover a 6,000 mm³ box, two solids totaling 12,000 mm³,
   and a 1,968 mm³ enclosed cavity; empty/stray geometry is rejected. Entity ownership survives
   the request. OCCT checks pass 230/230 (17.48 s); production modeling operations follow.
+- 2026-10-17 — #92 adds typed production extrusion and rigid transforms, including circular
+  holes, multiple solids, placed planes and immutable face/edge history. Exact knot-span
+  decomposition and span-aware volume integration fix measurements of rational profiles.
+  Annulus plus island: volume 553π mm³ and area 396π mm², both within 1e-5 after rotation.
+  OCCT checks pass 236/236 (12.43 s); service-side IR execution remains the next slice.
