@@ -21,7 +21,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Content hashes and typed inputs implemented; geometry evaluator and cache pending |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Typed inputs, content hashes and bounded cache implemented; production evaluator pending |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -83,3 +83,11 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   unsupported-evaluation errors. The benchmark now measures input/hash preparation separately
   from geometry. Local checks: 203/204 passed; the unchanged closest-point timing assertion
   exceeded 2 s under concurrent external compiler load (4.87 s). All new tests passed.
+- 2026-10-17 — #92 adds the service's LRU cache with explicit entry/estimated-byte limits,
+  safe replacement/eviction and retained reader ownership. A 2,000-operation reference-model
+  test checks ordering/accounting; OCCT integration verifies a translated cached solid retains
+  volume 6,000 mm³, area 2,200 mm², six faces and twelve edges, without changing its source.
+  The rerun passes 210/210 development tests (68.68 s); OCCT checks pass 226/226 (12.78 s).
+  Full ASan/UBSan checks pass 210/210 (297.64 s), with no sanitizer diagnostics.
+  The cache is a tested service component; feature execution and provenance integration remain
+  pending, and no production geometry-rebuild gate is claimed.
