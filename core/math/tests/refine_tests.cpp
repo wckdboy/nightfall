@@ -171,6 +171,24 @@ TEST_CASE("reversal traces the curve backwards on the same domain", "[refine][pr
   }
 }
 
+TEST_CASE("decomposition gives one Bézier piece per span", "[refine][property]") {
+  const int degree = GENERATE(1, 2, 3, 5);
+  const auto seed = GENERATE(take(10, random(1u, 1000000u)));
+  const NurbsCurve3 c = random_curve(degree, seed);
+  const auto pieces = decompose(c);
+  std::vector<double> distinct(c.knots().knots().begin(), c.knots().knots().end());
+  distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+  REQUIRE(pieces.size() == distinct.size() - 1);
+  for (std::size_t i = 0; i < pieces.size(); ++i) {
+    const auto& b = pieces[i];
+    CHECK(b.points().size() == static_cast<std::size_t>(degree + 1));  // a single span
+    CHECK(b.domain_start() == distinct[i]);
+    CHECK(b.domain_end() == distinct[i + 1]);
+    CHECK(max_deviation(c, b, b.domain_start(), b.domain_end()) <= kTol);
+    if (i > 0) CHECK(b.points().front() == pieces[i - 1].points().back());
+  }
+}
+
 TEST_CASE("refinement rejects invalid requests", "[refine]") {
   const NurbsCurve3 c = random_curve(3, 7);
   CHECK_FALSE(insert_knot(c, 0.0).has_value());     // domain end
