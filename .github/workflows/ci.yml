@@ -44,3 +44,7 @@ jobs:
 
       - name: tools/check.sh
         run: tools/check.sh --preset dev
+
+      # libnf-math from Swift through the C++ facade (RFC 0004; Phase 1 gate).
+      - name: Swift facade (swift test)
+        run: swift test
