@@ -60,3 +60,4 @@ if(NF_WITH_USD)
 endif()
 
 add_subdirectory(tools/bakeoff)
+add_subdirectory(services/kernel)

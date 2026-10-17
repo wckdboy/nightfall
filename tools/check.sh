@@ -76,6 +76,18 @@ else
   fi
 fi
 
+step "IR schema"
+python3 core/ir/schema/build_schema.py --check
+schema_python="${NF_SCHEMA_PYTHON:-python3}"
+if "$schema_python" -c 'import jsonschema' 2>/dev/null; then
+  "$schema_python" core/ir/tests/check_schema.py
+elif [[ -n "${CI:-}" ]]; then
+  echo "install tools/schema-requirements.txt for the required schema check" >&2
+  exit 1
+else
+  echo "jsonschema not installed; cross-check skipped (CI enforces it). See README.md."
+fi
+
 step "Configure ($preset)"
 cmake --preset "$preset" >/dev/null
 

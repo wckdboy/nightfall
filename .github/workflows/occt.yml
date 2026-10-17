@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Builds OpenCASCADE at the pinned release (cached by build-script hash) and runs the OCCT
-# smoke tests. Runs nightly and on PRs touching the OCCT build. Not a required check
-# (RFC 0001 evaluation).
+# geometry and evaluator tests. Runs nightly and on PRs touching the backend/service.
+# The OCCT install is shared; Nightfall code is also checked under ASan/UBSan.
 
 name: occt
 
@@ -16,6 +16,7 @@ on:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
       - "core/**"
+      - "services/kernel/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
@@ -26,6 +27,7 @@ on:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
       - "core/**"
+      - "services/kernel/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
@@ -50,7 +52,12 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: brew install ninja
+      - run: brew install ninja python@3.14
+      - name: Install schema test tooling
+        run: |
+          python3.14 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --quiet -r tools/schema-requirements.txt
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
 
       # Restore and save are separate steps so a slow OCCT build is cached even when a later
       # test step fails (actions/cache's combined form saves only when the whole job passes).
@@ -73,3 +80,8 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - run: tools/check.sh --preset occt --skip-format
+      - name: Sanitize production geometry and evaluator ownership
+        run: |
+          cmake --preset asan -DNF_WITH_OCCT=ON
+          cmake --build --preset asan --target nf_kernel_tests nf_kernel_cache_tests nf_evaluator_tests --parallel 2
+          ctest --preset asan -R '^(kernel\.|kernel-cache\.|evaluator\.)'

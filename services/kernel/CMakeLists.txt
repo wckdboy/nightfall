@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# Private kernel-service components (RFCs 0003, 0005). No kernel dependency in the app.
+if(NF_WITH_OCCT)
+  add_library(nf_evaluator STATIC src/model_inputs.cpp src/evaluator.cpp)
+  target_include_directories(nf_evaluator PUBLIC src)
+  target_link_libraries(nf_evaluator PUBLIC nf::ir nf::kernel PRIVATE nf::warnings)
+  add_executable(nf_evaluator_bench bench/rebuild_bench.cpp)
+  target_link_libraries(nf_evaluator_bench PRIVATE nf_evaluator nf::warnings)
+  set_target_properties(nf_evaluator_bench PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
+  if(NF_BUILD_TESTS)
+    add_executable(nf_evaluator_tests tests/model_inputs_tests.cpp tests/evaluator_tests.cpp tests/boolean_evaluator_tests.cpp tests/extrusion_result_tests.cpp tests/revolution_evaluator_tests.cpp)
+    target_link_libraries(nf_evaluator_tests PRIVATE nf_evaluator nf::warnings Catch2::Catch2WithMain)
+    set_target_properties(nf_evaluator_tests PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
+    catch_discover_tests(nf_evaluator_tests TEST_PREFIX "evaluator." EXTRA_ARGS --rng-seed=20261017)
+  endif()
+endif()
+
+if(NF_BUILD_TESTS)
+  add_executable(nf_kernel_cache_tests tests/cache_tests.cpp)
+  target_include_directories(nf_kernel_cache_tests PRIVATE src)
+  target_link_libraries(nf_kernel_cache_tests PRIVATE nf::ir nf::warnings Catch2::Catch2WithMain)
+  if(NF_WITH_OCCT)
+    target_sources(nf_kernel_cache_tests PRIVATE tests/cache_occt_tests.cpp)
+    target_link_libraries(nf_kernel_cache_tests PRIVATE nf::occt)
+    set_target_properties(nf_kernel_cache_tests PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
+  endif()
+  catch_discover_tests(nf_kernel_cache_tests TEST_PREFIX "kernel-cache." EXTRA_ARGS --rng-seed=20261017)
+endif()
