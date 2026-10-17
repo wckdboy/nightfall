@@ -67,6 +67,8 @@ TEST_CASE("sinusoids of one frequency are exact elliptical arcs", "[equation]") 
   CHECK(distance_from(e.curve, f, 0.2, 2.9) <= 1e-11);
   CHECK(length(e.curve.point(e.curve.domain_start()) - f(0.2)) <= 1e-12 * 5);
   CHECK(length(e.curve.point(e.curve.domain_end()) - f(2.9)) <= 1e-12 * 5);
+  // One frequency written with opposite signs is still one ellipse (review finding).
+  CHECK(curve("cos(t)", "sin(-t)", "0", 0, 1).exact);
   const auto back = curve("cos(-t)", "sin(-t)", "t*0", 0, 1);
   CHECK(back.exact);
   CHECK(length(back.curve.point(back.curve.domain_end()) -
@@ -105,6 +107,8 @@ TEST_CASE("bad equations and ranges are errors", "[equation]") {
   CHECK_FALSE(equation_curve("t", "0", "0", 1, 1).has_value());
   CHECK_FALSE(equation_curve("1/(t-1)", "0", "0", 0, 2).has_value());
   CHECK_FALSE(equation_curve("sqrt(t)", "t", "0", -1, 1).has_value());
+  // Undefined only between the fitting samples: caught by the denser check (review finding).
+  CHECK_FALSE(equation_curve("sqrt((t-0.0009765625)^2-0.00000001)", "t", "0", 0, 1, 1).has_value());
   CHECK(equation_curve("-2^2", "2^-1", "pi + e", 0, 1)->curve.point(0) ==
         Vec3{-4, 0.5, std::numbers::pi + std::numbers::e});
 }

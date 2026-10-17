@@ -125,7 +125,12 @@ std::expected<EquationCurve, std::string> equation_curve(std::string_view xs, st
       double worst = fit->max_deviation;
       for (int i = 0; i < count * kDense; ++i) {
         const double u = static_cast<double>(i) / (count * kDense);
-        worst = std::max(worst, length(fit->curve.point(u) - at(t0 + (t1 - t0) * u)));
+        const Vec3 q = at(t0 + (t1 - t0) * u);
+        if (!(std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z))) {
+          return std::unexpected("the equations are not finite at t = " +
+                                 std::to_string(t0 + (t1 - t0) * u));
+        }
+        worst = std::max(worst, length(fit->curve.point(u) - q));
       }
       if (worst <= tolerance) return EquationCurve{std::move(fit->curve), false, worst};
     }
