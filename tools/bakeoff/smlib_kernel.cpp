@@ -28,8 +28,8 @@
 
 #if NF_BAKEOFF_WITH_USD
 #include <OcctFileConverter.h>
-#include <pxr/base/plug/registry.h>
 #include <SmApiUsd.h>
+#include <pxr/base/plug/registry.h>
 
 #include <filesystem>
 
