@@ -81,7 +81,7 @@ class OcctKernel final : public IKernel {
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;revolve=1;"
-                "profile=exact-lines-v1;names=2;mass="
+                "profile=exact-lines-v2;names=2;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
@@ -318,6 +318,11 @@ class OcctKernel final : public IKernel {
       for (const auto& span : math::decompose(curve)) {
         std::vector<math::Vec3> points;
         for (auto v : span.points()) points.push_back(p.origin + p.x_axis * v.x + y * v.y);
+        // A bridge shorter than OCCT's vertex precision would create a degenerate edge.
+        // MakeWire instead welds the adjacent endpoints within that same precision floor.
+        if (span.degree() == 1 && !span.rational() &&
+            math::length(points.back() - points.front()) <= Precision::Confusion())
+          continue;
         auto edge = [&] {
           // Exact linear spans give OCCT analytic planes/cylinders/cones after revolution.
           // Only the edge parameterization changes; profile-curve provenance is unchanged.

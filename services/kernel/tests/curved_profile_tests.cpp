@@ -66,7 +66,6 @@ TEST_CASE("curved profiles preserve signed arcs and analytic semicylinder measur
     auto sketch = prepare(inputs);
     REQUIRE(sketch);
     REQUIRE(sketch->paths.size() == 1);
-    CHECK(sketch->paths[0].size() == 2);
     const auto shape = extrude(*sketch);
     CHECK_THAT(shape->measures().volume, WithinAbs(200 * kPi, 1e-6));
     CHECK_THAT(shape->measures().area, WithinAbs(140 * kPi + 80, 1e-6));
@@ -115,7 +114,6 @@ TEST_CASE("curved profiles join unordered arcs lines and reversed rational splin
     {"id":"l","type":"line","start":[-10,0],"end":[10,0]}])json"));
   REQUIRE(sketch);
   REQUIRE(sketch->paths.size() == 1);
-  CHECK(sketch->paths[0].size() == 3);
   const auto shape = extrude(*sketch);
   CHECK_THAT(shape->measures().volume, WithinAbs(200 * kPi, 1e-6));
   CHECK_THAT(shape->measures().centroid.y, WithinAbs(40 / (3 * kPi), 1e-7));
@@ -321,4 +319,32 @@ TEST_CASE("curved profile span limits precede expensive arrangement work", "[cur
   REQUIRE_FALSE(result);
   CHECK(result.error().pointer == "/inputs/profile");
   CHECK(result.error().message.find("4096-span") != std::string::npos);
+}
+
+TEST_CASE("curved profiles connect tolerance-matched internal and closing endpoints", "[curved]") {
+  for (const double gap : {5e-7, 5e-8}) {
+    CAPTURE(gap);
+    auto inputs = sketch_inputs(R"([
+      {"id":"a","type":"line","start":[0,0],"end":[10,0]},
+      {"id":"b","type":"line","start":[10,0],"end":[10,20]},
+      {"id":"c","type":"line","start":[10,20],"end":[0,20]},
+      {"id":"d","type":"line","start":[0,20],"end":[0,0]}])");
+    set_entity(inputs, "start", ir::json::Array{10.0, gap}, 1);
+    set_entity(inputs, "start", ir::json::Array{0.0, 20.0 - gap}, 3);
+    auto sketch = prepare(inputs);
+    REQUIRE(sketch);
+    CHECK_THAT(extrude(*sketch)->measures().volume, WithinAbs(800, 1e-5));
+    auto curved = sketch_inputs(half_disk);
+    set_entity(curved, "end", ir::json::Array{10.0 - gap, 0.0}, 1);
+    sketch = prepare(curved);
+    REQUIRE(sketch);
+    CHECK_THAT(extrude(*sketch)->measures().volume, WithinAbs(200 * kPi, 1e-5));
+    auto arcs = sketch_inputs(R"([
+      {"id":"a","type":"arc","center":[0,0],"radius":10,"start_angle":0,"sweep_angle":180},
+      {"id":"b","type":"arc","center":[0,0],"radius":10,"start_angle":180,"sweep_angle":180}])");
+    set_entity(arcs, "center", ir::json::Array{gap, 0.0}, 1);
+    sketch = prepare(arcs);
+    REQUIRE(sketch);
+    CHECK_THAT(extrude(*sketch)->measures().volume, WithinAbs(400 * kPi, 1e-5));
+  }
 }

@@ -173,13 +173,17 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   or reversed; both endpoints are checked for open/ambiguous junctions. Exact span decomposition
   prevents region probes from landing on spline corners. Knot/pole/weight errors carry field
   pointers; initial sketch-curve, spline-pole and profile-span work limits are each 4,096.
-  Fourteen regressions cover semicylinders (200π mm³), placed ellipses (72π mm³), a rational
+  Sixteen regressions cover semicylinders (200π mm³), placed ellipses (72π mm³), a rational
   circle, a closed polyline spline, a sphere (4000π/3 mm³), holes/region picks, parameter edits,
-  equivalent-unit cache reuse, failed dependencies and malformed/bounded inputs. Volume
+  equivalent-unit cache reuse, failed dependencies and malformed/bounded inputs. Review found
+  accepted near-coincident joins could remain disconnected in region detection; explicit bridges
+  now preserve the original curves and connect those endpoints. Bridges below OCCT's vertex
+  precision use vertex welding, avoiding degenerate edges. Regressions cover line/line,
+  line/arc and arc/arc gaps of 5e-7 and 5e-8 mm, including the closing junction. Volume
   tolerances are 1e-8–1e-5 mm³; centroid tolerances are 1e-7 mm. No schema/API/dependency change.
-  Full Release `tools/check.sh --preset occt` passes 301/301 (16.52 s), with hygiene and the
+  Full Release `tools/check.sh --preset occt` passes 303/303 (17.91 s), with hygiene and the
   independent 202-case schema cross-check passing. The CI ASan/UBSan kernel/evaluator/cache
-  selection passes 87/87 (25.82 s), with no diagnostics or retries. Nightfall code is instrumented;
+  selection passes 89/89 (27.77 s), with no diagnostics or retries. Nightfall code is instrumented;
   OCCT remains the pinned Release shared-library build. The prior integrated tree also passed
   the full 287-test sanitizer suite; this slice reruns the affected geometry/service selection.
 
@@ -281,14 +285,15 @@ execution counts. Profile and all downstream geometry rebuild on each unique dep
 
 | Elliptic tube | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
 | --- | ---: | ---: | ---: | ---: |
-| Cold | 8.969 | 9.110 | 9.300 | 29 / 0 |
-| Profile + depth edit | 9.164 | 12.796 | 15.209 | 29 / 0 |
-| Last transform edit | 0.623 | 0.659 | 0.664 | 1 / 29 |
-| Unused parameter edit | 0.579 | 0.617 | 0.630 | 0 / 30 |
+| Cold | 9.366 | 9.906 | 10.113 | 29 / 0 |
+| Profile + depth edit | 9.467 | 10.593 | 11.907 | 29 / 0 |
+| Last transform edit | 0.656 | 0.707 | 0.731 | 1 / 29 |
+| Unused parameter edit | 0.609 | 0.688 | 0.760 | 0 / 30 |
 
 The cache retains 96 entries / 18,732,720 estimated bytes after profile/depth edits (not RSS).
-Same-run depth-edit median/p95/max: plate 2.047/2.382/2.657 ms, bored plate 9.707/12.147/18.702 ms,
-boolean-cut plate 46.805/49.086/51.089 ms, sleeve 6.211/7.241/7.506 ms. Every sample is under
+Final benchmark after the review fix: same-run depth-edit median/p95/max is
+plate 1.966/2.518/4.987 ms, bored plate 9.781/11.660/18.681 ms,
+boolean-cut plate 47.112/50.712/51.059 ms, sleeve 6.318/7.494/7.524 ms. Every sample is under
 100 ms in this run; earlier slower tails remain documented above. Timing variation is not
 an optimization claim or a universal bound. Includes parsing, validation, geometry and naming;
 excludes serialization, IPC and tessellation. Full phase sign-off remains open.

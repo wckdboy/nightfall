@@ -96,10 +96,16 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
         reverse = b;
       }
       if (found == curves.end()) fail("/entities", "curve chain is open");
-      path.push_back(reverse ? math::reverse(*found) : *found);
+      auto next = reverse ? math::reverse(*found) : *found;
+      const auto next_start = next.point(next.domain_start());
+      // Keep the original curves exact and explicitly connect tolerance-matched ends.
+      // Arrangement vertex welding may use a tighter, drawing-relative tolerance.
+      if (end != next_start) path.push_back(math::make_line(end, next_start));
+      path.push_back(std::move(next));
       end = path.back().point(path.back().domain_end());
       curves.erase(found);
     }
+    if (end != start) path.push_back(math::make_line(end, start));
     sketch.paths.push_back(std::move(path));
   }
 }

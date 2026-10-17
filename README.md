@@ -74,8 +74,10 @@ path; native app integration and the remaining v1 operations are still in progre
 Arc entities use `center`, `radius`, `start_angle` and a signed `sweep_angle` up to one full turn;
 ellipses use `center`, `radii` and optional `rotation`. Splines retain their clamped knot vector,
 degree (1–9), `control_points` and optional positive `weights`. Coordinates and angles accept
-unit-aware expressions. Unordered line/arc/spline segments join only at unambiguous endpoints;
-open chains report errors. Exact knot-span decomposition handles spline corners before region
+unit-aware expressions. Unordered line/arc/spline segments join at unambiguous endpoints within
+the modeling tolerance, with explicit bridges preserving the original curves; open chains report
+errors. Bridges below OCCT's vertex precision are handled by vertex welding. Exact knot-span
+decomposition handles spline corners before region
 detection. Initial work limits are 4,096 sketch curves, 4,096 spline control points per sketch
 and 4,096 profile spans; oversized inputs report errors before arrangement work.
 
