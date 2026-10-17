@@ -223,5 +223,8 @@ TEST_CASE("malformed documents are errors at the element", "[svg][document]") {
   CHECK(err(mm(R"(<polyline points="0 0 L 1 1"/>)")).offset == at);
   CHECK(err(mm(R"(<polyline points="0 0 1"/>)")).offset == at);
   CHECK(err(mm(R"x(<line x2="1e308" transform="scale(1e10)"/>)x")).offset == at);
+  // Every point overflowing to the same infinity is still an error, not a collapse.
+  CHECK(err(mm(R"x(<line x1="1" y1="1" x2="2" y2="2" transform="scale(1e308) scale(1e308)"/>)x"))
+            .offset == at);
   CHECK(err(mm(R"(<path d="M0 0L1 1"/>)").substr(0, 40)).message.size() > 0);  // truncated XML
 }

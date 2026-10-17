@@ -30,7 +30,7 @@ class Generator {
 
   std::string document() {
     std::string root;
-    switch (pick(4)) {
+    switch (pick(9)) {  // every absolute unit, and meet, slice and none
       case 0:
         root = R"(width="210mm" height="297mm" viewBox="0 0 210 297")";
         break;
@@ -40,8 +40,25 @@ class Generator {
       case 2:
         root = R"(width="12cm" height="9cm" viewBox="-40 -30 400 300")";
         break;
-      default:
+      case 3:
         root = R"(width="5in" height="3in" viewBox="0 0 500 300" preserveAspectRatio="none")";
+        break;
+      case 4:
+        root = R"(width="640px" height="480px" viewBox="0 0 320 240")";
+        break;
+      case 5:
+        root = R"(width="595pt" height="842pt" viewBox="0 0 595 842")";
+        break;
+      case 6:
+        root =
+            R"(width="50pc" height="40pc" viewBox="10 10 300 200" preserveAspectRatio="xMinYMin slice")";
+        break;
+      case 7:
+        root =
+            R"(width="400Q" height="300Q" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet")";
+        break;
+      default:
+        root = R"(width="100mm" viewBox="0 0 50 80")";  // one size given
     }
     std::string body;
     const int n = 3 + pick(6);

@@ -270,6 +270,11 @@ class Reader {
       for (const NurbsCurve2& c : sp.segments) {
         std::vector<Vec2> points;
         for (const Vec2 p : c.points()) points.push_back(m.apply(p));
+        // Overflow is an error, not a collapse (equal infinities compare equal).
+        if (!std::ranges::all_of(points,
+                                 [](Vec2 q) { return std::isfinite(q.x) && std::isfinite(q.y); })) {
+          return fail(e, "coordinates out of range");
+        }
         // A segment the transform collapses to a point draws nothing, as in parse_path.
         if (std::ranges::all_of(points, [&](Vec2 q) { return q == points.front(); })) continue;
         mapped.push_back(NurbsCurve2::make(c.knots(), std::move(points),
