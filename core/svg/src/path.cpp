@@ -13,10 +13,9 @@
 #include <stdexcept>
 #include <utility>
 
-#include <xlocale.h>
-
 #include "nf/math/constructors.hpp"
 #include "nf/math/refine.hpp"
+#include "number.hpp"
 
 namespace nf::svg {
 
@@ -253,36 +252,12 @@ class Parser {
     return is_digit(c) || c == '.' || c == '+' || c == '-';
   }
 
-  // SVG 2 number: sign? (digits ('.' digits?)? | '.' digits) exponent?. The token is
-  // scanned here so the grammar is exact, then converted in the C locale.
   bool number(double& out) {
-    const std::size_t begin = pos_;
-    std::size_t i = pos_;
-    const auto digits = [&] {
-      const std::size_t from = i;
-      while (i < d_.size() && is_digit(d_[i])) ++i;
-      return i > from;
-    };
-    if (i < d_.size() && (d_[i] == '+' || d_[i] == '-')) ++i;
-    bool mantissa = digits();
-    if (i < d_.size() && d_[i] == '.') {
-      ++i;
-      mantissa = digits() || mantissa;
-    }
-    if (!mantissa) return fail("expected a number"), false;
-    if (i < d_.size() && (d_[i] == 'e' || d_[i] == 'E')) {
-      const std::size_t mark = i++;
-      if (i < d_.size() && (d_[i] == '+' || d_[i] == '-')) ++i;
-      if (!digits()) i = mark;  // "1e" is the number 1 followed by something else
-    }
-    static const locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
-    const std::string token(d_.substr(begin, i - begin));
-    char* stop = nullptr;
-    out = strtod_l(token.c_str(), &stop, c_locale);
-    if (stop != token.c_str() + token.size() || !std::isfinite(out)) {
-      return fail("number out of range"), false;
-    }
-    pos_ = i;
+    const detail::ScannedNumber r = detail::scan_number(d_, pos_);
+    if (r.error == detail::NumberError::kMissing) return fail("expected a number"), false;
+    if (r.error == detail::NumberError::kOutOfRange) return fail("number out of range"), false;
+    out = r.value;
+    pos_ = r.end;
     comma_pending_ = false;
     skip_separator();
     return true;
