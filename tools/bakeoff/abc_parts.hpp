@@ -20,6 +20,7 @@ struct AbcPlanRow {
   Vec3 bbox_max;
   double drill_radius = 0.0;  ///< 10 % of the smaller X/Y extent
   double round_radius = 0.0;  ///< 0.5 % of the bounding-box diagonal
+  bool drill_hits = true;     ///< the drill cylinder intersects the part (else no drill op)
 };
 
 /// Builds the plan from the manifest by importing each model with `reference` (OCCT).

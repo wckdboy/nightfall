@@ -210,6 +210,8 @@ def main():
         return 0
     if not args.build_dir or not args.out:
         ap.error("--build-dir and --out are required unless --rescore is given")
+    if args.abc_plan and not args.abc_dir:
+        ap.error("--abc-plan needs --abc-dir")
     if args.abc_plan:
         ABC.extend(["--abc", str(args.abc_plan), "--abc-dir", str(args.abc_dir)])
     if args.usd_plugin_dir:

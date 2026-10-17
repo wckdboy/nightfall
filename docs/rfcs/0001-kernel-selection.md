@@ -107,17 +107,18 @@ because they failed translation into SMLib). Scores follow the normalization abo
 
 | Metric (weight) | OCCT 7.9.3 | SMLib 1.0.0 |
 | --- | --- | --- |
-| Operation success (30 %) | 84.1 | 69.7 |
+| Operation success (30 %) | 83.3 | 68.2 |
 | Correctness (20 %) | 100 | 71.1 |
 | Operation history (20 %) | 50 (faces + edges through booleans, faces only through fillets) | 0 (no history API) |
 | Fillet and blend quality (10 %) | 54.2 | 10.9 |
-| Performance (10 %) | 100 | 48.7 |
+| Performance (10 %) | 100 | 49.8 |
 | Integration cost (10 %) | 70 | 100 |
-| **Weighted score** | **77.7** | **51.1** |
+| **Weighted score** | **77.4** | **50.7** |
 | Memory-safety errors / 1,000 sanitized operations | 0 | 250 |
 | UB reports / 1,000 sanitized operations | 50 | 50 |
 
-ABC operations valid: import 197 / 197 on both; drill OCCT 192, SMLib 191; round (fillet every
+ABC operations valid: import 197 / 197 on both; drill (the 167 models it actually cuts) OCCT
+162, SMLib 161; round (fillet every
 edge at 0.5 % of the diagonal) **OCCT 105, SMLib 18** (OCCT crashed once, isolated by the
 per-process runner). Imported volumes agree within 1e-6 on 161 of 197 models.
 
@@ -128,13 +129,13 @@ full of smooth edges (existing fillets, seams). At one fifth of the radius the o
 unchanged on both kernels, so radius is not the cause. The step therefore measures how each
 kernel handles an "every edge" request, not fillet geometry; SMLib's fillet strength on
 sharp edges is not established by it. **The decision does not depend on it:** crediting
-SMLib a valid round on every ABC model still gives 68.8 vs 77.7 = 88.6 %, below 90 %.
+SMLib a valid round on every ABC model still gives 68.9 vs 77.4 = 89.0 %, below 90 %.
 
 **Not run:** the stress cases listed under Corpus (item 3, from SMLib's KNOWN_ISSUES) were not
 run as a separate set; the reference corpus covers fillets next to caps (rounded box) and
 closed surfaces (sphere, torus, cylinders), and SMLIB-001 is reported separately.
 
-**Decision:** both kernels meet the hard requirements, but SMLib's score is **65.8 %** of
+**Decision:** both kernels meet the hard requirements, but SMLib's score is **65.5 %** of
 OCCT's, below the 90 % the decision rule requires, and stays below it under the most
 SMLib-favourable reading above. **OpenCASCADE 7.9.3 is Nightfall's primary kernel.** SMLib
 is re-evaluated at the next usd-brep release. The gaps that would have to close are an
@@ -170,7 +171,7 @@ Recorded as they come in; scoring waits for the full bake-off (#7).
 | F10 | 2026-10-17 | 14 analytic parts (#17, first half): OCCT 14/14; SMLib 8/14 with **every volume within 1e-6 and every result valid**. All six SMLib failures are area on parts with cylindrical or spherical faces: sphere 1.6e-4, hemisphere 1.8e-5, hole grid 4.4e-5, counterbore 3.4e-6, plate with hole 1.2e-6, Steinmetz 1.1e-6. The rounded box (cylindrical fillets, spherical corners) passes only marginally (area 9.0e-7, OCCT exact), and Steinmetz fails at 1.08e-6: around the 1e-6 bar SMLib's area pass/fail is effectively noise. Consistent with F6. | Correctness |
 | F11 | 2026-10-17 | 20-part corpus complete (#28 adds cone, torus, extruded profile, helix sweep, variable-radius fillet): OCCT 19/19 analytic parts, SMLib 9/19, plus 1 consensus part (both built valid; compared across kernels in #7, not counted as a pass). New SMLib misses: torus area 2.2e-4, knob area 5.4e-5, frustum area 3.6e-6, and the helical spring's **volume** 6.7e-6 (area 2.1e-5). The spring's volume miss needs a path ~0.002 mm short, far more than the helix fit's 1e-6 mm, so the likely cause is the pipe sweep's looser internal surface tolerance (`SmPrimitiveCreation::CreatePipeSweep`); not yet isolated. The 408-sided extruded gear is exact on both. Variable-radius fillet (consensus part): volumes differ by 8.8e-5 (OCCT 5971.571, SMLib 5972.099) because **the radius laws differ**: SMLib is consistent with linear (within 4e-7 of the quarter-circle estimate; a numerically integrated linear rolling-ball fillet gives ≈ 5972.15), while OCCT's two-radius `Add(R1, R2, E)` interpolates with zero end slopes (contact radius 1.39 / 2.00 / 2.61 at the quarter points vs 1.5 / 2.0 / 2.5 linear). A linear OCCT law (`Law_Linear`) needs care: a naive attempt crashed. | Correctness, fillet quality |
 | F12 | 2026-10-17 | Reference-corpus run (`tools/bakeoff/results/2026-10-17-corpus.json`, #36). Method: every part in its own process (crashes become results), timing inside that process after one untimed warm-up (median of 5; separate processes timed library loading instead), two processes per part to catch flakiness, one sanitizer run with **both kernels instrumented**. **Operation history is measured, not declared:** a probe traces every result face and edge through `Modified`/`Generated`; OCCT traces all faces and edges through a boolean but only faces through a fillet (11 edges untraced), so it scores **partial (50)**; SMLib exposes no history API (0). **Sanitizers:** parts with an ASan report OCCT 0/20, SMLib 5/20 (heap-use-after-free in every part that cuts a cylinder: SMLIB-001) = 0 vs 250 memory errors per 1,000 operations; UBSan in 1/20 each (variable fillet: OCCT misaligned construction in `NCollection_OccAllocator`, SMLib invalid enum load). Caveats: OCCT-asan is a Release build and pools its allocations, so its counts are a lower bound. **Corpus-only weighted scores (ABC still pending, so not the decision): OCCT 87.0, SMLib 69.1 (79 % of OCCT; the rule needs ≥ 90 %).** Driven by history (50 vs 0), correctness (100 vs 71.1) and performance (100 vs 48.5; per-part geometric-mean time ratio SMLib ≈ 4.2×). Integration cost uses cold CI builds (OCCT 31 min → 70, SMLib → 100). Unit: one reference part = one operation script; the consensus part is excluded from correctness (two kernels cannot settle it). | All |
-| F13 | 2026-10-17 | **ABC protocol, fixed before any ABC modeling result exists** (only the RFC 0002 translation spike has run). Per model, three operations on both kernels: (1) *import* — OCCT reads the STEP directly; SMLib gets STEP → OCCT → `.brep` → USD → SMLib (healer off); (2) *drill* — boolean difference with a cylinder along Z through the bounding-box centre, radius 10 % of the smaller of the X/Y extents, spanning the box with 1 mm margin; (3) *round* — fillet every edge, radius 0.5 % of the bounding-box diagonal. Parameters are computed **once** from OCCT's STEP import and committed (`tools/bakeoff/abc/ops-v1.csv`), so both kernels get identical inputs. A model that fails *import* on either kernel is excluded from both kernels' modeling scores and the count is published (RFC 0002). ABC results have no analytic values: they count toward operation success and fillet quality, not performance (SMLib's timings would include the STEP → OCCT → USD translation that OCCT does not pay); volume agreement between the kernels is reported but not scored (two kernels cannot say which is right). | Corpus definition |
+| F13 | 2026-10-17 | **ABC protocol, fixed before any ABC modeling result exists** (only the RFC 0002 translation spike has run). Per model, three operations on both kernels: (1) *import* — OCCT reads the STEP directly; SMLib gets STEP → OCCT → `.brep` → USD → SMLib (healer off); (2) *drill* — boolean difference with a cylinder along Z through the bounding-box centre, radius 10 % of the smaller of the X/Y extents, spanning the box with 1 mm margin; **amended after the first run (review finding):** drills that would miss the part (OCCT finds no volume removed at plan time) are dropped for both kernels, because a no-op is not an operation; (3) *round* — fillet every edge, radius 0.5 % of the bounding-box diagonal. Parameters are computed **once** from OCCT's STEP import and committed (`tools/bakeoff/abc/ops-v1.csv`), so both kernels get identical inputs. A model that fails *import* on either kernel is excluded from both kernels' modeling scores and the count is published (RFC 0002). ABC results have no analytic values: they count toward operation success and fillet quality, not performance (SMLib's timings would include the STEP → OCCT → USD translation that OCCT does not pay); volume agreement between the kernels is reported but not scored (two kernels cannot say which is right). | Corpus definition |
 
 Because of F3, the harness also runs both kernels under ASan/UBSan, and memory-safety
 errors per 1,000 operations are reported next to the weighted score.

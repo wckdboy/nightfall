@@ -8,7 +8,7 @@
 
 All of these, with evidence linked:
 
-- [x] RFC 0001 accepted with bake-off numbers and a kernel decision: **OCCT primary** (OCCT 77.7, SMLib 51.1 = 65.8 % < 90 %)
+- [x] RFC 0001 accepted with bake-off numbers and a kernel decision: **OCCT primary** (OCCT 77.4, SMLib 50.7 = 65.5 % < 90 %)
 - [x] A box appears in a Metal view, built through an XPC service from a JSON IR ([evidence](https://github.com/wckdboy/nightfall/blob/spike/8-9-xpc-viewport/docs/phases/evidence/phase0-xpc-metal-spike.png))
 - [x] CI builds and tests on macOS on every PR; nightly sanitizer build green
 - [x] `main` protected per WORKFLOW.md §2 (required: `hygiene`, `build-and-test (macOS arm64)`)
@@ -65,5 +65,5 @@ Tracked as GitHub issues in the [`Phase 0` milestone](https://github.com/wckdboy
   Corpus bake-off with both kernels instrumented (#36): OCCT 87.0, SMLib 69.1 (corpus only;
   history measured, warm in-process timing).
 - 2026-10-17 — RFC 0002 and RFC 0003 accepted (review period waived by the maintainer).
-- 2026-10-17 — Full bake-off (reference + ABC): OCCT 77.7, SMLib 51.1. **OCCT is the primary kernel**
+- 2026-10-17 — Full bake-off (reference + ABC): OCCT 77.4, SMLib 50.7. **OCCT is the primary kernel**
   (RFC 0001 accepted). Phase 0 gate passed.

@@ -34,8 +34,8 @@ The process is in `docs/process/WORKFLOW.md`. It is binding. The short version:
 
 ## Key decisions already made (see RFCs and the build plan)
 
-- Kernel: **OpenCASCADE 7.9.3 is the primary kernel** (RFC 0001 bake-off: OCCT 77.7 vs
-  SMLib 51.1). SMLib stays buildable for re-evaluation at the next usd-brep release.
+- Kernel: **OpenCASCADE 7.9.3 is the primary kernel** (RFC 0001 bake-off: OCCT 77.4 vs
+  SMLib 50.7). SMLib stays buildable for re-evaluation at the next usd-brep release.
   OCCT is LGPL-2.1: dynamic linking only.
 - OpenUSD + usd-brep's USD modules (RFC 0002) carry exact solids into/out of USD.
 - OCCT and OpenUSD headers never share a translation unit (OCCT's `Handle` macro).
