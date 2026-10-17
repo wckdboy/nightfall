@@ -49,6 +49,25 @@ std::optional<CircularArc> circular(const NurbsCurve2& b) {
   return CircularArc{center, length(r0), std::atan2(r0.y, r0.x), sweep};
 }
 
+// How far the span strays from the arc's circle, at its ends and 31 points between.
+double residual(const NurbsCurve2& b, const CircularArc& arc) {
+  double worst = 0.0;
+  for (int i = 0; i <= 32; ++i) {
+    const double u = b.domain_start() + (b.domain_end() - b.domain_start()) * i / 32;
+    worst = std::max(worst, std::abs(length(b.point(u) - arc.center) - arc.radius));
+  }
+  return worst;
+}
+
+double extent(const NurbsCurve2& c) {
+  Vec2 lo = c.points().front(), hi = lo;
+  for (const Vec2 q : c.points()) {
+    lo = {std::min(lo.x, q.x), std::min(lo.y, q.y)};
+    hi = {std::max(hi.x, q.x), std::max(hi.y, q.y)};
+  }
+  return length(hi - lo);
+}
+
 class Writer {
  public:
   explicit Writer(const ExportOptions& options) : options_(options) {}
@@ -61,7 +80,7 @@ class Writer {
         if (span.degree() == 1) {
           flush();
           line(span.points().front(), span.points().back());
-        } else if (const auto arc = circular(span)) {
+        } else if (const auto arc = as_arc(span)) {
           flush();
           emit_arc(*arc);
         } else {
@@ -102,9 +121,20 @@ class Writer {
     return out;
   }
 
-  double max_error() const { return approximated_ ? options_.tolerance : 0.0; }
+  double max_error() const { return max_error_; }
 
  private:
+  // A circular span whose distance from its circle fits the tolerance; that distance (a
+  // rounding-level residual for true circles) counts towards the reported error.
+  std::optional<CircularArc> as_arc(const NurbsCurve2& span) {
+    const auto arc = circular(span);
+    if (!arc) return std::nullopt;
+    const double off = residual(span, *arc);
+    if (off > options_.tolerance) return std::nullopt;
+    max_error_ = std::max(max_error_, off);
+    return arc;
+  }
+
   // A closed subpath that is a single curve tracing one whole circle.
   bool whole_circle(const Subpath& sp) {
     if (sp.segments.size() != 1) return false;
@@ -117,7 +147,7 @@ class Writer {
     std::optional<CircularArc> first;
     for (const NurbsCurve2& s : spans) {
       const auto arc = circular(s);
-      if (!arc) return false;
+      if (!arc || residual(s, *arc) > options_.tolerance) return false;
       if (!first) first = arc;
       if (length(arc->center - first->center) > 1e-12 * first->radius ||
           std::abs(arc->radius - first->radius) > 1e-12 * first->radius) {
@@ -157,7 +187,8 @@ class Writer {
 
   // Approximated spans gather into one POLYLINE until an exact entity or the subpath's end.
   void approximate(const NurbsCurve2& span) {
-    approximated_ = true;
+    // polyline() raises tolerances below 1e-12 of the curve's size to that; report what it used.
+    max_error_ = std::max(max_error_, std::max(options_.tolerance, 1e-12 * extent(span)));
     const auto pl = math::polyline(span, options_.tolerance);
     for (const auto& v : pl) {
       if (run_.empty() || v.point != run_.back()) run_.push_back(v.point);
@@ -206,7 +237,7 @@ class Writer {
   const ExportOptions& options_;
   std::string body_;
   std::vector<Vec2> run_;
-  bool approximated_ = false;
+  double max_error_ = 0.0;
   Vec2 lo_{std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
   Vec2 hi_{-std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()};
 };

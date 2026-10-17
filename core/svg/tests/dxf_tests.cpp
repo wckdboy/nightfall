@@ -95,7 +95,7 @@ TEST_CASE("circles and circular arcs are exact", "[dxf]") {
       nf::math::make_arc(Vec2{0, 0}, 2, 2, 0, 0.3, 0.3 + 200 * std::numbers::pi / 180));
   const Subpath arc{{cw}, false};
   const Exported r = write_dxf(std::span(&arc, 1)).value();
-  CHECK(r.max_error == 0.0);
+  CHECK(r.max_error <= 1e-12);  // the circles' rounding-level residual
   es = entities(r.text);
   REQUIRE(count(es, "ARC") == 3);  // ≤ 90° per span
   double total = 0;
@@ -130,4 +130,24 @@ TEST_CASE("ellipses and Béziers become polylines within the tolerance", "[dxf]"
     }
   }
   CHECK_FALSE(write_dxf({}, {.tolerance = 0}).has_value());
+}
+
+TEST_CASE("the reported error is truthful", "[dxf]") {
+  // A quarter ellipse within 5e-7 of a circle is not an exact arc at tolerance 1e-9 (review
+  // finding): it becomes a polyline.
+  const Subpath near{{nf::math::make_arc(Vec2{0, 0}, 1e6, 1e6 + 5e-7, 0, 0, std::numbers::pi / 2)},
+                     false};
+  const Exported strict = write_dxf(std::span(&near, 1), {.tolerance = 1e-9}).value();
+  CHECK(entities(strict.text).front().type == "POLYLINE");
+  // At a looser tolerance it may be an arc, and its residual is reported.
+  const Exported loose = write_dxf(std::span(&near, 1), {.tolerance = 1e-6}).value();
+  CHECK(entities(loose.text).front().type == "ARC");
+  CHECK(loose.max_error > 0);
+  CHECK(loose.max_error <= 1e-6);
+  // A tolerance below the polyline's floor reports the floor (review finding).
+  const Subpath big{
+      {nf::math::make_bezier(std::vector<Vec2>{{0, 0}, {3e5, 8e5}, {7e5, -4e5}, {1e6, 2e5}})},
+      false};
+  const Exported floor = write_dxf(std::span(&big, 1), {.tolerance = 1e-9}).value();
+  CHECK(floor.max_error >= 1e-12 * 1e6);
 }
