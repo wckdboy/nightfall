@@ -19,7 +19,7 @@ struct Part {
   const char* name;
   ir::Document document;
   double area, center_x;
-  std::size_t transforms = 28, cold_calls = 29, depth_calls = 29;
+  std::size_t transforms = 28, cold_calls = 29, depth_calls = 29, depth_hits = 1;
 };
 void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
@@ -65,7 +65,7 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
             : mode == "depth edit"          ? part.depth_calls
                                             : part.cold_calls;
     hits = mode == "cold"          ? 0
-           : mode == "depth edit"  ? 30 - part.depth_calls
+           : mode == "depth edit"  ? part.depth_hits
            : mode == "unused edit" ? 30
                                    : 29;
     verify(*evaluation, part, depth, tail, calls, hits);
@@ -78,6 +78,7 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
       "%zu bytes\n",
       part.name, mode.c_str(), (milliseconds[14] + milliseconds[15]) / 2, milliseconds[28],
       milliseconds.back(), calls, hits, usage.entries, usage.estimated_bytes);
+  std::fflush(stdout);
 }
 }  // namespace
 
@@ -94,6 +95,13 @@ int main() {
       {"id":"h1","type":"circle","center":[10,10],"radius":2},
       {"id":"h2","type":"circle","center":[30,10],"radius":2}],"constraints":[]})")
                                    .value();
+    auto sleeve = plate;
+    sleeve.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
+      {"id":"r","type":"rect","corner":[0,5],"size":["depth",5]}],"constraints":[]})")
+                                    .value();
+    sleeve.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
+      "axis":{"origin":[0,0,0],"direction":"z"},"angle":360,
+      "result":{"new":"plate","body_type":"brep"}})");
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -112,7 +120,8 @@ int main() {
         "IPC/tessellation.");
     for (const auto& part :
          {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
-          Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27}})
+          Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
+          Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})
         measure(*backend, part, mode);
   } catch (const std::exception& error) {

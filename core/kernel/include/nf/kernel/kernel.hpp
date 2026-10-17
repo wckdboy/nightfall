@@ -58,6 +58,15 @@ struct Extrusion {
   std::vector<math::Region> regions;
   math::Vec3 displacement;
 };
+/// Signed rotation in radians, with 0 < |angle| <= 2π, about an axis in the sketch plane.
+/// Region control hulls must all lie on the same side of the axis (touching it is allowed).
+/// This conservative restriction prevents overlapping sweeps without approximating curves.
+struct Revolution {
+  Plane plane;
+  std::vector<math::Region> regions;
+  math::Vec3 axis_origin, axis_direction{0, 1, 0};
+  double angle = 0;
+};
 /// Rotate about an axis, then translate. Angle is radians; axis direction need not be unit.
 struct RigidTransform {
   math::Vec3 translation, axis_origin, axis_direction{0, 0, 1};
@@ -92,10 +101,12 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans;
+    bool extrude, rigid_transform, booleans, revolve;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
+  /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> transform(
       const ShapePtr&, const RigidTransform&) = 0;
   /// Combine target with the union of nonempty tools: union, target minus tools, or common.

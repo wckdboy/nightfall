@@ -183,6 +183,10 @@ class FaultKernel final : public kernel::IKernel {
       const kernel::Extrusion& input) override {
     return backend.extrude(input);
   }
+  std::expected<kernel::OperationResult, kernel::KernelError> revolve(
+      const kernel::Revolution& input) override {
+    return backend.revolve(input);
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> boolean_operation(
       const kernel::ShapePtr& target, const std::vector<kernel::ShapePtr>& tools,
       kernel::BooleanOp op) override {

@@ -15,7 +15,7 @@ namespace {
 using ir::json::Value;
 struct Output {
   std::optional<Sketch> sketch;
-  std::optional<kernel::OperationResult> tool;  // private extrusion before a result-mode boolean
+  std::optional<kernel::OperationResult> tool;  // private sweep before a result-mode boolean
   std::vector<kernel::OperationResult> operations;
   std::vector<kernel::ShapePtr> bindings;
   std::size_t bytes = sizeof(Output);
@@ -150,7 +150,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/3;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/4;roles/3;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -159,6 +159,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   bool rolled_back = false;
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
+    const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
     const auto affected = targets(feature, previous);
@@ -191,7 +192,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       };
       std::shared_ptr<const Output> sketch;
       std::string result_mode;
-      if (feature.type == "extrude") {
+      if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
         const auto& upstream = result.features[features.at(id)];
         if (!upstream.hash)
@@ -235,10 +236,17 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         if (feature.type == "sketch") {
           built->sketch = take(prepare_sketch(inputs));
           built->bytes += sketch_bytes(*built->sketch);
-        } else if (feature.type == "extrude") {
-          const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
-          ++result.kernel_calls;
-          auto solid = take(state_->kernel.extrude(operation));
+        } else if (profile_feature) {
+          auto solid = [&] {
+            if (feature.type == "extrude") {
+              const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
+              ++result.kernel_calls;
+              return take(state_->kernel.extrude(operation));
+            }
+            const auto operation = take(prepare_revolution(inputs, *sketch->sketch));
+            ++result.kernel_calls;
+            return take(state_->kernel.revolve(operation));
+          }();
           if (result_mode.empty()) {
             built->operations.push_back(std::move(solid));
           } else {

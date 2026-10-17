@@ -144,15 +144,13 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
   });
 }
 
-std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& inputs,
-                                                              const Sketch& sketch) {
+namespace {
+std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value& inputs,
+                                                                    const Sketch& sketch) {
   return guarded([&] {
     const auto& result = field(inputs, "result");
     if (result.find("new") && *field(result, "body_type").if_string() != "brep")
       fail("/result/body_type", "only B-rep bodies are implemented", "unsupported_body_type");
-    if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
-    if (const auto* draft = inputs.find("draft"); draft && number(*draft) != 0)
-      fail("/draft", "drafted extrusion is not implemented");
     const auto& profile = field(inputs, "profile");
     auto rule = math::FillRule::kEvenOdd;
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
@@ -186,6 +184,19 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
       for (auto index : selected) picked.push_back(std::move((*regions)[index]));
       *regions = std::move(picked);
     }
+    return std::move(*regions);
+  });
+}
+}  // namespace
+
+std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& inputs,
+                                                              const Sketch& sketch) {
+  auto regions = prepare_regions(inputs, sketch);
+  if (!regions) return std::unexpected(regions.error());
+  return guarded([&] {
+    if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
+    if (const auto* draft = inputs.find("draft"); draft && number(*draft) != 0)
+      fail("/draft", "drafted extrusion is not implemented");
     const auto direction = inputs.find("direction") ? unit(field(inputs, "direction"), "/direction")
                                                     : sketch.plane.normal;
     kernel::Extrusion extrusion{sketch.plane, std::move(*regions),
@@ -193,6 +204,19 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
     if (const auto* symmetric = inputs.find("symmetric"); symmetric && *symmetric->if_bool())
       extrusion.plane.origin = extrusion.plane.origin - extrusion.displacement / 2;
     return extrusion;
+  });
+}
+
+std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inputs,
+                                                                const Sketch& sketch) {
+  auto regions = prepare_regions(inputs, sketch);
+  if (!regions) return std::unexpected(regions.error());
+  return guarded([&] {
+    const auto& axis = field(inputs, "axis");
+    if (!axis.find("origin")) fail("/axis", "selector and sketch axes are not implemented");
+    return kernel::Revolution{sketch.plane, std::move(*regions), vector3(field(axis, "origin")),
+                              unit(field(axis, "direction"), "/axis/direction"),
+                              number(field(inputs, "angle"))};
   });
 }
 

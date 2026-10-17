@@ -21,7 +21,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/transform/boolean evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/revolve/transform/boolean evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -146,6 +146,20 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Full OCCT checks pass 273/273 (16.16 s); ASan/UBSan evaluator tests pass 32/32 (28.69 s),
   with no sanitizer diagnostics. The independent schema corpus remains 202/202.
 
+- 2026-10-18 — #92 adds exact solid revolutions about explicit axes in the sketch plane,
+  including signed partial/full turns, new/join/cut/intersect results and face provenance.
+  Tests cover hollow cylinders, toruses, cavities, placed axes, axis-touching profiles,
+  selected regions, dimensional angles, incremental edits, cache rebinding, eviction,
+  rollback, suppression and failure propagation. Profile control hulls must stay on one side
+  of the axis; conservative rejection prevents overlapping sweeps without approximating curves.
+  Exact linear spans now produce analytic planes/cylinders/cones in OCCT; the original profile
+  provenance is retained while edge parameterization changes. Rational curves remain exact.
+  Sketch-line/selector axes and the other remaining v1 operations still report errors.
+  Full OCCT checks pass 287/287 (19.06 s); full ASan/UBSan checks pass 287/287 (663.87 s),
+  with no sanitizer diagnostics or retries. The latter ran under substantial background build
+  load. Hygiene checks and the independent 202-case schema cross-check pass. Nightfall code is
+  instrumented; OCCT remains the pinned Release shared-library build.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -204,3 +218,32 @@ The full `tools/check.sh --preset asan` run also passes 266/266 (188.30 s), incl
 new geometry/evaluator tests, with no sanitizer diagnostics or retries. Nightfall code is
 ASan/UBSan-instrumented; the OCCT shared libraries remain the pinned Release build. Remote
 CI and maintainer review are pending; this extends the local latency evidence only.
+
+### Revolution rebuild evidence
+
+2026-10-18, same machine/configuration and 30-sample methodology. The turned sleeve has one
+sketch, one revolution and 28 transforms. Every unique height edit rebuilds the sketch and
+all 29 kernel operations; analytic volume `75π × height` mm³, centroid and execution counts
+are checked for every sample. Exact line spans retain analytic surfaces in OCCT. Before this
+representation change, sleeve height edits measured 1,756.782 ms median in an earlier run.
+
+| Turned sleeve | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 8.828 | 29.102 | 37.186 | 29 / 0 |
+| Height edit | 6.934 | 8.842 | 9.595 | 29 / 0 |
+| Last transform edit | 0.613 | 0.978 | 1.026 | 1 / 29 |
+| Unused parameter edit | 0.596 | 0.633 | 0.845 | 0 / 30 |
+
+The sleeve cache retains 96 entries / 6,422,472 estimated bytes after the height edits.
+This final benchmark ran after Nightfall's builds/tests finished. Same-run depth-edit results
+for the existing cases are recorded below rather than assuming earlier timings still apply.
+
+| Existing part, depth edit | Median ms | p95 ms | Max ms |
+| --- | ---: | ---: | ---: |
+| Plate | 2.137 | 2.337 | 2.783 |
+| Bored plate | 18.263 | 28.047 | 33.780 |
+| Boolean-cut plate | 72.176 | 126.785 | 129.510 |
+
+The sleeve meets the local 100 ms criterion in every sample. The boolean case's tail exceeds
+100 ms in this run; these measurements do not establish a universal latency bound. Broader
+reference-part coverage, remote CI/review of this slice and full Phase 2 sign-off remain open.

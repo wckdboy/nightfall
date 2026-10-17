@@ -8,6 +8,7 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
 #include <Precision.hxx>
 #include <Standard_Version.hxx>
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <numbers>
 #include <sstream>
 
 #include "nf/kernel/occt_geom.hpp"
@@ -57,6 +59,20 @@ struct LocalRole {
   TopoDS_Shape entity;
   std::optional<ProfileEdge> from;
 };
+OperationResult generated_result(TopoDS_Shape geometry, const std::vector<LocalRole>& roles) {
+  auto shape = checked(std::move(geometry));
+  OperationResult result{shape, {}, {}, shape->estimated_bytes()};
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(shape->geometry, TopAbs_FACE, faces);
+  for (const auto& role : roles) {
+    const auto index = faces.FindIndex(role.entity);
+    if (!index) fail("generated face is absent from the validated output");
+    result.generated.push_back({role.role, detail::entity(shape, faces(index)), role.from});
+  }
+  result.estimated_bytes +=
+      result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
+  return result;
+}
 
 class OcctKernel final : public IKernel {
  public:
@@ -64,23 +80,20 @@ class OcctKernel final : public IKernel {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
-             << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;names=1;mass="
+             << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;revolve=1;"
+                "profile=exact-lines-v1;names=2;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
-  Capabilities capabilities() const noexcept override { return {true, true, true}; }
+  Capabilities capabilities() const noexcept override { return {true, true, true, true}; }
 
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
     return guarded([&] {
       const auto& p = input.plane;
-      if (!finite(p.origin) || !finite(p.normal) || !finite(p.x_axis) ||
-          !math::near(math::length(p.normal), 1, tolerance_.angular) ||
-          !math::near(math::length(p.x_axis), 1, tolerance_.angular) ||
-          !math::near(math::dot(p.normal, p.x_axis), 0, tolerance_.angular))
-        fail("sketch plane must have finite orthonormal axes");
+      validate_plane(p);
       if (input.regions.empty() || !finite(input.displacement) ||
           !(math::abs(math::dot(input.displacement, p.normal)) > tolerance_.linear))
         fail("extrusion needs regions and a finite displacement out of their plane");
@@ -89,17 +102,10 @@ class OcctKernel final : public IKernel {
       builder.MakeCompound(compound);
       std::vector<LocalRole> roles;
       for (std::size_t r = 0; r < input.regions.size(); ++r) {
-        const auto& region = input.regions[r];
         std::vector<EdgeSource> edges;
-        auto outer = wire(region.outer, p, r, 0, edges);
-        BRepBuilderAPI_MakeFace face(
-            gp_Pln(gp_Ax3(point(p.origin), direction(p.normal), direction(p.x_axis))), outer, true);
-        for (std::size_t h = 0; h < region.holes.size(); ++h)
-          face.Add(wire(region.holes[h], p, r, h + 1, edges));
-        if (!face.IsDone()) fail("cannot build planar region face");
+        auto face = profile_face(input.regions[r], p, r, edges);
         BRepPrimAPI_MakePrism prism(
-            face.Face(), gp_Vec(input.displacement.x, input.displacement.y, input.displacement.z),
-            true);
+            face, gp_Vec(input.displacement.x, input.displacement.y, input.displacement.z), true);
         if (!prism.IsDone()) fail("extrusion failed");
         builder.Add(compound, prism.Shape());
         roles.push_back({"cap_start", prism.FirstShape(), {}});
@@ -108,13 +114,59 @@ class OcctKernel final : public IKernel {
           for (const auto& shape : prism.Generated(source.edge))
             if (shape.ShapeType() == TopAbs_FACE) roles.push_back({"side", shape, source.from});
       }
-      auto shape = checked(compound);
-      OperationResult result{shape, {}, {}, shape->estimated_bytes()};
-      for (const auto& role : roles)
-        result.generated.push_back({role.role, detail::entity(shape, role.entity), role.from});
-      result.estimated_bytes +=
-          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
-      return result;
+      return generated_result(compound, roles);
+    });
+  }
+
+  std::expected<OperationResult, KernelError> revolve(const Revolution& input) override {
+    return guarded([&] {
+      const auto& p = input.plane;
+      validate_plane(p);
+      auto axis = math::normalized(input.axis_direction, tolerance_);
+      const auto angle = std::abs(input.angle);
+      if (!axis || !finite(input.axis_origin) ||
+          !math::near(math::dot(*axis, p.normal), 0, tolerance_.angular) ||
+          !math::near(math::dot(input.axis_origin - p.origin, p.normal), 0, tolerance_.linear))
+        fail("revolution needs a finite nonzero axis in the sketch plane");
+      if (input.regions.empty() || !std::isfinite(angle) || angle <= tolerance_.angular ||
+          angle > 2 * std::numbers::pi)
+        fail("revolution needs regions and an angle with 0 < magnitude <= 2 pi");
+      const auto radial = math::cross(*axis, p.normal), y = math::cross(p.normal, p.x_axis);
+      double low = 0, high = 0;
+      for (const auto& region : input.regions)
+        for (const auto& curve : region.outer.curves)
+          for (const auto v : curve.points()) {
+            const auto r =
+                math::dot(p.origin + p.x_axis * v.x + y * v.y - input.axis_origin, radial);
+            if (!std::isfinite(r)) fail("revolution profile exceeds finite coordinates");
+            low = std::min(low, r);
+            high = std::max(high, r);
+          }
+      if (low < -tolerance_.linear && high > tolerance_.linear)
+        fail("revolution profile control hulls must stay on one side of the axis");
+      if (input.angle < 0) *axis = *axis * -1;
+      BRep_Builder builder;
+      TopoDS_Compound compound;
+      builder.MakeCompound(compound);
+      std::vector<LocalRole> roles;
+      for (std::size_t r = 0; r < input.regions.size(); ++r) {
+        std::vector<EdgeSource> edges;
+        auto face = profile_face(input.regions[r], p, r, edges);
+        BRepPrimAPI_MakeRevol revol(face, gp_Ax1(point(input.axis_origin), direction(*axis)), angle,
+                                    true);
+        if (!revol.IsDone() || revol.Shape().IsNull()) fail("revolution failed");
+        builder.Add(compound, revol.Shape());
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(revol.Shape(), TopAbs_FACE, faces);
+        // A complete turn has no cap faces; OCCT may also close turns within its precision floor.
+        for (const auto& cap : {LocalRole{"cap_start", revol.FirstShape(), {}},
+                                LocalRole{"cap_end", revol.LastShape(), {}}})
+          if (!cap.entity.IsNull() && faces.Contains(cap.entity)) roles.push_back(cap);
+        for (const auto& source : edges)
+          for (const auto& shape : revol.Generated(source.edge))
+            if (shape.ShapeType() == TopAbs_FACE) roles.push_back({"side", shape, source.from});
+      }
+      return generated_result(compound, roles);
     });
   }
 
@@ -234,6 +286,23 @@ class OcctKernel final : public IKernel {
   }
 
  private:
+  void validate_plane(const Plane& p) const {
+    if (!finite(p.origin) || !finite(p.normal) || !finite(p.x_axis) ||
+        !math::near(math::length(p.normal), 1, tolerance_.angular) ||
+        !math::near(math::length(p.x_axis), 1, tolerance_.angular) ||
+        !math::near(math::dot(p.normal, p.x_axis), 0, tolerance_.angular))
+      fail("sketch plane must have finite orthonormal axes");
+  }
+  TopoDS_Face profile_face(const math::Region& region, const Plane& p, std::size_t r,
+                           std::vector<EdgeSource>& edges) const {
+    auto outer = wire(region.outer, p, r, 0, edges);
+    BRepBuilderAPI_MakeFace face(
+        gp_Pln(gp_Ax3(point(p.origin), direction(p.normal), direction(p.x_axis))), outer, true);
+    for (std::size_t h = 0; h < region.holes.size(); ++h)
+      face.Add(wire(region.holes[h], p, r, h + 1, edges));
+    if (!face.IsDone()) fail("cannot build planar region face");
+    return face.Face();
+  }
   TopoDS_Wire wire(const math::Loop& loop, const Plane& p, std::size_t region, std::size_t index,
                    std::vector<EdgeSource>& edges) const {
     if (loop.curves.empty()) fail("region boundary is empty");
@@ -249,12 +318,18 @@ class OcctKernel final : public IKernel {
       for (const auto& span : math::decompose(curve)) {
         std::vector<math::Vec3> points;
         for (auto v : span.points()) points.push_back(p.origin + p.x_axis * v.x + y * v.y);
-        auto lifted = math::NurbsCurve3::make(span.knots(), std::move(points),
-                                              {span.weights().begin(), span.weights().end()});
-        if (!lifted) fail(lifted.error());
-        auto converted = to_occt(*lifted);
-        if (!converted) fail(converted.error());
-        BRepBuilderAPI_MakeEdge edge(*converted, span.domain_start(), span.domain_end());
+        auto edge = [&] {
+          // Exact linear spans give OCCT analytic planes/cylinders/cones after revolution.
+          // Only the edge parameterization changes; profile-curve provenance is unchanged.
+          if (span.degree() == 1 && !span.rational())
+            return BRepBuilderAPI_MakeEdge(point(points.front()), point(points.back()));
+          auto lifted = math::NurbsCurve3::make(span.knots(), std::move(points),
+                                                {span.weights().begin(), span.weights().end()});
+          if (!lifted) fail(lifted.error());
+          auto converted = to_occt(*lifted);
+          if (!converted) fail(converted.error());
+          return BRepBuilderAPI_MakeEdge(*converted, span.domain_start(), span.domain_end());
+        }();
         if (!edge.IsDone()) fail("cannot build profile edge");
         builder.Add(edge.Edge());
         if (!builder.IsDone()) fail("cannot join profile edges");

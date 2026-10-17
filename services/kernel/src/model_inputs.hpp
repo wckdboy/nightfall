@@ -16,5 +16,7 @@ struct Sketch {
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
                                                               const Sketch& sketch);
+std::expected<kernel::Revolution, ir::Error> prepare_revolution(const ir::json::Value& inputs,
+                                                                const Sketch& sketch);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const ir::json::Value& inputs);
 }  // namespace nf::kernel_service
