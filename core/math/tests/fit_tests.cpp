@@ -103,4 +103,9 @@ TEST_CASE("fitting rejects bad input", "[fit]") {
   const std::vector<Vec2> ok{{0, 0}, {1, 0}, {2, 1}, {3, 3}, {4, 2}};
   CHECK_FALSE(approximate<Vec2>(ok, 0.0, 3).has_value());
   CHECK_FALSE(approximate<Vec2>(ok, std::nan(""), 3).has_value());
+  // Below floating-point accuracy: an error, not a fit that misses (review finding).
+  const std::vector<Vec2> six{{0.1, 0.3}, {1.7, 0.9}, {2.3, 1.1},
+                              {3.9, 3.7}, {4.1, 2.3}, {5.3, 0.7}};
+  const auto unreachable = approximate<Vec2>(six, 1e-20, 3);
+  if (unreachable) CHECK(unreachable->max_deviation <= 1e-20);  // exact data could reach it
 }

@@ -31,11 +31,13 @@ struct Fit {
   double max_deviation;
 };
 
-/// The non-rational curve of `degree` with the fewest control points (searched by doubling,
-/// then bisection) whose least-squares fit (A9.7, knots by Eq. 9.69, ends interpolated, then
-/// parameter correction for as long as each round improves the fit by 1 %, up to 200 rounds)
-/// keeps every data point within `tolerance`. Needs more than `degree` points, no two
-/// consecutive ones equal, and a positive finite tolerance.
+/// A non-rational curve of `degree` whose least-squares fit (A9.7, knots by Eq. 9.69, ends
+/// interpolated, then parameter correction for as long as each round improves the fit by 1 %,
+/// up to 200 rounds) keeps every data point within `tolerance`. The number of control points
+/// is searched by doubling, then bisection: usually the fewest, but not always, since fit
+/// quality is not monotone in the count (each count has its own knots). Needs more than
+/// `degree` points, no two consecutive ones equal, and a positive finite tolerance; a
+/// tolerance below the fit's floating-point accuracy is an error.
 template <typename Point>
 [[nodiscard]] std::expected<Fit<Point>, std::string> approximate(std::span<const Point> points,
                                                                  double tolerance, int degree = 3);

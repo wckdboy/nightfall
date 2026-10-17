@@ -234,10 +234,8 @@ std::expected<Fit<Point>, std::string> approximate(std::span<const Point> q, dou
     lo = n;
     if (n == m) break;
   }
-  if (!best) {  // n = m is interpolation, so this means a numerical failure
-    auto c = interpolate(q, degree);
-    if (!c) return std::unexpected(c.error());
-    return Fit<Point>{*c, *ub, deviation(*c, q, *ub)};
+  if (!best) {  // even n = m (interpolation) misses: below what floating point can reach
+    return std::unexpected("tolerance is below the fit's floating-point accuracy");
   }
   while (hi - lo > 1) {
     const int mid = (lo + hi) / 2;
