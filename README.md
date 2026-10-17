@@ -44,6 +44,17 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
+To run the independent IR schema cross-check locally (Python 3.13+):
+
+```sh
+python3 -m venv build/schema-venv
+build/schema-venv/bin/pip install -r tools/schema-requirements.txt
+NF_SCHEMA_PYTHON=build/schema-venv/bin/python tools/check.sh
+```
+
+The published [part schema](core/ir/schema/part-v1.schema.json) is generated from
+`core/ir/schema/build_schema.py`; `tools/check.sh` rejects a stale generated copy.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [the development workflow](docs/process/WORKFLOW.md)

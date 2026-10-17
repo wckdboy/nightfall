@@ -40,3 +40,6 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   This is structural validation only. The normative JSON Schema, per-feature inputs,
   selectors, body/entity references and schema corpus remain in #90; expressions, units
   and parameter dependency evaluation remain in #91. No Phase 2 gate is claimed yet.
+- 2026-10-17 — #90 publishes the JSON Schema 2020-12 definitions for all 16 feature types,
+  sketch entities, constraints and semantic selectors. A shared valid/invalid corpus is
+  independently checked with pinned Python test tooling in CI; native enforcement follows.

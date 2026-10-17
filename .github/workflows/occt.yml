@@ -50,7 +50,12 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: brew install ninja
+      - run: brew install ninja python@3.14
+      - name: Install schema test tooling
+        run: |
+          python3.14 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --quiet -r tools/schema-requirements.txt
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
 
       # Restore and save are separate steps so a slow OCCT build is cached even when a later
       # test step fails (actions/cache's combined form saves only when the whole job passes).
