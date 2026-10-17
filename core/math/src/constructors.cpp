@@ -61,10 +61,12 @@ NurbsCurve<Point> bezier(std::span<const Point> pts) {
 // rational quadratic exactly, which also makes ellipses exact.
 template <typename Point, typename Map>
 NurbsCurve<Point> unit_arc(double start, double end, Map map) {
-  const double sweep = end - start;
+  double sweep = end - start;
   if (!(sweep > 0.0) || sweep > 2.0 * std::numbers::pi * (1.0 + 1e-12)) {
     throw std::invalid_argument("arc sweep must be in (0, 2π]");
   }
+  // Within rounding of a full turn it is a full turn: four spans, never a fifth that overlaps.
+  sweep = std::min(sweep, 2.0 * std::numbers::pi);
   const int spans = static_cast<int>(std::ceil(sweep / (std::numbers::pi / 2.0) - 1e-12));
   const double step = sweep / spans;
   const double w = std::cos(step / 2.0);

@@ -190,6 +190,9 @@ NurbsSurface extrude(const NurbsCurve3& profile, Vec3 direction) {
 NurbsSurface revolve(const NurbsCurve3& profile, Vec3 origin, Vec3 axis, double angle) {
   const auto a = normalized(axis);
   if (!a) throw std::invalid_argument("revolution axis has no direction");
+  if (!(angle > 0.0 && angle <= 2.0 * std::numbers::pi)) {
+    throw std::invalid_argument("revolution angle must be in (0, 2π]");
+  }
   const NurbsCurve2 unit = make_arc(Vec2{0, 0}, 1.0, 1.0, 0.0, 0.0, angle);  // validates angle
   std::vector<Vec3> pts;
   std::vector<double> ws;

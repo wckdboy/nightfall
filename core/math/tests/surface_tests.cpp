@@ -141,4 +141,10 @@ TEST_CASE("revolving a line parallel to the axis gives a cylinder", "[surface]")
   }
   CHECK_THROWS(revolve(make_line(Vec3{3, 0, 0}, Vec3{3, 0, 4}), Vec3{0, 0, 0}, Vec3{0, 0, 0}, 1.0));
   CHECK_THROWS(revolve(make_line(Vec3{3, 0, 0}, Vec3{3, 0, 4}), Vec3{0, 0, 0}, Vec3{0, 0, 1}, 7.0));
+  // Just above a full turn is refused too, not wrapped into an overlapping fifth span.
+  CHECK_THROWS(revolve(make_line(Vec3{3, 0, 0}, Vec3{3, 0, 4}), Vec3{0, 0, 0}, Vec3{0, 0, 1},
+                       std::nextafter(2 * std::numbers::pi, 7.0)));
+  // make_arc's rounding allowance gives exactly four spans.
+  const NurbsCurve2 full = make_arc(Vec2{0, 0}, 1, 1, 0, 0, 2 * std::numbers::pi * (1 + 5e-13));
+  CHECK(full.points().size() == 9);
 }
