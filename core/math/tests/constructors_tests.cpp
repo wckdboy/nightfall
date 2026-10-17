@@ -99,3 +99,25 @@ TEST_CASE("2D arcs honour the rotation of the ellipse axes", "[constructors]") {
   CHECK_THROWS_AS(make_arc(Vec2{}, 1, 1, 0, 1.0, 1.0), std::invalid_argument);
   CHECK_THROWS_AS(make_arc(Vec2{}, 1, 1, 0, 0.0, 7.0), std::invalid_argument);
 }
+
+TEST_CASE("polylines drop repeated vertices", "[constructors]") {
+  const std::vector<Vec2> pts{{0, 0}, {0, 0}, {1, 0}, {1, 0}, {1, 1}, {1, 1}};
+  const NurbsCurve2 c = make_polyline(pts);
+  CHECK(c.points().size() == 3);
+  CHECK(c.point(0.0) == Vec2{0, 0});
+  CHECK(c.point(0.5) == Vec2{1, 0});
+  CHECK(c.point(1.0) == Vec2{1, 1});
+}
+
+TEST_CASE("3D circles start on +X projected into the plane", "[constructors]") {
+  for (const Vec3 normal : {Vec3{0.95, 0.1, 0.296}, Vec3{0.3, -0.5, 0.8}, Vec3{0.99, 0.0, 0.141}}) {
+    const NurbsCurve3 c = make_circle(Vec3{0, 0, 0}, normal, 2.0);
+    const Vec3 n = *normalized(normal);
+    const Vec3 px = Vec3{1, 0, 0} - n * dot(Vec3{1, 0, 0}, n);
+    const Vec3 expected = px * (2.0 / length(px));
+    CHECK(length(c.point(c.domain_start()) - expected) < 1e-12);
+  }
+  // Normal along X: +X has no projection, so the circle starts on +Y.
+  const NurbsCurve3 c = make_circle(Vec3{0, 0, 0}, Vec3{-1, 0, 0}, 1.0);
+  CHECK(length(c.point(c.domain_start()) - Vec3{0, 1, 0}) < 1e-12);
+}

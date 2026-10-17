@@ -31,11 +31,19 @@ NurbsCurve<Point> polyline(std::span<const Point> pts) {
   }
   const double total = cumulative.back();
   if (!(total > 0.0)) throw std::invalid_argument("polyline has zero length");
-  std::vector<double> knots{0.0};
-  for (const double c : cumulative) knots.push_back(c / total);
+  // Vertices that repeat the previous parameter (duplicates) change nothing; dropping them
+  // keeps interior knot multiplicities at 1.
+  std::vector<Point> kept{pts.front()};
+  std::vector<double> knots{0.0, 0.0};
+  for (std::size_t i = 1; i < pts.size(); ++i) {
+    const bool last = i + 1 == pts.size();
+    const double t = last ? 1.0 : cumulative[i] / total;  // exact end, whatever the rounding
+    if (t == knots.back()) continue;
+    kept.push_back(pts[i]);
+    knots.push_back(t);
+  }
   knots.push_back(1.0);
-  knots[knots.size() - 2] = 1.0;  // exact end, whatever the rounding
-  return build(std::move(knots), 1, std::vector<Point>(pts.begin(), pts.end()));
+  return build(std::move(knots), 1, std::move(kept));
 }
 
 template <typename Point>
@@ -103,8 +111,9 @@ NurbsCurve3 make_circle(Vec3 center, Vec3 normal, double r) {
   const auto n = normalized(normal);
   if (!n) throw std::invalid_argument("circle normal has no direction");
   // In-plane x axis: +X projected into the plane, or +Y if the normal is (anti)parallel to X.
-  const Vec3 seed = std::abs(n->x) > 0.9 ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
-  const Vec3 x = *normalized(seed - *n * dot(seed, *n));
+  const auto project = [&](Vec3 v) { return v - *n * dot(v, *n); };
+  const Vec3 px = project({1, 0, 0});
+  const Vec3 x = length(px) > 1e-9 ? *normalized(px) : *normalized(project({0, 1, 0}));
   const Vec3 y = cross(*n, x);
   return make_arc(center, x, y, r, r, 0.0, 2.0 * std::numbers::pi);
 }

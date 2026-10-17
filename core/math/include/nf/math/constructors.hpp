@@ -17,7 +17,8 @@ namespace nf::math {
 [[nodiscard]] NurbsCurve3 make_line(Vec3 a, Vec3 b);
 
 /// Degree-1 curve through `points` (≥ 2), parameterised by cumulative chord length on
-/// [0, 1]. Exact. Throws std::invalid_argument for fewer than 2 points or zero length.
+/// [0, 1]. Exact. Repeated consecutive vertices are dropped. Throws std::invalid_argument for
+/// fewer than 2 points or zero length.
 [[nodiscard]] NurbsCurve2 make_polyline(std::span<const Vec2> points);
 [[nodiscard]] NurbsCurve3 make_polyline(std::span<const Vec3> points);
 
