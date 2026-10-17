@@ -130,8 +130,24 @@ TEST_CASE("the pentagram under both rules", "[regions]") {
   for (const Region& g : eo) CHECK(g.outer.curves.size() == 3);
 }
 
+TEST_CASE("regions of touching curves", "[regions]") {
+  // Externally tangent circles: two regions touching at a point (review finding).
+  const auto outside = regions_of({{make_circle(Vec2{0, 0}, 1.0)}, {make_circle(Vec2{2, 0}, 1.0)}},
+                                  FillRule::kNonZero);
+  CHECK(outside.size() == 2);
+  // An internally tangent circle under even-odd: the crescent between them.
+  const auto crescent = regions_of(
+      {{make_circle(Vec2{0, 0}, 1.0)}, {make_circle(Vec2{0.5, 0}, 0.5)}}, FillRule::kEvenOdd);
+  REQUIRE(crescent.size() == 1);
+  CHECK(std::abs(total_area(crescent) - std::numbers::pi * (1 - 0.25)) <= 1e-6);
+}
+
 TEST_CASE("winding numbers of points", "[regions]") {
   const auto sq = square(0, 0, 2);
+  // On the boundary it is undefined, on every side (review finding).
+  for (const Vec2 p : {Vec2{0, 1}, Vec2{2, 1}, Vec2{1, 0}, Vec2{1, 2}, Vec2{0, 0}}) {
+    CHECK_FALSE(winding_number(sq, p).has_value());
+  }
   CHECK(winding_number(sq, Vec2{1, 1}) == 1);
   CHECK(winding_number(sq, Vec2{3, 1}) == 0);
   CHECK(winding_number(square(0, 0, 2, false), Vec2{1, 1}) == -1);

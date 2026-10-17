@@ -48,8 +48,8 @@ struct Arrangement {
     std::span<const std::vector<NurbsCurve2>> paths);
 
 /// Winding number of closed curves around p (signed crossings along a ray, retried in other
-/// directions when one grazes a vertex or a tangent); nullopt if every direction is
-/// ambiguous, which happens only for p on a curve.
+/// directions when one grazes a vertex or a tangent); nullopt for p on a curve (within 1e-9
+/// of the curves' size), where it is undefined.
 [[nodiscard]] std::optional<int> winding_number(std::span<const NurbsCurve2> curves, Vec2 p);
 
 enum class FillRule { kNonZero, kEvenOdd };

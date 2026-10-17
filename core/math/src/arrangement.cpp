@@ -275,7 +275,12 @@ std::optional<int> winding_number(std::span<const NurbsCurve2> curves, Vec2 p) {
       hi = {std::max(hi.x, q.x), std::max(hi.y, q.y)};
     }
   }
-  return winding_at(curves, p, 1e-9 * std::max(length(hi - lo), 1e-300));
+  const double tol = 1e-9 * std::max(length(hi - lo), 1e-300);
+  // On a curve the winding number is undefined; rays from there would disagree.
+  for (const NurbsCurve2& c : curves) {
+    if (closest_point(c, p).distance <= tol) return std::nullopt;
+  }
+  return winding_at(curves, p, tol);
 }
 
 std::expected<std::vector<Region>, std::string> regions(
