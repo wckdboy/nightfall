@@ -8,14 +8,17 @@
 #include <catch2/generators/catch_generators_random.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <numbers>
 #include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
 
 #include "nf/math/constructors.hpp"
+#include "nf/math/fit.hpp"
 #include "nf/math/query.hpp"
 
 using namespace nf::math;
@@ -123,6 +126,31 @@ TEST_CASE("closest point special cases", "[query]") {
   const auto e = closest_point(line, Vec2{3, 1});
   CHECK(e.u == 1.0);
   CHECK(e.point == Vec2{1, 0});
+}
+
+TEST_CASE("closest point where the curve starts slowly", "[query]") {
+  // An involute fitted with its own parameter starts almost at rest (a cusp at t = 0). Just
+  // off it there, plain Newton headed for a maximum and stalled 1000× too far away; the
+  // safeguarded one finds the foot of the perpendicular.
+  std::vector<Vec2> pts;
+  std::vector<double> us;
+  const double end = 3 * std::numbers::pi;
+  const auto f = [](double t) {
+    return Vec2{std::cos(t) + t * std::sin(t), std::sin(t) - t * std::cos(t)};
+  };
+  for (int i = 0; i <= 256; ++i) {
+    pts.push_back(f(end * i / 256));
+    us.push_back(i / 256.0);
+  }
+  const auto fit = approximate<Vec2>(pts, 5e-5, 3, us);
+  REQUIRE(fit.has_value());
+  for (const double t : {0.03, 0.0942, 0.15, 0.3}) {
+    const Vec2 q = f(t);
+    double brute = INFINITY;
+    for (int i = 0; i <= 100000; ++i)
+      brute = std::min(brute, length(fit->curve.point(0.05 * i / 100000) - q));
+    CHECK(closest_point(fit->curve, q).distance <= brute + 1e-12);
+  }
 }
 
 TEST_CASE("queries near the ends and at extreme scales", "[query]") {
