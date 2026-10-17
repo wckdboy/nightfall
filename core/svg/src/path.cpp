@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <exception>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <utility>
 
 #include <xlocale.h>
@@ -44,32 +46,48 @@ NurbsCurve2 with_ends(const NurbsCurve2& c, Vec2 a, Vec2 b) {
 // SVG 2 §9.5.1 / implementation notes B.2.4: endpoint to centre parameterisation.
 NurbsCurve2 arc(Vec2 p0, double rx, double ry, double rotation_deg, bool large, bool sweep,
                 Vec2 p1) {
-  const double phi = rotation_deg * std::numbers::pi / 180.0;
+  // Reduced first: exact, and keeps a huge finite rotation from overflowing.
+  const double phi = std::fmod(rotation_deg, 360.0) * std::numbers::pi / 180.0;
   const double c = std::cos(phi), s = std::sin(phi);
   const Vec2 h = (p0 - p1) / 2.0;
   const Vec2 q{c * h.x + s * h.y, -s * h.x + c * h.y};  // (x1', y1')
-  rx = std::abs(rx);
-  ry = std::abs(ry);
-  const double lambda = q.x * q.x / (rx * rx) + q.y * q.y / (ry * ry);
+  // Work in units of the largest length involved, so no square overflows or underflows.
+  const double scale = std::max({std::abs(rx), std::abs(ry), std::abs(q.x), std::abs(q.y)});
+  double a = std::abs(rx) / scale, b = std::abs(ry) / scale;
+  const Vec2 qs = q / scale;
+  const double lambda = qs.x * qs.x / (a * a) + qs.y * qs.y / (b * b);
   if (lambda > 1.0) {
-    rx *= std::sqrt(lambda);
-    ry *= std::sqrt(lambda);
+    a *= std::sqrt(lambda);
+    b *= std::sqrt(lambda);
   }
-  const double num = rx * rx * ry * ry - rx * rx * q.y * q.y - ry * ry * q.x * q.x;
-  const double den = rx * rx * q.y * q.y + ry * ry * q.x * q.x;
-  const double k = std::sqrt(std::max(0.0, num / den)) * (large == sweep ? -1.0 : 1.0);
-  const Vec2 cq{k * rx * q.y / ry, -k * ry * q.x / rx};  // (cx', cy')
+  const double num = a * a * b * b - a * a * qs.y * qs.y - b * b * qs.x * qs.x;
+  const double den = a * a * qs.y * qs.y + b * b * qs.x * qs.x;
+  const double ratio = num / den;
+  if (!std::isfinite(ratio)) throw std::range_error("arc out of range");
+  const double k = std::sqrt(std::max(0.0, ratio)) * (large == sweep ? -1.0 : 1.0);
+  const Vec2 cs{k * a * qs.y / b, -k * b * qs.x / a};  // (cx', cy') / scale
+  const Vec2 cq = cs * scale;
   const Vec2 mid = (p0 + p1) / 2.0;
   const Vec2 center{c * cq.x - s * cq.y + mid.x, s * cq.x + c * cq.y + mid.y};
-  const Vec2 u{(q.x - cq.x) / rx, (q.y - cq.y) / ry};
-  const Vec2 v{(-q.x - cq.x) / rx, (-q.y - cq.y) / ry};
+  const Vec2 u{(qs.x - cs.x) / a, (qs.y - cs.y) / b};
+  const Vec2 v{(-qs.x - cs.x) / a, (-qs.y - cs.y) / b};
   const double theta = angle({1.0, 0.0}, u);
   double delta = angle(u, v);
   if (!sweep && delta > 0.0) delta -= 2.0 * std::numbers::pi;
   if (sweep && delta < 0.0) delta += 2.0 * std::numbers::pi;
+  rx = a * scale;
+  ry = b * scale;
   const NurbsCurve2 curve =
       delta > 0.0 ? math::make_arc(center, rx, ry, phi, theta, theta + delta)
                   : math::reverse(math::make_arc(center, rx, ry, phi, theta + delta, theta));
+  // The computed arc must reach both endpoints up to rounding before they are snapped;
+  // anything else means the numbers were out of range.
+  const double tol =
+      1e-9 * std::max({rx, ry, std::abs(p0.x), std::abs(p0.y), std::abs(p1.x), std::abs(p1.y)});
+  const auto off = [](Vec2 x, Vec2 y) { return std::hypot(x.x - y.x, x.y - y.y); };
+  if (!(off(curve.points().front(), p0) <= tol && off(curve.points().back(), p1) <= tol)) {
+    throw std::range_error("arc out of range");
+  }
   return with_ends(curve, p0, p1);
 }
 
@@ -80,16 +98,32 @@ class Parser {
   std::expected<std::vector<Subpath>, ParseError> run() {
     skip_space();
     while (pos_ < d_.size() && !error_) step();
+    if (!error_ && comma_pending_) fail_at(comma_at_, "comma without a following argument");
     if (error_) return std::unexpected(std::move(*error_));
     flush();
     return std::move(out_);
   }
 
  private:
-  // One command with one set of arguments (implicit repeats come back here).
+  // A command; geometry that overflows (huge but finite numbers) is a parse error at the
+  // command, never an exception escaping the importer.
   void step() {
+    const std::size_t at = pos_;
+    try {
+      command();
+    } catch (const std::exception&) {
+      return fail_at(at, "coordinates out of range");
+    }
+    if (!error_ && !(std::isfinite(p_.x) && std::isfinite(p_.y))) {
+      fail_at(at, "coordinates out of range");
+    }
+  }
+
+  // One command with one set of arguments (implicit repeats come back here).
+  void command() {
     char cmd = d_[pos_];
     if (is_command(cmd)) {
+      if (comma_pending_) return fail_at(comma_at_, "comma without a following argument");
       ++pos_;
       skip_space();
     } else if (repeat_ != 0 && starts_number()) {
@@ -207,7 +241,8 @@ class Parser {
   void skip_separator() {
     skip_space();
     if (pos_ < d_.size() && d_[pos_] == ',') {
-      ++pos_;
+      comma_pending_ = true;  // only valid before another argument
+      comma_at_ = pos_++;
       skip_space();
     }
   }
@@ -248,6 +283,7 @@ class Parser {
       return fail("number out of range"), false;
     }
     pos_ = i;
+    comma_pending_ = false;
     skip_separator();
     return true;
   }
@@ -259,12 +295,14 @@ class Parser {
       return fail("expected an arc flag (0 or 1)"), false;
     }
     out = d_[pos_++] == '1';
+    comma_pending_ = false;
     skip_separator();
     return true;
   }
 
-  void fail(std::string message) {
-    if (!error_) error_ = ParseError{pos_, std::move(message)};
+  void fail(std::string message) { fail_at(pos_, std::move(message)); }
+  void fail_at(std::size_t offset, std::string message) {
+    if (!error_) error_ = ParseError{offset, std::move(message)};
   }
 
   std::string_view d_;
@@ -274,6 +312,8 @@ class Parser {
   Subpath current_;
   Vec2 p_{}, start_{}, last_control_{};
   bool started_ = false;
+  bool comma_pending_ = false;  // a comma was consumed and needs an argument after it
+  std::size_t comma_at_ = 0;
   char repeat_ = 0;    // command implied by bare numbers
   char previous_ = 0;  // previous command (upper case), for S/T reflection
 };

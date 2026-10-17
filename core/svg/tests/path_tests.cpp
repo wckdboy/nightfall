@@ -178,6 +178,27 @@ TEST_CASE("arc special cases", "[svg][path]") {
     REQUIRE(p[0].segments.size() == 1);
     CHECK(p[0].segments[0].points().back() == Vec2{10, 0});
   }
+  SECTION("a huge finite rotation is reduced, not overflowed") {
+    const auto p = parse("M0 0 A1 1 1e308 0 0 2 2");
+    REQUIRE(p[0].segments.size() == 1);
+    CHECK(p[0].segments[0].points().back() == Vec2{2, 2});
+  }
+  SECTION("huge but representable arcs are computed without overflow") {
+    const auto p = parse("M0 0 A1e308 1e308 0 0 1 1e308 0");
+    REQUIRE(p[0].segments.size() == 1);
+    const NurbsCurve2& c = p[0].segments[0];
+    // Sweep 1 from (0,0) to (1e308,0): the centre is below the chord (y-down: "positive
+    // angle" runs +X toward +Y), at (5e307, sqrt(3)/2 * 1e308) for the small arc.
+    const Vec2 center{5e307, std::sqrt(3.0) / 2.0 * 1e308};
+    for (int i = 0; i <= 16; ++i) {
+      const Vec2 q = c.point(c.domain_start() + (c.domain_end() - c.domain_start()) * i / 16.0);
+      const double r = std::hypot((q.x - center.x) / 1e308, (q.y - center.y) / 1e308);
+      CHECK(std::abs(r - 1.0) < 1e-12);
+    }
+  }
+  SECTION("commas between repeated arguments are fine") {
+    CHECK(parse("M0 0,1 1,2 0")[0].segments.size() == 2);
+  }
   SECTION("negative radii use their absolute value") {
     CHECK(dist(mid(parse("M0 0 A-5 -5 0 0 1 10 0")[0].segments[0]), {5, -5}) < 1e-12);
   }
@@ -198,14 +219,19 @@ TEST_CASE("malformed path data is an error with an offset", "[svg][path]") {
     REQUIRE_FALSE(r.has_value());
     return r.error();
   };
-  CHECK(err("L1 1").offset == 1);                  // must start with M
-  CHECK(err("M1").offset == 2);                    // missing y
-  CHECK(err("M1 1 X2 2").offset == 5);             // unknown command
-  CHECK(err("M1 1 Z 2 2").offset == 7);            // numbers after Z don't repeat it
-  CHECK(err("M0 0 A1 1 0 2 0 1 1").offset == 12);  // flag must be 0 or 1
-  CHECK(err("M0 0 L1e 2").offset == 7);            // exponent without digits
-  CHECK(err("M0 0 L. 2").offset == 6);             // a lone dot
-  CHECK(err("M0 0 L1e999 2").offset == 6);         // out of range
-  CHECK(err("M0,,0").offset == 3);                 // double comma
+  CHECK(err("L1 1").offset == 1);                               // must start with M
+  CHECK(err("M1").offset == 2);                                 // missing y
+  CHECK(err("M1 1 X2 2").offset == 5);                          // unknown command
+  CHECK(err("M1 1 Z 2 2").offset == 7);                         // numbers after Z don't repeat it
+  CHECK(err("M0 0 A1 1 0 2 0 1 1").offset == 12);               // flag must be 0 or 1
+  CHECK(err("M0 0 L1e 2").offset == 7);                         // exponent without digits
+  CHECK(err("M0 0 L. 2").offset == 6);                          // a lone dot
+  CHECK(err("M0 0 L1e999 2").offset == 6);                      // out of range
+  CHECK(err("M0,,0").offset == 3);                              // double comma
+  CHECK(err("M0 0,").offset == 4);                              // trailing comma
+  CHECK(err("M0 0,L1 1").offset == 4);                          // comma before a command
+  CHECK(err("M1e308 0 l1e308 0").offset == 9);                  // overflows to infinity
+  CHECK(err("M1e308 0 m1e308 0").offset == 9);                  // even with nothing drawn
+  CHECK(err("M0 0 A1e308 1e308 0 1 1 1.5e308 0").offset == 5);  // control points overflow
   CHECK_FALSE(err("M1 1 X2 2").message.empty());
 }
