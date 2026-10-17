@@ -43,6 +43,49 @@ double extent(const NurbsCurve2& c) {
   return length(hi - lo);
 }
 
+// Half-edges leaving a vertex along (nearly) the same tangent, as where curves touch, are
+// ordered by where they actually go: the direction of the chord to a point a short, common
+// arc length along each, measured from the run's first tangent (more clockwise first, as
+// angles increase counter-clockwise). Tangencies are solved only to ~1e-8, so tangents that
+// should coincide differ by about that much; ties are taken within 1e-6 rad, where the
+// chords' curvature term dominates. Runs may wrap around ±π.
+void order_tangent_ties(std::vector<int>& list, const std::vector<Arrangement::HalfEdge>& he,
+                        const std::vector<double>& angle) {
+  const std::size_t n = list.size();
+  if (n < 2) return;
+  const auto same = [&](int a, int b) {
+    const double d = std::abs(angle[at(a)] - angle[at(b)]);
+    return std::min(d, 2 * std::numbers::pi - d) <= 1e-6;
+  };
+  // Start at a gap between different angles, so no run wraps around the list's end.
+  std::size_t start = 0;
+  while (start < n && same(list[(start + n - 1) % n], list[start])) ++start;
+  if (start == n) start = 0;
+  std::rotate(list.begin(), list.begin() + static_cast<std::ptrdiff_t>(start), list.end());
+  for (std::size_t i = 0; i < n;) {
+    std::size_t j = i + 1;
+    while (j < n && same(list[i], list[j])) ++j;
+    if (j - i > 1) {
+      double arc = INFINITY;  // a common arc length, short for every curve in the run
+      for (std::size_t k = i; k < j; ++k) arc = std::min(arc, 1e-4 * extent(he[at(list[k])].curve));
+      const Vec2 ref = leaving(he[at(list[i])].curve);
+      const auto heading = [&](int h) {
+        const NurbsCurve2& c = he[at(h)].curve;
+        std::array<Vec2, 2> d{};
+        c.derivatives(c.domain_start(), 1, d);
+        const double du =
+            length(d[1]) > 0 ? arc / length(d[1]) : 1e-6 * (c.domain_end() - c.domain_start());
+        const Vec2 chord = c.point(std::min(c.domain_start() + du, c.domain_end())) - d[0];
+        return std::atan2(cross(ref, chord), dot(ref, chord));
+      };
+      std::sort(list.begin() + static_cast<std::ptrdiff_t>(i),
+                list.begin() + static_cast<std::ptrdiff_t>(j),
+                [&](int a, int b) { return heading(a) < heading(b); });
+    }
+    i = j;
+  }
+}
+
 // Shoelace over a fine polyline: twice the signed area swept with the origin.
 double swept_area(const NurbsCurve2& c, double tol) {
   const auto pl = polyline(c, tol);
@@ -162,7 +205,10 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
     angle[h] = std::atan2(t.y, t.x);
     around[at(out.half_edges[h].origin)].push_back(static_cast<int>(h));
   }
-  for (auto& list : around) std::ranges::sort(list, {}, [&](int h) { return angle[at(h)]; });
+  for (auto& list : around) {
+    std::ranges::sort(list, {}, [&](int h) { return angle[at(h)]; });
+    order_tangent_ties(list, out.half_edges, angle);
+  }
   for (auto& he : out.half_edges) {
     const auto& list = around[at(he.target)];
     const auto k = std::ranges::find(list, he.twin) - list.begin();
@@ -183,22 +229,24 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
     out.faces.push_back(std::move(face));
   }
 
-  // 6. Winding numbers at a point inside each bounded face: off the middle of its longest
-  //    edge, halfway to the nearest curve on its left.
+  // 6. Winding numbers at a point on the left of each cycle: off its longest edge, halfway
+  //    to the nearest curve there. Every cycle gets one, however small: the outer cycle of a
+  //    part nested inside another face borders that face, so it shares its winding number;
+  //    with no curve on its left, a cycle borders the unbounded face (winding 0).
   for (Arrangement::Face& face : out.faces) {
-    if (!(face.area > 1e-12 * size * size)) continue;
     int longest = face.half_edges.front();
     for (const int h : face.half_edges) {
-      if (length(end_of(out.half_edges[at(h)].curve) - start_of(out.half_edges[at(h)].curve)) >
-          length(end_of(out.half_edges[at(longest)].curve) -
-                 start_of(out.half_edges[at(longest)].curve))) {
+      if (extent(out.half_edges[at(h)].curve) > extent(out.half_edges[at(longest)].curve))
         longest = h;
-      }
     }
     const NurbsCurve2& c = out.half_edges[at(longest)].curve;
-    const double um = (c.domain_start() + c.domain_end()) / 2;
+    // A parameter where the curve is not stationary (a cubic can stop at its midpoint).
     std::array<Vec2, 2> d{};
-    c.derivatives(um, 1, d);
+    for (const double f : {0.5, 0.37, 0.63, 0.21, 0.79}) {
+      c.derivatives(c.domain_start() + f * (c.domain_end() - c.domain_start()), 1, d);
+      if (length(d[1]) > 0) break;
+    }
+    if (!(length(d[1]) > 0)) return std::unexpected("an edge has no direction at any sample");
     const Vec2 n = Vec2{-d[1].y, d[1].x} / length(d[1]);
     double nearest = INFINITY;
     for (std::size_t h = 0; h < out.half_edges.size(); h += 2) {
@@ -207,7 +255,10 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
         if (t > tol) nearest = std::min(nearest, t);
       }
     }
-    if (!std::isfinite(nearest)) return std::unexpected("could not place a point inside a face");
+    if (!std::isfinite(nearest)) {
+      if (face.area > 0) return std::unexpected("could not place a point inside a face");
+      continue;  // the unbounded face
+    }
     const auto w = winding_at(input, d[0] + n * (nearest / 2), tol);
     if (!w) return std::unexpected("winding number is ambiguous in every direction tried");
     face.winding = *w;

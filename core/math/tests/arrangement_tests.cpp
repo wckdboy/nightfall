@@ -120,6 +120,39 @@ TEST_CASE("open paths are closed; touching and separate parts", "[arrangement]")
   check_euler(parts);
 }
 
+TEST_CASE("tangential contacts keep their faces apart", "[arrangement]") {
+  // Circles touching at (1, 0), from outside and from inside (review finding).
+  const auto outside = arranged({{make_circle(Vec2{0, 0}, 1.0)}, {make_circle(Vec2{2, 0}, 1.0)}});
+  CHECK(windings(outside) == std::vector<int>{1, 1});
+  check_euler(outside);
+  const auto inside = arranged({{make_circle(Vec2{0, 0}, 1.0)}, {make_circle(Vec2{0.5, 0}, 0.5)}});
+  CHECK(windings(inside) == std::vector<int>{1, 2});
+  check_euler(inside);
+  // A circle touching a square's side.
+  CHECK(windings(arranged({square(-1, -3, 2), {make_circle(Vec2{0, 0}, 1.0)}})) ==
+        std::vector<int>{1, 1});
+}
+
+TEST_CASE("small faces and stationary edges", "[arrangement]") {
+  // A face far smaller than the drawing still gets its winding (review finding).
+  const auto tiny = arranged({square(0, 0, 10), square(20, 20, 1e-7)});
+  int small_faces = 0;
+  for (const auto& f : tiny.faces) {
+    if (f.area > 0 && f.area < 1e-12) {
+      ++small_faces;
+      CHECK(f.winding == 1);
+    }
+  }
+  CHECK(small_faces == 1);
+  // A side whose derivative vanishes at its midpoint (review finding).
+  const auto stalled = make_bezier(std::vector<Vec2>{{0, 0}, {1, 0}, {0, 0}, {1, 0}});
+  const auto r = arrange(std::vector<std::vector<NurbsCurve2>>{
+      {stalled, make_line(Vec2{1, 0}, Vec2{1, 1}), make_line(Vec2{1, 1}, Vec2{0, 1}),
+       make_line(Vec2{0, 1}, Vec2{0, 0})}});
+  REQUIRE(r.has_value());
+  CHECK(windings(*r) == std::vector<int>{1});
+}
+
 TEST_CASE("coincident edges are reported, not mis-arranged", "[arrangement]") {
   const auto r = arrange(std::vector<std::vector<NurbsCurve2>>{square(0, 0, 1), square(1, 0, 1)});
   CHECK_FALSE(r.has_value());
