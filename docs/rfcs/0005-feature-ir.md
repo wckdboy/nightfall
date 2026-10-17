@@ -92,9 +92,11 @@ unknown key is a validation error, so typos do not silently do nothing.
 
 ### Ids and names
 
-- Ids (features, params, references, bodies, sketch entities) match `[a-z_][a-z0-9_]{0,63}`,
-  are unique within their namespace, and are never reused after deletion within a document's
-  life. Parameter names are their ids. An entity of a sketch is addressed `sketch_id/entity_id`.
+- Ids (features, params, references, bodies, sketch entities) match `[a-z_][a-z0-9_]{0,63}`
+  and are unique within their namespace. Parameter names are their ids. The document keeps no
+  record of deleted ids, so an id may be reused after a deletion is saved; nothing outside the
+  document (caches, agent transcripts, undo across sessions) may treat an id alone as a
+  permanent identity. Caches key on hashes, which change when a reused id means something new. An entity of a sketch is addressed `sketch_id/entity_id`.
 - The app generates short ids (`extrude_3`); agents and scripts may choose meaningful ones
   (`mounting_holes`). `name` is a free display label, never used for references.
 - Renaming an id is an explicit IR operation that rewrites every use. It is never a side
@@ -113,6 +115,10 @@ expression. The expression language is RFC 0004's (numbers, `+ − * / ^`, paren
   naming the field. A bare number in a length or angle field takes the document unit; in an
   expression, a bare number is dimensionless (`width / 2`).
 
+A parameter has no declared field type: its dimension is that of its value. A JSON number
+is dimensionless (`"count": 6`); a length or angle needs a unit (`"40 mm"`, `"15 deg"`) or an
+expression whose dimension follows from its parts (`"width / 2"`). The document's `units`
+never apply to parameters, so a parameter's dimension never depends on where it is used.
 Parameters may refer to other parameters; the dependency graph must be acyclic (a cycle is an
 error that lists it). `min` and `max` are optional values of the same dimension; a value out
 of bounds is an error on the parameter, not a clamp. Expressions evaluate to doubles once per
