@@ -171,33 +171,43 @@ class Parser {
     return Value(x);
   }
 
-  // One UTF-8 sequence starting at i_, validated (no overlongs, surrogates or > U+10FFFF).
-  bool utf8(std::string& out) {
+  // The code point of the UTF-8 sequence at i_, validated (no overlongs, surrogates or
+  // > U+10FFFF), and advances past it.
+  std::optional<unsigned> utf8() {
     const auto byte = [&](std::size_t k) { return static_cast<unsigned char>(s_[i_ + k]); };
     const unsigned char b0 = byte(0);
-    int len = 0;
+    std::size_t len = 0;
     unsigned lo = 0x80, hi = 0xbf;  // allowed range of the second byte
+    unsigned cp = 0;
     if (b0 >= 0xc2 && b0 <= 0xdf) {
       len = 2;
+      cp = b0 & 0x1fu;
     } else if (b0 >= 0xe0 && b0 <= 0xef) {
       len = 3;
+      cp = b0 & 0x0fu;
       if (b0 == 0xe0) lo = 0xa0;
       if (b0 == 0xed) hi = 0x9f;  // excludes the surrogates
     } else if (b0 >= 0xf0 && b0 <= 0xf4) {
       len = 4;
+      cp = b0 & 0x07u;
       if (b0 == 0xf0) lo = 0x90;
       if (b0 == 0xf4) hi = 0x8f;
     } else {
-      return false;
+      return std::nullopt;
     }
-    if (i_ + static_cast<std::size_t>(len) > s_.size()) return false;
-    if (byte(1) < lo || byte(1) > hi) return false;
-    for (std::size_t k = 2; k < static_cast<std::size_t>(len); ++k) {
-      if (byte(k) < 0x80 || byte(k) > 0xbf) return false;
+    if (i_ + len > s_.size()) return std::nullopt;
+    if (byte(1) < lo || byte(1) > hi) return std::nullopt;
+    for (std::size_t k = 1; k < len; ++k) {
+      if (byte(k) < 0x80 || byte(k) > 0xbf) return std::nullopt;
+      cp = (cp << 6) | (byte(k) & 0x3fu);
     }
-    out.append(s_.substr(i_, static_cast<std::size_t>(len)));
-    i_ += static_cast<std::size_t>(len);
-    return true;
+    i_ += len;
+    return cp;
+  }
+
+  // I-JSON (RFC 7493 §2.1) excludes the noncharacters U+FDD0…U+FDEF and U+xxFFFE/U+xxFFFF.
+  static bool noncharacter(unsigned cp) {
+    return (cp >= 0xfdd0 && cp <= 0xfdef) || (cp & 0xfffe) == 0xfffe;
   }
 
   std::optional<unsigned> hex4() {
@@ -240,7 +250,11 @@ class Parser {
       }
       if (c < 0x20) return fail("control character in a string");
       if (c >= 0x80) {
-        if (!utf8(out)) return fail("invalid UTF-8");
+        const std::size_t at = i_;
+        const auto cp = utf8();
+        if (!cp) return fail_at(at, "invalid UTF-8");
+        if (noncharacter(*cp)) return fail_at(at, "noncharacter in a string");
+        put(out, *cp);
         continue;
       }
       if (c != '\\') {
@@ -284,6 +298,7 @@ class Parser {
             if (!lo || *lo < 0xdc00 || *lo > 0xdfff) return fail_at(at, "lone surrogate");
             cp = 0x10000 + ((cp - 0xd800) << 10) + (*lo - 0xdc00);
           }
+          if (noncharacter(cp)) return fail_at(at, "noncharacter in a string");
           put(out, cp);
           break;
         }

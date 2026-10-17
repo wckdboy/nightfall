@@ -89,7 +89,14 @@ TEST_CASE("JSON: malformed input is an error with an offset", "[ir][json]") {
        {"\"\x80\"", "\"\xc0\xaf\"", "\"\xed\xa0\x80\"", "\"\xf4\x90\x80\x80\"", "\"\xe2\x82\""}) {
     fails(bad);
   }
-  fails("\xef\xbb\xbf{}");  // a byte order mark
+  // I-JSON: no noncharacters, escaped or raw.
+  for (const char* bad : {"\"\\ufffe\"", "\"\\uFDD0\"", "\"\\ud83f\\udfff\"", "\"\xef\xbf\xbf\"",
+                          "\"\xef\xb7\x90\"", "\"\xf4\x8f\xbf\xbe\""}) {
+    CHECK(fails(bad).message.find("noncharacter") != std::string::npos);
+  }
+  CHECK(*ok("\"\\ufdcf\\ufdf0\\ufffd\"").if_string() ==
+        "\ufdcf\ufdf0\ufffd");  // neighbours are fine
+  fails("\xef\xbb\xbf{}");      // a byte order mark
   CHECK(fails("{\"a\":1,\"b\":2,\"a\":3}").message.find("duplicate") != std::string::npos);
   fails("{1:2}");
   fails("{\"a\" 1}");
@@ -107,8 +114,9 @@ TEST_CASE("JSON: values compare by content", "[ir][json]") {
   CHECK_FALSE(ok("{\"a\":1,\"b\":2}") == ok("{\"b\":2,\"a\":1}"));  // order matters
   CHECK(Value(Array{Value(1.0), Value("a"), Value(true), Value()}) == ok("[1,\"a\",true,null]"));
   CHECK(Value(Object{{"k", Value(2.0)}}) == ok("{\"k\":2}"));
-  CHECK_FALSE(Value(std::numeric_limits<double>::quiet_NaN()) ==
-              Value(std::numeric_limits<double>::quiet_NaN()));
+  // Values hold only finite numbers, so everything built can be written as JSON.
+  CHECK_THROWS_AS(Value(std::numeric_limits<double>::quiet_NaN()), std::domain_error);
+  CHECK_THROWS_AS(Value(-std::numeric_limits<double>::infinity()), std::domain_error);
 }
 
 TEST_CASE("JSON: mutated input never crashes", "[ir][json]") {

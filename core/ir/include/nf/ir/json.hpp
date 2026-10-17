@@ -7,10 +7,12 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -31,7 +33,7 @@ class Value {
   Value();  // null
   Value(std::nullptr_t);
   Value(bool b);
-  Value(double x);
+  Value(double x);  // throws std::domain_error unless finite: JSON has no NaN or infinity
   Value(std::string s);
   Value(const char* s);
   Value(Array a);
@@ -49,7 +51,7 @@ class Value {
   /// The member's value, if this is an object with that key.
   [[nodiscard]] const Value* find(std::string_view key) const;
 
-  /// Content equality (offsets are ignored; NaN, which JSON cannot hold, is unequal).
+  /// Content equality (offsets are ignored).
   friend bool operator==(const Value& a, const Value& b);
 
   std::size_t offset = 0;  // byte offset in the parsed text; 0 for built values
@@ -67,7 +69,9 @@ struct Member {
 inline Value::Value() = default;
 inline Value::Value(std::nullptr_t) {}
 inline Value::Value(bool b) : data_(b) {}
-inline Value::Value(double x) : data_(x) {}
+inline Value::Value(double x) : data_(x) {
+  if (!std::isfinite(x)) throw std::domain_error("JSON numbers are finite");
+}
 inline Value::Value(std::string s) : data_(std::move(s)) {}
 inline Value::Value(const char* s) : data_(std::string(s)) {}
 inline Value::Value(Array a) : data_(std::move(a)) {}
