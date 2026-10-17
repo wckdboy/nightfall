@@ -19,7 +19,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | Issue | Item | Scope | Status |
 | --- | --- | --- | --- |
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
-| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Next |
+| [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | In progress: JSON I/O and document envelope |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir |  |
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel |  |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
@@ -35,3 +35,8 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 - 2026-10-17 — RFC 0005 accepted (review period waived by the maintainer): one JSON document,
   sketches inside the feature history, selectors instead of indices, content hashes of
   evaluated inputs, a new kernel-free module `core/ir`.
+- 2026-10-17 — #90 document envelope: typed parameters, references and feature history;
+  version checks, unique IDs, rollback validation, bounded load/save and preserved extensions.
+  This is structural validation only. The normative JSON Schema, per-feature inputs,
+  selectors, body/entity references and schema corpus remain in #90; expressions, units
+  and parameter dependency evaluation remain in #91. No Phase 2 gate is claimed yet.

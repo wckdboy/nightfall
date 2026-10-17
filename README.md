@@ -6,7 +6,8 @@ Nightfall pairs fluid direct modeling with a full parametric history, on exact N
 geometry. Every part is a program: defined by math, code and SVG, editable by hand or
 by any AI agent.
 
-> **Status:** Phase 0 — foundations and kernel bake-off. Nothing here is usable yet.
+> **Status:** Phase 2 — parametric document foundations. The NURBS math and SVG phase is
+> complete; the native modeling app is not usable yet. See the [phase tracker](docs/phases/phase-2.md).
 
 ## Principles
 
