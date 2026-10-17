@@ -68,26 +68,46 @@ std::optional<std::vector<double>> number_list(std::string_view s) {
   }
 }
 
-// A length with an optional absolute unit, in CSS pixels; nullopt for relative units (%,
-// em, ex) or malformed text.
-std::optional<double> length_px(std::string_view s) {
+// A length with an optional absolute unit, converted by `per_unit` (a table of unit → factor);
+// nullopt for relative units (%, em, ex) or malformed text.
+std::optional<double> length_in(
+    std::string_view s, const std::array<std::pair<std::string_view, double>, 8>& per_unit) {
   while (!s.empty() && is_sep(s.front())) s.remove_prefix(1);
   while (!s.empty() && is_sep(s.back())) s.remove_suffix(1);
   const auto r = detail::scan_number(s, 0);
   if (r.error != detail::NumberError::kNone) return std::nullopt;
   const std::string_view unit = s.substr(r.end);
-  constexpr std::array<std::pair<std::string_view, double>, 8> kUnits{{{"", 1.0},
-                                                                       {"px", 1.0},
-                                                                       {"mm", 96.0 / 25.4},
-                                                                       {"cm", 96.0 / 2.54},
-                                                                       {"in", 96.0},
-                                                                       {"pt", 96.0 / 72.0},
-                                                                       {"pc", 16.0},
-                                                                       {"Q", 96.0 / 101.6}}};
-  for (const auto& [name, px] : kUnits) {
-    if (unit == name) return r.value * px;
+  for (const auto& [name, factor] : per_unit) {
+    if (unit == name) return r.value * factor;
   }
   return std::nullopt;
+}
+
+// In CSS pixels, for lengths in user space.
+std::optional<double> length_px(std::string_view s) {
+  static constexpr std::array<std::pair<std::string_view, double>, 8> kPx{{{"", 1.0},
+                                                                           {"px", 1.0},
+                                                                           {"mm", 96.0 / 25.4},
+                                                                           {"cm", 96.0 / 2.54},
+                                                                           {"in", 96.0},
+                                                                           {"pt", 96.0 / 72.0},
+                                                                           {"pc", 16.0},
+                                                                           {"Q", 96.0 / 101.6}}};
+  return length_in(s, kPx);
+}
+
+// In millimetres, for the root's size: directly, so "W mm" is exactly W (a detour through
+// pixels, ×96/25.4 then ×25.4/96, is not exact in floating point).
+std::optional<double> length_mm(std::string_view s) {
+  static constexpr std::array<std::pair<std::string_view, double>, 8> kMm{{{"", 25.4 / 96.0},
+                                                                           {"px", 25.4 / 96.0},
+                                                                           {"mm", 1.0},
+                                                                           {"cm", 10.0},
+                                                                           {"in", 25.4},
+                                                                           {"pt", 25.4 / 72.0},
+                                                                           {"pc", 25.4 / 6.0},
+                                                                           {"Q", 0.25}}};
+  return length_in(s, kMm);
 }
 
 class Reader {
@@ -111,9 +131,9 @@ class Reader {
     const auto size = [&](const char* name) -> std::optional<double> {
       const std::string* v = root.attribute(name);
       if (v == nullptr) return std::nullopt;
-      const auto px = length_px(*v);
-      if (!px || !(*px > 0)) warn(std::string("root ") + name + " \"" + *v + "\" ignored");
-      return px && *px > 0 ? std::optional(*px * kMmPerPx) : std::nullopt;
+      const auto mm = length_mm(*v);
+      if (!mm || !(*mm > 0)) warn(std::string("root ") + name + " \"" + *v + "\" ignored");
+      return mm && *mm > 0 ? mm : std::nullopt;
     };
     const std::optional<double> w = size("width"), h = size("height");
     std::optional<std::vector<double>> vb;
@@ -206,9 +226,15 @@ class Reader {
       rx = std::clamp(rx, 0.0, w / 2);
       ry = std::clamp(ry, 0.0, h / 2);
       if (rx > 0 && ry > 0) {
-        d = "M" + n(x + rx) + " " + n(y) + "H" + n(x + w - rx) + arc(rx, ry, x + w, y + ry) + "V" +
-            n(y + h - ry) + arc(rx, ry, x + w - rx, y + h) + "H" + n(x + rx) +
-            arc(rx, ry, x, y + h - ry) + "V" + n(y + ry) + arc(rx, ry, x + rx, y) + "Z";
+        // A radius clamped to half the side leaves no straight run there; x + w − rx and
+        // x + rx would differ by rounding and make a zero-length side.
+        const bool hs = rx < w / 2, vs = ry < h / 2;
+        const std::string top = hs ? "H" + n(x + w - rx) : "",
+                          right = vs ? "V" + n(y + h - ry) : "";
+        const std::string bottom = hs ? "H" + n(x + rx) : "", left = vs ? "V" + n(y + ry) : "";
+        d = "M" + n(x + rx) + " " + n(y) + top + arc(rx, ry, x + w, y + ry) + right +
+            arc(rx, ry, x + w - rx, y + h) + bottom + arc(rx, ry, x, y + h - ry) + left +
+            arc(rx, ry, x + rx, y) + "Z";
       } else {
         d = "M" + n(x) + " " + n(y) + "H" + n(x + w) + "V" + n(y + h) + "H" + n(x) + "Z";
       }
@@ -240,15 +266,20 @@ class Reader {
     auto parsed = parse_path(d);
     if (!parsed) return fail(e, std::string(kind) + ": " + parsed.error().message);
     for (Subpath& sp : *parsed) {
-      for (NurbsCurve2& c : sp.segments) {
+      std::vector<NurbsCurve2> mapped;
+      for (const NurbsCurve2& c : sp.segments) {
         std::vector<Vec2> points;
         for (const Vec2 p : c.points()) points.push_back(m.apply(p));
-        c = NurbsCurve2::make(c.knots(), std::move(points),
-                              c.rational()
-                                  ? std::vector<double>(c.weights().begin(), c.weights().end())
-                                  : std::vector<double>{})
-                .value();
+        // A segment the transform collapses to a point draws nothing, as in parse_path.
+        if (std::ranges::all_of(points, [&](Vec2 q) { return q == points.front(); })) continue;
+        mapped.push_back(NurbsCurve2::make(c.knots(), std::move(points),
+                                           c.rational() ? std::vector<double>(c.weights().begin(),
+                                                                              c.weights().end())
+                                                        : std::vector<double>{})
+                             .value());
       }
+      sp.segments = std::move(mapped);
+      if (sp.segments.empty()) continue;
       drawing_.paths.push_back(std::move(sp));
     }
   }
