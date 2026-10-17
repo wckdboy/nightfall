@@ -6,7 +6,7 @@ Nightfall pairs fluid direct modeling with a full parametric history, on exact N
 geometry. Every part is a program: defined by math, code and SVG, editable by hand or
 by any AI agent.
 
-> **Status:** Phase 2 — parametric documents and unit-aware expressions. The NURBS math and SVG phase is
+> **Status:** Phase 2 — parametric documents, unit-aware expressions and incremental solid rebuilds. The NURBS math and SVG phase is
 > complete; the native modeling app is not usable yet. See the [phase tracker](docs/phases/phase-2.md).
 
 ## Principles
@@ -61,6 +61,28 @@ angles to radians. Parameter numbers are dimensionless; bare numbers in feature 
 the document units. Errors include the field's JSON Pointer and expression offset when available.
 See [the expression API](core/ir/include/nf/ir/expression.hpp) and
 [parameter evaluation](core/ir/include/nf/ir/parameters.hpp).
+
+The service's [document evaluator](services/kernel/src/evaluator.hpp) executes sketches,
+new B-rep extrusions and rigid transforms using dynamically linked OCCT 7.9.3. It supports
+rectangle, circle, polygon and closed-line profiles, holes, interior-point region selection,
+datum/explicit planes and symmetric extrusion. Content hashes and a bounded cache preserve
+unchanged geometry. Rollback, suppression and failures have explicit states; unsupported
+constraints, selectors and modeling operations report errors. This is the headless kernel
+path; native app integration and the remaining v1 operations are still in progress.
+
+To run the real 30-feature geometry benchmark (plain and bored plates):
+
+```sh
+third_party/build-occt.sh
+cmake --preset occt
+cmake --build --preset occt --target nf_evaluator_bench
+build/occt/services/kernel/nf_evaluator_bench
+```
+
+The benchmark reports median/p95/maximum for cold builds and unique parameter edits, with
+analytic geometry and execution-count checks on every sample. Timings include JSON parsing,
+document validation, feature evaluation and kernel validity checks; they exclude serialization,
+IPC and tessellation. Cache byte counts are retained-size estimates, not process RSS.
 
 ## Contributing
 

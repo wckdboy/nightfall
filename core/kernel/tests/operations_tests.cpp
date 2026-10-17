@@ -60,6 +60,11 @@ TEST_CASE("production extrusion handles exact circular holes and separate island
   REQUIRE(moved);
   CHECK_THAT(moved->shape->measures().volume, WithinAbs(553 * std::numbers::pi, 1e-5));
   CHECK_THAT(moved->shape->measures().area, WithinAbs(396 * std::numbers::pi, 1e-5));
+  const auto actual = std::dynamic_pointer_cast<const detail::Snapshot>(moved->shape);
+  const auto measured = detail::snapshot(actual->geometry).value();
+  CHECK_THAT(measured->measures().volume, WithinAbs(moved->shape->measures().volume, 1e-5));
+  CHECK_THAT(measured->measures().area, WithinAbs(moved->shape->measures().area, 1e-5));
+  CHECK_THAT(measured->measures().centroid.x, WithinAbs(moved->shape->measures().centroid.x, 1e-7));
 }
 
 TEST_CASE("production extrusion respects plane placement and rejects invalid profiles") {
@@ -109,6 +114,13 @@ TEST_CASE("rigid transforms preserve source snapshots and trace every face and e
   CHECK_THAT(moved->shape->measures().volume, WithinAbs(6000, 1e-8));
   CHECK_THAT(moved->shape->measures().centroid.x, WithinAbs(-3, 1e-8));
   CHECK_THAT(moved->shape->measures().centroid.y, WithinAbs(5, 1e-8));
+  const auto actual = std::dynamic_pointer_cast<const detail::Snapshot>(moved->shape);
+  const auto measured = detail::snapshot(actual->geometry).value();
+  CHECK_THAT(measured->measures().centroid.x, WithinAbs(-3, 1e-8));
+  CHECK_THAT(measured->measures().centroid.y, WithinAbs(5, 1e-8));
+  // OCCT's exact-geometry bounds include its 1e-7 mm gap plus floating-point roundoff.
+  CHECK_THAT(measured->measures().minimum.x, WithinAbs(-13, 2e-7));
+  CHECK_THAT(measured->measures().maximum.x, WithinAbs(7, 2e-7));
   CHECK_THAT(source.shape->measures().centroid.x, WithinAbs(5, 1e-10));
   CHECK(moved->history.size() == 18);
   for (const auto& change : moved->history) {

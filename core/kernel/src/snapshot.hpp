@@ -3,6 +3,7 @@
 #pragma once
 
 #include <TopoDS_Shape.hxx>
+#include <gp_Trsf.hxx>
 
 #include <expected>
 #include <vector>
@@ -29,9 +30,16 @@ struct Subshape final : Entity {
   bool same_as(const Entity& other) const noexcept override;
 };
 
-/// Adopt newly built, exclusively owned geometry; callers must never mutate it afterward.
+/// Adopt newly built geometry (or an immutable snapshot with a new rigid location).
+/// Callers must never mutate shared geometry afterward.
 /// Checks all descendants belong to closed solids and computes finite measurements.
 std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry);
+/// Validate a direct rigid relocation of an already validated immutable snapshot. Unchanged
+/// topology/orientation plus a finite isometry preserve solid validity and mass properties.
+/// New geometry falls back to full validation; rotations recompute exact-geometry bounds.
+std::expected<SnapshotPtr, KernelError> rigid_snapshot(TopoDS_Shape geometry,
+                                                       const Snapshot& source,
+                                                       const gp_Trsf& transform);
 EntityPtr entity(SnapshotPtr owner, const TopoDS_Shape& geometry);
 std::vector<EntityPtr> entities(const SnapshotPtr& owner);
 }  // namespace nf::kernel::detail

@@ -78,6 +78,45 @@ std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry) {
   }
 }
 
+std::expected<SnapshotPtr, KernelError> rigid_snapshot(TopoDS_Shape geometry,
+                                                       const Snapshot& source,
+                                                       const gp_Trsf& transform) {
+  try {
+    if (!geometry.IsPartner(source.geometry) ||
+        geometry.Orientation() != source.geometry.Orientation())
+      return snapshot(std::move(geometry));
+    const auto expected = transform * source.geometry.Location().Transformation();
+    const auto actual = geometry.Location().Transformation();
+    for (int row = 1; row <= 3; ++row)
+      for (int column = 1; column <= 4; ++column)
+        if (!std::isfinite(actual.Value(row, column)) ||
+            actual.Value(row, column) != expected.Value(row, column))
+          return snapshot(std::move(geometry));
+    if (transform.IsNegative() || transform.ScaleFactor() != 1)
+      return snapshot(std::move(geometry));
+    auto result = std::make_shared<Snapshot>(source);
+    result->geometry = std::move(geometry);
+    auto& m = result->measured;
+    m.centroid = point(gp_Pnt(m.centroid.x, m.centroid.y, m.centroid.z).Transformed(transform));
+    if (transform.Form() == gp_Translation || transform.Form() == gp_Identity) {
+      const auto t = transform.TranslationPart();
+      m.minimum = m.minimum + math::Vec3{t.X(), t.Y(), t.Z()};
+      m.maximum = m.maximum + math::Vec3{t.X(), t.Y(), t.Z()};
+    } else {
+      Bnd_Box bounds;
+      BRepBndLib::AddOptimal(result->geometry, bounds, false, false);
+      if (bounds.IsVoid() || bounds.IsOpen())
+        return std::unexpected(KernelError{"kernel", "rigid output has no finite bounds"});
+      bounds.Get(m.minimum.x, m.minimum.y, m.minimum.z, m.maximum.x, m.maximum.y, m.maximum.z);
+    }
+    if (!finite(m.centroid) || !finite(m.minimum) || !finite(m.maximum))
+      return std::unexpected(KernelError{"kernel", "rigid output has nonfinite measurements"});
+    return result;
+  } catch (const Standard_Failure& e) {
+    return std::unexpected(KernelError{"kernel", e.GetMessageString()});
+  }
+}
+
 EntityKind Subshape::kind() const noexcept {
   return geometry.ShapeType() == TopAbs_FACE ? EntityKind::kFace : EntityKind::kEdge;
 }

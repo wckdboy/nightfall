@@ -59,7 +59,8 @@ class OcctKernel final : public IKernel {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
-             << ";solid-v1;copy=1;names=1;mass=" << detail::kMassRelativeAccuracy
+             << ";solid-v1;rigid=located-invariants-v1;names=1;mass="
+             << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
     identity_ = identity.str();
@@ -122,13 +123,18 @@ class OcctKernel final : public IKernel {
       const auto axis = math::normalized(t.axis_direction, tolerance_);
       if (!axis) fail("rotation needs a nonzero finite axis");
       gp_Trsf transform;
-      transform.SetRotation(gp_Ax1(point(t.axis_origin), direction(*axis)), t.angle);
+      if (t.angle != 0)
+        transform.SetRotation(gp_Ax1(point(t.axis_origin), direction(*axis)), t.angle);
       gp_Trsf translation;
       translation.SetTranslation(gp_Vec(t.translation.x, t.translation.y, t.translation.z));
       transform.PreMultiply(translation);
-      BRepBuilderAPI_Transform operation(source->geometry, transform, true);
+      // A direct rigid isometry changes only a TopLoc_Location. OCCT shares immutable
+      // geometry; no builder edits source topology, tolerances or underlying curves.
+      BRepBuilderAPI_Transform operation(source->geometry, transform, false);
       if (!operation.IsDone()) fail("rigid transform failed");
-      auto shape = checked(operation.Shape());
+      auto validated = detail::rigid_snapshot(operation.Shape(), *source, transform);
+      if (!validated) throw validated.error();
+      auto shape = *validated;
       OperationResult result{shape, {}, {}, shape->estimated_bytes() + source->estimated_bytes()};
       for (const auto& before : detail::entities(source)) {
         const auto& entity = static_cast<const detail::Subshape&>(*before);

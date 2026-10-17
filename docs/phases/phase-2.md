@@ -9,7 +9,7 @@
 All of these, with evidence linked:
 
 - [ ] 20 reference parts (gear, bracket, enclosure, …) build headlessly in CI
-- [ ] Changing one parameter rebuilds a 30-feature part in < 100 ms
+- [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([local evidence](#rebuild-benchmark-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
 ## Work items (build order)
@@ -21,7 +21,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Typed inputs, content hashes and bounded cache implemented; production evaluator pending |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Sketch/extrude/transform evaluator and rebuild benchmark implemented; remaining v1 operations/selectors and review pending |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -123,3 +123,43 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   reuse; retained history is rejected when an evicted upstream snapshot has been rebuilt.
   Tests exercise 30-feature histories and verify unused/equivalent-unit edits do no kernel
   work. OCCT checks pass 252/252 (14.51 s); measured rebuild latency follows separately.
+- 2026-10-17 — #92 measures real geometry and optimizes rigid transforms: shared immutable
+  B-reps, checked location/orientation/isometry invariants, preserved volume/area and translated
+  bounds. New geometry still receives full OCCT validation; rotations recompute bounds.
+  Tests independently remeasure moved B-reps and their unchanged sources. The benchmark below
+  meets the local 30-feature latency criterion; the full Phase 2 gate remains open.
+
+## Rebuild benchmark evidence
+
+2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
+Run `build/occt/services/kernel/nf_evaluator_bench` after building the `occt` preset.
+Each part has one sketch, one extrusion and 28 transforms. The bored plate has two circular
+holes represented by exact rational NURBS. Each row has 30 samples with unique parameter
+values; every sample checks analytic volume/centroid and the expected kernel/cache counts.
+Timers include JSON parsing, validation, expressions, hashing, geometry, validity checks and
+name propagation. Serialization, IPC and tessellation are excluded.
+
+| Part | Rebuild | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Plate | Cold | 3.073 | 4.888 | 5.980 | 29 / 0 |
+| Plate | Depth edit | 3.081 | 6.497 | 9.765 | 29 / 1 |
+| Plate | Last transform edit | 0.698 | 1.148 | 1.603 | 1 / 29 |
+| Plate | Unused parameter edit | 0.684 | 1.452 | 1.550 | 0 / 30 |
+| Bored plate | Cold | 15.588 | 19.352 | 20.570 | 29 / 0 |
+| Bored plate | Depth edit | 14.263 | 22.587 | 28.131 | 29 / 1 |
+| Bored plate | Last transform edit | 1.099 | 3.220 | 3.876 | 1 / 29 |
+| Bored plate | Unused parameter edit | 1.169 | 2.326 | 2.402 | 0 / 30 |
+
+Before rigid-invariant reuse, depth edits measured 114.290/382.885 ms median for the two
+parts. The benchmark cache has an explicit 96-entry/64 MiB estimated budget; after 30 depth
+edits it retains 96 entries, estimated at 10.25/26.24 MiB respectively. This is not a process
+RSS guarantee or a service-wide default. These are local measurements for the implemented
+feature subset; 20 reference parts in CI and full phase sign-off remain pending (#95).
+
+Final local verification: `tools/check.sh --preset occt` passes 252/252 (15.90 s), including
+the 202-case schema cross-check and hygiene checks. After the optimization, the exact CI
+ASan/UBSan kernel/evaluator/cache selection passes 38/38 (15.02 s). The earlier full sanitizer
+run passed 251/252 (228.96 s), with no sanitizer diagnostics; the unchanged closest-point
+2-second timing assertion took 5.136 s, then passed alone in 1.94 s. OCCT itself uses the
+pinned release build; Nightfall code is instrumented. CI now runs the geometry sanitizer
+selection on OCCT pull requests/nightly builds. Remote CI and maintainer review remain pending.
