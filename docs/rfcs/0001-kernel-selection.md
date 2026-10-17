@@ -121,11 +121,25 @@ ABC operations valid: import 197 / 197 on both; drill OCCT 192, SMLib 191; round
 edge at 0.5 % of the diagonal) **OCCT 105, SMLib 18** (OCCT crashed once, isolated by the
 per-process runner). Imported volumes agree within 1e-6 on 161 of 197 models.
 
+**What the "round" step measured (found in review).** 170 of SMLib's 179 failed rounds return
+`SM_ERR_INVALID_INPUT`: `SmApiFilletEdges` rejects the *whole* call when any selected edge is
+smooth (its faces meet within ~2° of tangent, `SmEdge::GetBlendEdgeuse`), and ABC parts are
+full of smooth edges (existing fillets, seams). At one fifth of the radius the outcomes are
+unchanged on both kernels, so radius is not the cause. The step therefore measures how each
+kernel handles an "every edge" request, not fillet geometry; SMLib's fillet strength on
+sharp edges is not established by it. **The decision does not depend on it:** crediting
+SMLib a valid round on every ABC model still gives 68.8 vs 77.7 = 88.6 %, below 90 %.
+
+**Not run:** the stress cases listed under Corpus (item 3, from SMLib's KNOWN_ISSUES) were not
+run as a separate set; the reference corpus covers fillets next to caps (rounded box) and
+closed surfaces (sphere, torus, cylinders), and SMLIB-001 is reported separately.
+
 **Decision:** both kernels meet the hard requirements, but SMLib's score is **65.8 %** of
-OCCT's, below the 90 % the decision rule requires. **OpenCASCADE 7.9.3 is Nightfall's
-primary kernel.** SMLib is re-evaluated at the next usd-brep release. The gaps that would
-have to close are fillet robustness on real parts, an operation-history API, area accuracy on
-curved faces, speed, and SMLIB-001.
+OCCT's, below the 90 % the decision rule requires, and stays below it under the most
+SMLib-favourable reading above. **OpenCASCADE 7.9.3 is Nightfall's primary kernel.** SMLib
+is re-evaluated at the next usd-brep release. The gaps that would have to close are an
+operation-history API, area accuracy on curved faces, speed, SMLIB-001, and the fillet API's
+all-or-nothing rejection of smooth edges.
 
 Consequences:
 

@@ -263,6 +263,8 @@ def main():
         history.setdefault(k, "no")
 
     scores, shared, excluded = score(results, integration, history)
+    if args.abc_plan and len(excluded) > len({abc_model(n) for n in abc_parts}) // 2:
+        sys.exit(f"{len(excluded)} ABC models failed import: is the USD plugin path set? Not writing a report.")
     report = {
         "date": datetime.date.today().isoformat(),
         "corpus": "reference parts + ABC (RFC 0001 F13)" if args.abc_plan else "reference parts only",

@@ -28,7 +28,8 @@ if(NF_WITH_USD)
   endif()
   target_sources(nf_bakeoff PRIVATE step_bridge.cpp)
   target_link_libraries(nf_bakeoff PUBLIC nf::usdbrep)
-  target_compile_definitions(nf_bakeoff PUBLIC NF_BAKEOFF_WITH_USD=1)
+  target_compile_definitions(nf_bakeoff PUBLIC NF_BAKEOFF_WITH_USD=1
+                             PRIVATE NF_OMNISOLID_PLUGIN_DIR="${NF_OMNISOLID_PLUGIN_DIR}")
 endif()
 
 add_executable(nf_bakeoff_cli main.cpp)
