@@ -46,8 +46,10 @@ prefix="${NF_OCCT_INSTALL_DIR:-$root/third_party/install/occt-$VERSION$variant}"
 # Keyed on the source path so a different NF_OCCT_SOURCE_DIR never reuses a CMake cache.
 build="$root/build/third_party/occt-$VERSION$variant-$(printf %s "$src" | shasum -a 256 | cut -c1-8)"
 
-if [[ -f "$prefix/.nf-occt-commit" && "$(cat "$prefix/.nf-occt-commit")" == "$COMMIT" ]]; then
-  echo "OCCT $VERSION already installed in $prefix"
+# The stamp records commit and variant, so a sanitizer request never reuses a plain install.
+stamp="$COMMIT${variant:-}"
+if [[ -f "$prefix/.nf-occt-commit" && "$(cat "$prefix/.nf-occt-commit")" == "$stamp" ]]; then
+  echo "OCCT $VERSION${variant:-} already installed in $prefix"
   exit 0
 fi
 
@@ -80,5 +82,5 @@ cmake -S "$src" -B "$build" -G Ninja \
 
 cmake --build "$build" --parallel "$jobs"
 cmake --install "$build" >/dev/null
-echo "$COMMIT" > "$prefix/.nf-occt-commit"
+echo "$stamp" > "$prefix/.nf-occt-commit"
 echo "OCCT $VERSION installed in $prefix"
