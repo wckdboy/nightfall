@@ -7,6 +7,7 @@
 #include <catch2/generators/catch_generators_random.hpp>
 
 #include <cmath>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -102,6 +103,31 @@ TEST_CASE("coincident curves are reported as overlapping", "[intersect]") {
   CHECK_FALSE(end.overlap);
   REQUIRE(end.hits.size() == 1);
   CHECK(end.hits[0].point == Vec2{1, 0});
+}
+
+TEST_CASE("local features beside long spans", "[intersect]") {
+  // A shared stretch shorter than any subdivision threshold is still an overlap.
+  CHECK(
+      intersect(make_line(Vec2{0, 0}, Vec2{1, 0}), make_line(Vec2{0.9999, 0}, Vec2{2, 0})).overlap);
+  // Distinct crossings near a long span are not merged.
+  for (const double far : {1e8, 1e9}) {
+    const std::vector<Vec2> pts{{0, 0}, {10, 10}, {20, 0}, {far, 0}};
+    const NurbsCurve2 zigzag = make_polyline(pts);
+    const auto r = intersect(zigzag, make_line(Vec2{0, 5}, Vec2{20, 5}));
+    CHECK_FALSE(r.overlap);
+    REQUIRE(r.hits.size() == 2);
+    CHECK(length(r.hits[0].point - Vec2{5, 5}) <= 1e-9);
+    CHECK(length(r.hits[1].point - Vec2{15, 5}) <= 1e-9);
+    // And a line through them is not "collinear" with the diagonal pieces.
+    const auto l = intersect_line(zigzag, Vec2{0, 5}, Vec2{1, 0});
+    CHECK_FALSE(l.overlap);
+    REQUIRE(l.hits.size() == 2);
+    CHECK(length(l.hits[0].point - Vec2{5, 5}) <= 1e-9);
+    CHECK(length(l.hits[1].point - Vec2{15, 5}) <= 1e-9);
+  }
+  // A huge but finite direction is fine.
+  const double big = std::numeric_limits<double>::max();
+  CHECK(intersect_line(make_circle(Vec2{0, 0}, 1.0), Vec2{0, 0}, Vec2{big, big}).hits.size() == 2);
 }
 
 TEST_CASE("curve–line intersections", "[intersect]") {
