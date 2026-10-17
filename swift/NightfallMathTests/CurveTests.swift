@@ -59,4 +59,10 @@ import Testing
   let line = try #require(Curve3D.line(from: .zero, to: SIMD3(1, 2, 3)))
   #expect(line.degree == 1)
   #expect(line.point(at: 1) == SIMD3(1, 2, 3))
+  // Space curves have derivatives and control points too (review finding).
+  #expect(line.derivative(at: 0.5) == SIMD3(1, 2, 3))
+  #expect(line.controlPoints == [SIMD3(0, 0, 0), SIMD3(1, 2, 3)])
+  let tangent = c.derivative(at: c.domain.lowerBound)
+  #expect(abs(tangent.z) < 1e-12)
+  #expect(abs((tangent * (p - SIMD3(0, 0, 5))).sum()) < 1e-9)  // perpendicular to the radius
 }

@@ -87,10 +87,16 @@ public struct Curve3D {
   public var degree: Int { Int(raw.degree()) }
   public var isRational: Bool { raw.rational() }
   public var domain: ClosedRange<Double> { raw.domain_start()...raw.domain_end() }
+  public var controlPoints: [SIMD3<Double>] { raw.control_points().map { SIMD3($0.x, $0.y, $0.z) } }
 
   public func point(at u: Double) -> SIMD3<Double> {
     let p = raw.point(u)
     return SIMD3(p.x, p.y, p.z)
+  }
+
+  public func derivative(at u: Double) -> SIMD3<Double> {
+    let d = raw.derivative(u)
+    return SIMD3(d.x, d.y, d.z)
   }
 
   public func polyline(tolerance: Double) -> [SIMD3<Double>] {
