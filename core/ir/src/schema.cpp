@@ -54,6 +54,11 @@ struct Catalog {
         compile(v);
       } else if (k == "pattern") {
         patterns.try_emplace(*v.if_string(), *v.if_string());
+      } else if (k == "x-nf-value") {
+        if (!v.if_string() ||
+            (*v.if_string() != "length" && *v.if_string() != "angle" &&
+             *v.if_string() != "scalar" && *v.if_string() != "count" && *v.if_string() != "degree"))
+          throw std::logic_error("unsupported schema field dimension");
       } else if (k == "type") {
         if (!v.if_string()) throw std::logic_error("schema type arrays are unsupported");
       } else if (k == "const" || k == "enum") {
@@ -73,7 +78,7 @@ struct Catalog {
       } else if (k != "$schema" && k != "$id" && k != "$comment" && k != "title" && k != "type" &&
                  k != "enum" && k != "const" && k != "required" && k != "minimum" &&
                  k != "maximum" && k != "minItems" && k != "maxItems" && k != "minLength" &&
-                 k != "x-nf-reference" && k != "x-nf-definition") {
+                 k != "x-nf-reference" && k != "x-nf-definition" && k != "x-nf-value") {
         throw std::logic_error("unsupported schema keyword: " + k);
       }
     }
@@ -100,6 +105,8 @@ class Checker {
       result.errors.push_back({"schema", std::move(message), p, std::nullopt});
   }
   void record(const Value& v, const Value& s, const std::string& p) {
+    if (const auto* kind = s.find("x-nf-value"))
+      result.fields.push_back({*kind->if_string(), p, &v});
     for (const auto* key : {"x-nf-reference", "x-nf-definition"}) {
       if (const auto* kind = s.find(key)) {
         std::string target;
@@ -248,12 +255,14 @@ class Checker {
     std::size_t best_score = 0;
     Errors best;
     std::vector<Link> links;
+    std::vector<ValueField> fields;
     for (const auto& choice : choices) {
       Checker probe(catalog_, budget_);
       probe.check(v, choice, p, depth);
       if (probe.result.errors.empty()) {
         ++successes;
         links = std::move(probe.result.links);
+        fields = std::move(probe.result.fields);
         if (!exactly_one) break;
       } else {
         std::size_t score = 0;
@@ -272,21 +281,35 @@ class Checker {
       fail(p, "no matching input form");
     } else if (exactly_one && successes != 1)
       fail(p, "choose exactly one input form");
-    else
+    else {
       result.links.insert(result.links.end(), std::make_move_iterator(links.begin()),
                           std::make_move_iterator(links.end()));
+      result.fields.insert(result.fields.end(), std::make_move_iterator(fields.begin()),
+                           std::make_move_iterator(fields.end()));
+    }
   }
   const Catalog& catalog_;
   std::size_t& budget_;
 };
+const Catalog& catalog() {
+  static const Catalog instance;
+  return instance;
+}
 }  // namespace
 
 SchemaResult check_schema(const Value& document, std::size_t work_limit) {
-  static const Catalog catalog;
-  Checker checker(catalog, work_limit);
-  checker.check(document, catalog.root, "");
+  Checker checker(catalog(), work_limit);
+  checker.check(document, catalog().root, "");
   // Resource exhaustion must not become success through a negated or alternative schema.
   if (work_limit == 0) checker.fail("", "validation work limit exceeded");
+  return std::move(checker.result);
+}
+
+SchemaResult check_feature(const Value& feature) {
+  std::size_t budget = 1000000;
+  Checker checker(catalog(), budget);
+  checker.check(feature, *catalog().definitions.at("#/$defs/feature"), "");
+  if (budget == 0) checker.fail("", "validation work limit exceeded");
   return std::move(checker.result);
 }
 }  // namespace nf::ir::detail

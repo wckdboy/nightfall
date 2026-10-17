@@ -38,12 +38,14 @@
         {
           "$ref": "#/$defs/nonempty"
         }
-      ]
+      ],
+      "x-nf-value": "count"
     },
     "point2": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/value"
+        "$ref": "#/$defs/value",
+        "x-nf-value": "length"
       },
       "minItems": 2,
       "maxItems": 2
@@ -51,7 +53,8 @@
     "point3": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/value"
+        "$ref": "#/$defs/value",
+        "x-nf-value": "length"
       },
       "minItems": 3,
       "maxItems": 3
@@ -69,7 +72,13 @@
           ]
         },
         {
-          "$ref": "#/$defs/point3"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value",
+            "x-nf-value": "scalar"
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
       ]
     },
@@ -277,7 +286,8 @@
           "$ref": "#/$defs/point3"
         },
         "radius": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "convex": {
           "type": "boolean"
@@ -658,13 +668,16 @@
           "$ref": "#/$defs/point2"
         },
         "radius": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "start_angle": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         },
         "sweep_angle": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         }
       },
       "required": [
@@ -694,7 +707,8 @@
           "$ref": "#/$defs/point2"
         },
         "radius": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -725,7 +739,8 @@
           "$ref": "#/$defs/point2"
         },
         "rotation": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         }
       },
       "required": [
@@ -815,12 +830,14 @@
             {
               "$ref": "#/$defs/nonempty"
             }
-          ]
+          ],
+          "x-nf-value": "degree"
         },
         "knots": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/value"
+            "$ref": "#/$defs/value",
+            "x-nf-value": "scalar"
           },
           "minItems": 4
         },
@@ -834,7 +851,8 @@
         "weights": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/value"
+            "$ref": "#/$defs/value",
+            "x-nf-value": "scalar"
           },
           "minItems": 2
         }
@@ -868,13 +886,16 @@
           "$ref": "#/$defs/nonempty"
         },
         "t0": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "scalar"
         },
         "t1": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "scalar"
         },
         "tolerance": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -912,10 +933,12 @@
               "$ref": "#/$defs/point2"
             },
             "scale": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "scalar"
             },
             "rotation": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "angle"
             }
           },
           "required": [],
@@ -1224,7 +1247,8 @@
           "maxItems": 2
         },
         "value": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -1252,7 +1276,8 @@
           "maxItems": 2
         },
         "value": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         }
       },
       "required": [
@@ -1280,7 +1305,8 @@
           "maxItems": 1
         },
         "value": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -1374,7 +1400,8 @@
           "$ref": "#/$defs/profile"
         },
         "distance": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "to": {
           "$ref": "#/$defs/selector"
@@ -1386,7 +1413,8 @@
           "type": "boolean"
         },
         "draft": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         },
         "result": {
           "$ref": "#/$defs/result"
@@ -1423,7 +1451,8 @@
           "$ref": "#/$defs/axis"
         },
         "angle": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         },
         "result": {
           "$ref": "#/$defs/result"
@@ -1500,7 +1529,8 @@
           "$ref": "#/$defs/selector"
         },
         "radius": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -1519,10 +1549,12 @@
           "$ref": "#/$defs/selector"
         },
         "distance": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "angle": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         }
       },
       "required": [
@@ -1545,7 +1577,8 @@
           "$ref": "#/$defs/selector"
         },
         "thickness": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         }
       },
       "required": [
@@ -1573,19 +1606,23 @@
           "minItems": 1
         },
         "diameter": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "depth": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "counterbore": {
           "type": "object",
           "properties": {
             "diameter": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "length"
             },
             "depth": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "length"
             }
           },
           "required": [
@@ -1601,10 +1638,12 @@
           "type": "object",
           "properties": {
             "diameter": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "length"
             },
             "angle": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "angle"
             }
           },
           "required": [
@@ -1693,7 +1732,8 @@
           "$ref": "#/$defs/count"
         },
         "spacing": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "length"
         },
         "direction": {
           "$ref": "#/$defs/direction"
@@ -1744,7 +1784,8 @@
           "$ref": "#/$defs/count"
         },
         "angle": {
-          "$ref": "#/$defs/value"
+          "$ref": "#/$defs/value",
+          "x-nf-value": "angle"
         },
         "axis": {
           "$ref": "#/$defs/axis"
@@ -1836,7 +1877,8 @@
               "$ref": "#/$defs/axis"
             },
             "angle": {
-              "$ref": "#/$defs/value"
+              "$ref": "#/$defs/value",
+              "x-nf-value": "angle"
             }
           },
           "required": [

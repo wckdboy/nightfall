@@ -8,6 +8,8 @@
 #include <cstdio>
 
 #include "nf/ir/document.hpp"
+#include "nf/ir/hash.hpp"
+#include "nf/ir/inputs.hpp"
 #include "nf/ir/parameters.hpp"
 
 using namespace nf::ir;
@@ -79,6 +81,27 @@ int main() {
     });
     std::printf("  %zu features, %zu bytes: load %.1f us; edit + save %.1f us\n", count,
                 text.size(), load, save);
+    std::vector<FeatureInputs> programs;
+    for (const auto& feature : document.features)
+      programs.push_back(FeatureInputs::compile(feature).value());
+    const double hash_inputs = microseconds([&](int edit) {
+      document.params[0].value = edit % 2 == 0 ? "3 mm" : "4 mm";
+      const auto values = evaluate_parameters(document.params).value().values;
+      Hash upstream;
+      std::optional<Hash> body;
+      for (std::size_t i = 0; i < programs.size(); ++i) {
+        const auto inputs = programs[i].evaluate(document.units, values).value();
+        const auto key = feature_hash("input-bench-v1", document.features[i].type, inputs,
+                                      {&upstream, i == 0 ? 0u : 1u});
+        if (i > 0) body = body_hash(body, key);
+        upstream = body.value_or(key);
+      }
+      return static_cast<std::size_t>(upstream.bytes[0]);
+    });
+    std::printf(
+        "  %zu prepared features: parameter edit + inputs + chained hashes %.1f us "
+        "(no geometry)\n",
+        count, hash_inputs);
     std::vector<Parameter> params;
     for (std::size_t i = 0; i < count; ++i) {
       Parameter p;

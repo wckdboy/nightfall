@@ -21,7 +21,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#89](https://github.com/wckdboy/nightfall/issues/89) | 2.0 RFC 0005: feature IR schema v1 | ir | Done (RFC 0005) |
 | [#90](https://github.com/wckdboy/nightfall/issues/90) | 2.1 IR schema v1, validation and migrations | ir | Schema, document I/O and reference validation implemented; review pending |
 | [#91](https://github.com/wckdboy/nightfall/issues/91) | 2.2 Expression engine with units, bounds and dependency graph | ir | Expressions, dependency graph and bounds implemented; review pending |
-| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Content hashing in progress; geometry evaluator and cache pending |
+| [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Content hashes and typed inputs implemented; geometry evaluator and cache pending |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
@@ -75,3 +75,11 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   body states, using RFC 8785 canonical JSON and CommonCrypto. Known-answer tests cover
   SHA-256, canonical envelopes, external digest normalization and upstream ordering.
   Geometry execution, incremental rebuild timings and the Phase 2 gate remain pending.
+- 2026-10-17 — #92 compiles feature inputs once using dimension annotations in the existing
+  schema (no format or validation-rule change). Evaluations normalize lengths, angles and
+  scalars, check integer counts/degrees, preserve field diagnostics and exclude opaque
+  extensions from executable inputs. Equivalent evaluated values share hashes; unused
+  parameters do not invalidate them. Script and equation-curve binding remain explicit
+  unsupported-evaluation errors. The benchmark now measures input/hash preparation separately
+  from geometry. Local checks: 203/204 passed; the unchanged closest-point timing assertion
+  exceeded 2 s under concurrent external compiler load (4.87 s). All new tests passed.
