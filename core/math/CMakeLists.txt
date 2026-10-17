@@ -1,17 +1,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
 
-# libnf-math: Nightfall's NURBS math API. Header-only until the NLib wrapper lands
-# (Phase 1, after RFC 0001 decides the kernel).
-add_library(nf_math INTERFACE)
+# libnf-math: Nightfall's own, kernel-free NURBS math core (RFC 0004). Used by both the app
+# and the kernel service; never depends on a kernel.
+add_library(nf_math STATIC src/knot_vector.cpp src/basis.cpp)
 add_library(nf::math ALIAS nf_math)
-target_include_directories(nf_math INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_features(nf_math INTERFACE cxx_std_23)
+target_include_directories(nf_math PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_features(nf_math PUBLIC cxx_std_23)
+target_link_libraries(nf_math PRIVATE nf::warnings)
 
 if(NF_BUILD_TESTS)
   add_executable(nf_math_tests
     tests/tolerance_tests.cpp
-    tests/vec_tests.cpp)
+    tests/vec_tests.cpp
+    tests/basis_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.
