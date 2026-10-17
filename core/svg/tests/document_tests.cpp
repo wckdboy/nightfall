@@ -177,6 +177,36 @@ TEST_CASE("unsupported and hidden content is skipped", "[svg][document]") {
   CHECK(d.warnings.size() == 4);  // namedview, text, image, use (repeats reported once)
 }
 
+TEST_CASE("namespaces are resolved from xmlns bindings", "[svg][document]") {
+  // A foreign default namespace hides its subtree; any prefix bound to SVG is SVG.
+  const auto d = read(mm(R"(<g xmlns="urn:foreign"><path d="M0 0L1 0"/></g>)"
+                         R"(<s:path xmlns:s="http://www.w3.org/2000/svg" d="M0 0L2 0"/>)"
+                         R"(<svg:path d="M0 0L3 0"/>)"));  // svg: is unbound here
+  REQUIRE(d.paths.size() == 1);
+  CHECK(d.paths[0].segments[0].points().back() == Vec2{2, 0});
+  CHECK(d.warnings.size() == 2);
+  // No xmlns at all: read as SVG.
+  CHECK(read(R"(<svg><path d="M0 0L1 0"/></svg>)").paths.size() == 1);
+  // A root in another namespace is not an SVG document.
+  CHECK_FALSE(read_document(R"(<svg xmlns="urn:x"/>)").has_value());
+  CHECK(
+      read(R"(<svg:svg xmlns:svg="http://www.w3.org/2000/svg"><svg:path d="M0 0L1 0"/></svg:svg>)")
+          .paths.size() == 1);
+}
+
+TEST_CASE("switch reads only the first qualifying child", "[svg][document]") {
+  const auto d =
+      read(mm(R"(<switch><path requiredExtensions="urn:x" d="M0 0L1 0"/>)"
+              R"(<path systemLanguage="en" d="M0 0L2 0"/><path d="M0 0L3 0"/></switch>)"));
+  REQUIRE(d.paths.size() == 1);
+  CHECK(d.paths[0].segments[0].points().back() == Vec2{2, 0});
+}
+
+TEST_CASE("empty points draw nothing", "[svg][document]") {
+  const auto d = read(mm(R"(<polyline points=""/><polygon points="  "/>)"));
+  CHECK(d.paths.empty());
+}
+
 TEST_CASE("malformed documents are errors at the element", "[svg][document]") {
   const auto err = [](std::string_view text) {
     const auto r = read_document(text);

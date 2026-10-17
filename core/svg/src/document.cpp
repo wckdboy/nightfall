@@ -23,6 +23,24 @@ using math::NurbsCurve2;
 using math::Vec2;
 
 constexpr double kMmPerPx = 25.4 / 96.0;
+constexpr std::string_view kSvgNamespace = "http://www.w3.org/2000/svg";
+
+// In-scope namespace bindings, innermost last: (prefix, URI); "" is the default namespace.
+using Scope = std::vector<std::pair<std::string, std::string>>;
+
+// The scope inside e, and the namespace URI of e's own name ("" if its prefix is unbound).
+std::pair<Scope, std::string> resolve(const xml::Element& e, Scope scope) {
+  for (const auto& [key, value] : e.attributes) {
+    if (key == "xmlns") scope.emplace_back("", value);
+    if (key.starts_with("xmlns:")) scope.emplace_back(key.substr(6), value);
+  }
+  const std::size_t colon = e.name.find(':');
+  const std::string prefix = colon == std::string::npos ? "" : e.name.substr(0, colon);
+  for (const auto& [p, uri] : scope | std::views::reverse) {
+    if (p == prefix) return {std::move(scope), uri};
+  }
+  return {std::move(scope), ""};
+}
 
 // x' = a x + c y + e, y' = b x + d y + f (SVG's matrix order).
 struct Affine {
@@ -77,10 +95,12 @@ class Reader {
   std::expected<Drawing, ParseError> run(std::string_view text) {
     auto root = xml::parse(text);
     if (!root) return std::unexpected(root.error());
-    if (root->name != "svg" && root->name != "svg:svg") {
+    // Files without any xmlns are common; their unprefixed elements are taken as SVG.
+    const Scope assumed{{"", std::string(kSvgNamespace)}};
+    if (root->local_name() != "svg" || resolve(*root, assumed).second != kSvgNamespace) {
       return std::unexpected(ParseError{root->offset, "the root element is not <svg>"});
     }
-    walk(*root, root_scale(*root), true);
+    walk(*root, root_scale(*root), true, assumed);
     if (error_) return std::unexpected(std::move(*error_));
     return std::move(drawing_);
   }
@@ -122,12 +142,11 @@ class Reader {
     return Affine{sx, 0, 0, -sy, 0, 0};
   }
 
-  void walk(const xml::Element& e, const Affine& parent, bool root) {
+  void walk(const xml::Element& e, const Affine& parent, bool root, const Scope& outer) {
     if (error_) return;
     const std::string_view local = e.local_name();
-    if (e.name.find(':') != std::string::npos && !e.name.starts_with("svg:")) {
-      return warn("skipped <" + e.name + "> (other namespace)");
-    }
+    auto [scope, uri] = resolve(e, outer);
+    if (uri != kSvgNamespace) return warn("skipped <" + e.name + "> (not in the SVG namespace)");
     if (const std::string* display = e.attribute("display"); display && *display == "none") return;
     Affine m = parent;
     if (const std::string* t = e.attribute("transform")) {
@@ -140,14 +159,24 @@ class Reader {
       m = m * Affine{1, 0, 0, 1, user(e, "x"), user(e, "y")};
       if (e.attribute("viewBox") != nullptr) warn("nested <svg> viewBox ignored");
     }
-    static constexpr std::array<std::string_view, 4> kGroups{"svg", "g", "a", "switch"};
+    static constexpr std::array<std::string_view, 3> kGroups{"svg", "g", "a"};
     static constexpr std::array<std::string_view, 14> kDefinitions{
         "defs",  "symbol",         "clipPath",       "mask",  "pattern", "marker", "metadata",
         "style", "linearGradient", "radialGradient", "title", "desc",    "script", "filter"};
     static constexpr std::array<std::string_view, 7> kShapes{
         "path", "rect", "circle", "ellipse", "line", "polyline", "polygon"};
     if (std::ranges::contains(kGroups, local)) {
-      for (const xml::Element& child : e.children) walk(child, m, false);
+      for (const xml::Element& child : e.children) walk(child, m, false, scope);
+    } else if (local == "switch") {
+      // Only the first child whose conditions hold is rendered. No extensions are supported
+      // and systemLanguage is taken as satisfied (the model has no user language).
+      for (const xml::Element& child : e.children) {
+        if (const std::string* ext = child.attribute("requiredExtensions"); ext && !ext->empty()) {
+          continue;
+        }
+        walk(child, m, false, scope);
+        break;
+      }
     } else if (std::ranges::contains(kShapes, local)) {
       try {
         shape(e, local, m);
@@ -202,7 +231,9 @@ class Reader {
     } else {  // polyline, polygon
       const std::string* pts = e.attribute("points");
       if (pts == nullptr) return;
-      if (!number_list(*pts)) return fail(e, "invalid points");
+      const auto list = number_list(*pts);
+      if (!list) return fail(e, "invalid points");
+      if (list->empty()) return;  // valid, draws nothing
       d = "M" + *pts + (kind == "polygon" ? "Z" : "");
     }
     if (error_) return;

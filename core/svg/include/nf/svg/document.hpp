@@ -28,6 +28,8 @@ struct Drawing {
 /// unless preserveAspectRatio="none"; without a viewBox, or without a size, a user unit is
 /// a CSS pixel (25.4/96 mm). write_document's output therefore reads back unchanged.
 ///
+/// Namespaces are resolved from the in-scope xmlns bindings (a file with no xmlns at all is
+/// read as SVG). In a switch only the first child without requiredExtensions is read.
 /// Text, images, `use` references and elements in other namespaces are skipped with a
 /// warning; definitions (defs, symbol, clipPath, mask, pattern, marker, gradients,
 /// metadata, style) are skipped silently, as are elements with display="none". Malformed
