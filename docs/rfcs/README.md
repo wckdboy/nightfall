@@ -14,6 +14,6 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 
 | RFC | Title | Status |
 | --- | --- | --- |
-| [0001](0001-kernel-selection.md) | Geometry kernel selection and bake-off | Draft |
+| [0001](0001-kernel-selection.md) | Geometry kernel selection and bake-off | Accepted (OCCT) |
 | [0002](0002-openusd-dependency.md) | Adopt OpenUSD 25.11 (C++-only) as a dependency | Accepted |
 | [0003](0003-process-architecture.md) | Process architecture: the kernel in an XPC service | Accepted |

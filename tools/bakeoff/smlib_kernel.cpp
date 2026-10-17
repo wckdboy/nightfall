@@ -17,12 +17,24 @@
 #include <SmLine.h>
 #include <SmVector3d.h>
 
+#include <unistd.h>
+#include <cstdlib>
 #include <exception>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "kernel.hpp"
+
+#if NF_BAKEOFF_WITH_USD
+#include <OcctFileConverter.h>
+#include <SmApiUsd.h>
+#include <pxr/base/plug/registry.h>
+
+#include <filesystem>
+
+#include "step_bridge.hpp"
+#endif
 
 namespace nf::bakeoff {
 
@@ -74,6 +86,44 @@ class SmlibKernel final : public Kernel {
     SmBrep* raw = nullptr;
     const SmApiStatus status = SmApiCreateSphere(to_sm(center), radius, raw);
     return adopt(raw, status, "SmApiCreateSphere");
+  }
+
+  Body import_step(const std::string& path) override {
+#if NF_BAKEOFF_WITH_USD
+    // RFC 0002: STEP -> OCCT -> .brep -> USD BrepArray -> SmBrep, healer off (RFC 0001 F13).
+    namespace fs = std::filesystem;
+    // usd-brep's omniSolid schema must be registered before any stage opens. Register the
+    // build-time location explicitly so a missing PXR_PLUGINPATH_NAME cannot drop every import
+    // (registering an already-known plugin is a no-op).
+    static const bool registered = [] {
+      pxr::PlugRegistry::GetInstance().RegisterPlugins(std::string(NF_OMNISOLID_PLUGIN_DIR));
+      return true;
+    }();
+    (void)registered;
+    const fs::path dir = fs::temp_directory_path() / ("nf_bakeoff_" + std::to_string(::getpid()));
+    fs::create_directories(dir);
+    struct RemoveOnExit {
+      fs::path path;
+      ~RemoveOnExit() {
+        std::error_code ignored;
+        fs::remove_all(path, ignored);
+      }
+    } cleanup{dir};
+    const std::string brep = (dir / "model.brep").string(), usd = (dir / "model.usdc").string();
+    std::string error;
+    if (!step_to_brep(path, brep, error)) throw KernelError("STEP -> .brep: " + error);
+    if (!occt::ConvertOcctFileToUsd(brep, usd, error)) throw KernelError(".brep -> USD: " + error);
+    std::vector<SmBrep*> breps;
+    const SmStatus status = SmApiUsdImportBreps(usd.c_str(), breps, /*bHealerIsEnabled=*/FALSE);
+    std::vector<BrepPtr> owned(breps.begin(), breps.end());
+    if (status != SM_SUCCESS) throw KernelError("USD -> SMLib: status " + std::to_string(status));
+    if (owned.size() != 1)
+      throw KernelError("USD -> SMLib: " + std::to_string(owned.size()) + " bodies");
+    return store(std::move(owned.front()));
+#else
+    (void)path;
+    throw KernelError("SMLib STEP import needs the USD path (NF_WITH_USD, RFC 0002)");
+#endif
   }
 
   Body rotate(Body body, Vec3 point, Vec3 axis, double degrees) override {
@@ -208,6 +258,11 @@ class SmlibKernel final : public Kernel {
     check(SmApiGetEdges(brep, edges), "SmApiGetEdges");
     m.faces = static_cast<int>(faces.GetSize());
     m.edges = static_cast<int>(edges.GetSize());
+    SmPoint3d lo, hi;
+    if (SmApiBrepBoundingBox(brep, TRUE, lo, hi) == SM_SUCCESS) {
+      m.bbox_min = {lo[0], lo[1], lo[2]};
+      m.bbox_max = {hi[0], hi[1], hi[2]};
+    }
     return m;
   }
 

@@ -4,7 +4,7 @@
 # Kernel bake-off harness (RFC 0001). The runner and parts build everywhere and are tested
 # with a fake kernel; kernel drivers (#16, #21) build only when their kernel is enabled.
 
-add_library(nf_bakeoff STATIC runner.cpp parts.cpp)
+add_library(nf_bakeoff STATIC runner.cpp parts.cpp abc_parts.cpp)
 target_include_directories(nf_bakeoff PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(nf_bakeoff PUBLIC nf::math PRIVATE nf::warnings)
 
@@ -20,6 +20,16 @@ if(NF_WITH_SMLIB)
   target_link_libraries(nf_bakeoff PUBLIC nf::sm_api)
   target_compile_definitions(nf_bakeoff PUBLIC NF_BAKEOFF_WITH_SMLIB=1
                              PRIVATE NF_SMLIB_VERSION="${_smlib_version}")
+endif()
+
+if(NF_WITH_USD)
+  if(NOT NF_WITH_OCCT)
+    message(FATAL_ERROR "the bake-off's SMLib STEP import needs OCCT too (RFC 0002 path)")
+  endif()
+  target_sources(nf_bakeoff PRIVATE step_bridge.cpp)
+  target_link_libraries(nf_bakeoff PUBLIC nf::usdbrep)
+  target_compile_definitions(nf_bakeoff PUBLIC NF_BAKEOFF_WITH_USD=1
+                             PRIVATE NF_OMNISOLID_PLUGIN_DIR="${NF_OMNISOLID_PLUGIN_DIR}")
 endif()
 
 add_executable(nf_bakeoff_cli main.cpp)
