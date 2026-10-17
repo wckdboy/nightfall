@@ -2,7 +2,7 @@
 
 - **Weeks:** 5–10
 - **Milestone:** `Phase 1` on GitHub
-- **Status:** In progress
+- **Status:** Gate passed (2026-10-17)
 - **Design:** [RFC 0004](../rfcs/0004-libnf-math.md)
 
 ## Gate
@@ -19,7 +19,8 @@ All of these, with evidence linked:
 - [x] Cubic NURBS point evaluation ≤ 50 ns on Apple Silicon: 39.9 ns non-rational, 28.7 ns
       rational, M-series (`nf_math_bench`, #84)
 - [x] libnf-math curves and surfaces convert to OCCT `Geom` and back without loss (#79)
-- [ ] Swift reads and evaluates a curve through the facade
+- [x] Swift reads and evaluates a curve through the facade: `swift test` in the required CI job
+      (#87, #88)
 
 ## Work items (build order)
 
@@ -36,7 +37,7 @@ Evaluation and exact constructors come first; fitting and intersection after (RF
 | [#48](https://github.com/wckdboy/nightfall/issues/48) | 1.5 SVG path data as exact NURBS | svg | Done (#62) |
 | [#61](https://github.com/wckdboy/nightfall/issues/61) | 1.5b SVG documents: shapes, transforms, units, viewBox | svg | Done (#65–#67) |
 | [#49](https://github.com/wckdboy/nightfall/issues/49) | 1.6 Planar regions from SVG (fill rules) | math | Done (#76, #77) |
-| [#74](https://github.com/wckdboy/nightfall/issues/74) | 1.6b Coincident edges in planar arrangements | math | |
+| [#74](https://github.com/wckdboy/nightfall/issues/74) | 1.6b Coincident edges in planar arrangements | math | Moved to Phase 2 |
 | [#50](https://github.com/wckdboy/nightfall/issues/50) | 1.7 SVG export | svg | Done (#64) |
 | [#63](https://github.com/wckdboy/nightfall/issues/63) | 1.7b DXF R12 export | svg | Done (#83) |
 | [#51](https://github.com/wckdboy/nightfall/issues/51) | 1.8 Equation curves | math | Done (#81, #82) |
@@ -44,8 +45,8 @@ Evaluation and exact constructors come first; fitting and intersection after (RF
 | [#53](https://github.com/wckdboy/nightfall/issues/53) | 1.10 Curve queries: closest point, intersections, polylines | math | Done (#71, #72) |
 | [#54](https://github.com/wckdboy/nightfall/issues/54) | 1.11 NURBS surfaces: evaluation and constructors | math | Done (#78) |
 | [#55](https://github.com/wckdboy/nightfall/issues/55) | 1.12 Lossless conversion to and from OCCT `Geom` | kernel | Done (#79) |
-| [#56](https://github.com/wckdboy/nightfall/issues/56) | 1.13 Swift facade for libnf-math | app | Next |
-| [#84](https://github.com/wckdboy/nightfall/issues/84) | 1.14 Gate: SVG corpus round trip, evaluation benchmark | svg | In review |
+| [#56](https://github.com/wckdboy/nightfall/issues/56) | 1.13 Swift facade for libnf-math | app | Done (#87, #88) |
+| [#84](https://github.com/wckdboy/nightfall/issues/84) | 1.14 Gate: SVG corpus round trip, evaluation benchmark | svg | Done (#85) |
 
 ## Log
 
@@ -68,3 +69,5 @@ Evaluation and exact constructors come first; fitting and intersection after (RF
   review. The gate's SVG corpus caught two exactness bugs in the reader (root sizes detoured
   through pixels; clamped rounded rects leaving zero-length sides); fixed with it (#84). Four
   of five gate items met; the Swift facade (#56) remains.
+- 2026-10-17 — Swift facade merged; Swift evaluates libnf-math curves in CI. **Phase 1 gate
+  passed.** #74 (coincident edges) carried into Phase 2.
