@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -24,15 +25,16 @@ TEST_CASE("an OCCT .brep reaches SMLib through USD with its volume intact", "[us
   REQUIRE(occt::ConvertOcctFileToUsd("pipeline.brep", "pipeline.usdc", error));
   INFO(error);
 
-  std::vector<SmBrep*> breps;
-  REQUIRE(SmApiUsdImportBreps("pipeline.usdc", breps, /*bHealerIsEnabled=*/FALSE) == SM_SUCCESS);
+  std::vector<SmBrep*> raw;
+  const SmStatus status = SmApiUsdImportBreps("pipeline.usdc", raw, /*bHealerIsEnabled=*/FALSE);
+  const std::vector<std::unique_ptr<SmBrep>> breps(raw.begin(), raw.end());  // freed on any exit
+  REQUIRE(status == SM_SUCCESS);
   REQUIRE(breps.size() == 1);
 
   SmBoolean manifold = FALSE;
-  REQUIRE(SmApiBrepIsManifoldSolid(breps[0], manifold) == SM_SUCCESS);
+  REQUIRE(SmApiBrepIsManifoldSolid(breps[0].get(), manifold) == SM_SUCCESS);
   CHECK(manifold == TRUE);
   double volume = 0.0;
-  REQUIRE(SmApiBrepComputeVolume(breps[0], 1e-8, volume) == SM_SUCCESS);
+  REQUIRE(SmApiBrepComputeVolume(breps[0].get(), 1e-8, volume) == SM_SUCCESS);
   CHECK_THAT(volume, Catch::Matchers::WithinRel(occt_volume, 1e-6));
-  for (SmBrep* b : breps) delete b;
 }

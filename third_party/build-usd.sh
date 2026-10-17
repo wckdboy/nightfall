@@ -5,6 +5,8 @@
 # Fetch OpenUSD at the pinned release and build a C++-only install (no Python, no imaging)
 # into third_party/install/usd-<version>, using OpenUSD's own build_usd.py (which fetches
 # its dependencies, e.g. oneTBB). Pinned to the release usd-brep 1.0.0 builds against.
+# The OpenUSD commit is pinned; the dependency versions are the ones build_usd.py at that
+# commit pins, so the CI cache key (this script's hash) covers them only through the commit.
 #
 # Usage: third_party/build-usd.sh [--jobs N]
 #   NF_USD_SOURCE_DIR / NF_USD_INSTALL_DIR override the default locations.
