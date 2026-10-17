@@ -34,3 +34,7 @@ if(NF_BUILD_TESTS)
   # --rng-seed time to explore new samples.
   catch_discover_tests(nf_math_tests TEST_PREFIX "math." EXTRA_ARGS --rng-seed=20261016)
 endif()
+
+# Benchmark for the Phase 1 gate (cubic evaluation ≤ 50 ns); built, not run by ctest.
+add_executable(nf_math_bench bench/eval_bench.cpp)
+target_link_libraries(nf_math_bench PRIVATE nf::math nf::warnings)
