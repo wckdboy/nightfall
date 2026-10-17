@@ -5,7 +5,7 @@
 # and the kernel service; never depends on a kernel.
 add_library(nf_math STATIC src/knot_vector.cpp src/basis.cpp src/nurbs_curve.cpp
                             src/constructors.cpp src/refine.cpp src/query.cpp
-                            src/intersect.cpp src/fit.cpp src/arrangement.cpp
+                            src/intersect.cpp src/fit.cpp src/arrangement.cpp src/facade.cpp
                             src/nurbs_surface.cpp src/expression.cpp
                             src/equation.cpp)
 add_library(nf::math ALIAS nf_math)
@@ -28,7 +28,8 @@ if(NF_BUILD_TESTS)
     tests/region_tests.cpp
     tests/surface_tests.cpp
     tests/expression_tests.cpp
-    tests/equation_tests.cpp)
+    tests/equation_tests.cpp
+    tests/facade_tests.cpp)
   target_link_libraries(nf_math_tests PRIVATE nf::math nf::warnings Catch2::Catch2WithMain)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.
