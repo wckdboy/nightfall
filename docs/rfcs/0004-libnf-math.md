@@ -1,13 +1,13 @@
 # RFC 0004: libnf-math, a kernel-free NURBS math core
 
-- **Status:** Review
+- **Status:** Accepted
 - **Author(s):** wckdboy
 - **Phase:** 1
 - **Created:** 2026-10-17
-- **Decided:** —
+- **Decided:** 2026-10-17 (review period waived by the maintainer)
 
-**Depends on:** RFC 0001's decision (OCCT primary, recorded in #41). This RFC is accepted only
-after that decision is merged; if it changed, the "delegated" column would target the other kernel
+**Depends on:** RFC 0001's decision (OCCT primary, merged in #41). This RFC was accepted
+after that decision was merged; if it changed, the "delegated" column would target the other kernel
 while libnf-math's kernel-free scope stays the same.
 
 ## Summary
