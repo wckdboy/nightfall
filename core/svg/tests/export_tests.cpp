@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -36,7 +37,7 @@ double dist(Vec2 a, Vec2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
 // Distance from q to the curve: dense sampling, then ternary search around the best sample.
 double distance_to(const NurbsCurve2& c, Vec2 q) {
   const double a = c.domain_start(), b = c.domain_end();
-  constexpr int kSamples = 400;
+  constexpr int kSamples = 64;
   int best = 0;
   double best_d = dist(c.point(a), q);
   for (int i = 1; i <= kSamples; ++i) {
@@ -58,7 +59,17 @@ double distance_to(const NurbsCurve2& c, Vec2 q) {
 
 double distance_to(const std::vector<NurbsCurve2>& cs, Vec2 q) {
   double d = INFINITY;
-  for (const auto& c : cs) d = std::min(d, distance_to(c, q));
+  for (const auto& c : cs) {
+    // A curve lies in its control points' box: skip curves whose box is already farther.
+    Vec2 lo = c.points().front(), hi = lo;
+    for (const Vec2 p : c.points()) {
+      lo = {std::min(lo.x, p.x), std::min(lo.y, p.y)};
+      hi = {std::max(hi.x, p.x), std::max(hi.y, p.y)};
+    }
+    const double dx = std::max({lo.x - q.x, 0.0, q.x - hi.x});
+    const double dy = std::max({lo.y - q.y, 0.0, q.y - hi.y});
+    if (std::hypot(dx, dy) < d) d = std::min(d, distance_to(c, q));
+  }
   return d;
 }
 
@@ -89,7 +100,7 @@ NurbsCurve2 quadratic(Vec2 a, Vec2 b, Vec2 c, std::vector<double> w) {
 
 TEST_CASE("lines and Béziers round-trip bit for bit", "[svg][export]") {
   const auto p1 = parse("M0 0 L10 0 Q12 3 15 0 C16 1 18 1 20 0 L20 10 Z M5 5 l1 1");
-  const Exported e = write_path(p1);
+  const Exported e = write_path(p1).value();
   CHECK(e.text == "M0 0L10 0Q12 3 15 0C16 1 18 1 20 0L20 10ZM5 5L6 6");
   CHECK(e.max_error == 0.0);
   const auto p2 = parse(e.text);
@@ -104,13 +115,13 @@ TEST_CASE("lines and Béziers round-trip bit for bit", "[svg][export]") {
       CHECK(std::ranges::equal(a.weights(), b.weights()));
     }
   }
-  CHECK(write_path(p2).text == e.text);
+  CHECK(write_path(p2)->text == e.text);
 }
 
 TEST_CASE("awkward numbers are written to read back exactly", "[svg][export]") {
   const std::vector<Vec2> pts{{0.1, -1e-300}, {1.0 / 3.0, 2.5e17}, {-0.0, -123456.789}};
   const Subpath sp{{nf::math::make_polyline(pts)}, false};
-  const Exported e = write_path(std::span(&sp, 1));
+  const Exported e = write_path(std::span(&sp, 1)).value();
   const auto back = parse(e.text);
   REQUIRE(back.size() == 1);
   REQUIRE(back[0].segments.size() == 2);
@@ -138,7 +149,7 @@ TEST_CASE("elliptical arcs are written as A and stay exact", "[svg][export][prop
   std::snprintf(d, sizeof d, "M%.17g %.17g A%.17g %.17g %.17g %d %d %.17g %.17g", a.x, a.y, rx, ry,
                 rot, large, sweep, b.x, b.y);
   const auto p1 = parse(d);
-  const Exported e = write_path(p1);
+  const Exported e = write_path(p1).value();
   CHECK(e.max_error == 0.0);
   CHECK(e.text.find('C') == std::string::npos);
   CHECK(std::ranges::count(e.text, 'A') ==
@@ -153,7 +164,7 @@ TEST_CASE("elliptical arcs are written as A and stay exact", "[svg][export][prop
 
 TEST_CASE("a circle is four arcs and a Z", "[svg][export]") {
   const Subpath sp{{nf::math::make_circle(Vec2{1, 2}, 3.0)}, true};
-  const Exported e = write_path(std::span(&sp, 1));
+  const Exported e = write_path(std::span(&sp, 1)).value();
   CHECK(std::ranges::count(e.text, 'A') == 4);
   CHECK(e.text.back() == 'Z');
   const auto back = parse(e.text);
@@ -170,7 +181,7 @@ TEST_CASE("a circle is four arcs and a Z", "[svg][export]") {
 TEST_CASE("a parabolic rational quadratic is written as Q", "[svg][export]") {
   // Standard-form weight 2 / sqrt(1 · 4) = 1: a parabola, though not in polynomial form.
   const Subpath sp{{quadratic({0, 0}, {5, 8}, {10, 0}, {1, 2, 4})}, false};
-  const Exported e = write_path(std::span(&sp, 1));
+  const Exported e = write_path(std::span(&sp, 1)).value();
   CHECK(e.text == "M0 0Q5 8 10 0");
   CHECK(e.max_error == 0.0);
 }
@@ -185,7 +196,7 @@ TEST_CASE("curves SVG cannot express are approximated within the tolerance", "[s
       quadratic({0, 0}, {20, 40}, {40, 0}, {1, 0.2, 1})  // elliptical: exact, for contrast
   );
   const Subpath sp{{curve}, false};
-  const Exported e = write_path(std::span(&sp, 1), {.tolerance = tol});
+  const Exported e = write_path(std::span(&sp, 1), {.tolerance = tol}).value();
   CHECK(e.max_error <= tol);
   const auto back = segments(parse(e.text));
   const double slack = 1e-9;
@@ -199,8 +210,50 @@ TEST_CASE("documents are in millimetres with y up", "[svg][export]") {
   for (std::size_t i = 0; i < square.size(); ++i) {
     sp.segments.push_back(nf::math::make_line(square[i], square[(i + 1) % square.size()]));
   }
-  const Exported doc = write_document(std::span(&sp, 1));
+  const Exported doc = write_document(std::span(&sp, 1)).value();
   CHECK(doc.text.find(R"(width="10mm" height="5mm" viewBox="0 -5 10 5")") != std::string::npos);
   CHECK(doc.text.find(R"(d="M0 0L10 0L10-5L0-5Z")") != std::string::npos);
   CHECK(doc.text.starts_with("<?xml"));
+}
+
+TEST_CASE("the reported error bounds the true deviation", "[svg][export]") {
+  // A degree-9 curve whose worst deviation from the first cubic falls between any fixed set
+  // of samples (review finding): the bound must still hold everywhere.
+  const std::vector<double> y{0,           0,          -0.07844567, 0.10708487, 0.02013912,
+                              -0.10269559, 0.00552593, 0.04810558,  0,          0};
+  std::vector<Vec2> pts;
+  for (std::size_t i = 0; i < y.size(); ++i) pts.push_back({static_cast<double>(i) / 9.0, y[i]});
+  const Subpath sp{{nf::math::make_bezier(pts)}, false};
+  for (const double tol : {0.01, 1e-3, 1e-6}) {
+    const Exported e = write_path(std::span(&sp, 1), {.tolerance = tol}).value();
+    CHECK(e.max_error <= tol);
+    // Dense check of the actual distance from the curve to what was written.
+    const auto back = segments(parse(e.text));
+    double worst = 0.0;
+    for (int i = 0; i <= 1000; ++i) {
+      worst = std::max(worst, distance_to(back, sp.segments[0].point(i / 1000.0)));
+    }
+    CHECK(worst <= e.max_error + 1e-12);
+  }
+}
+
+TEST_CASE("invalid or unreachable tolerances are errors", "[svg][export]") {
+  const Subpath sp{
+      {nf::math::elevate_degree(
+           nf::math::make_bezier(std::vector<Vec2>{{0, 0}, {1, 3}, {4, -2}, {5, 1}}), 2)
+           .value()},
+      false};
+  for (const double tol : {0.0, -1.0, std::nan(""), std::numeric_limits<double>::infinity()}) {
+    CHECK_FALSE(write_path(std::span(&sp, 1), {.tolerance = tol}).has_value());
+  }
+  CHECK_FALSE(write_path(std::span(&sp, 1), {.tolerance = 1e-300}).has_value());
+  CHECK_FALSE(write_document(std::span(&sp, 1), {.tolerance = -1}).has_value());
+}
+
+TEST_CASE("documents never have an empty viewport", "[svg][export]") {
+  const Subpath line{{nf::math::make_line(Vec2{0, 3}, Vec2{10, 3})}, false};
+  const Exported doc = write_document(std::span(&line, 1)).value();
+  CHECK(doc.text.find(R"(width="10mm" height="1mm" viewBox="0 -3.5 10 1")") != std::string::npos);
+  const Exported empty = write_document({}).value();
+  CHECK(empty.text.find(R"(width="1mm" height="1mm")") != std::string::npos);
 }

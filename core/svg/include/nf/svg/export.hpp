@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <expected>
 #include <span>
 #include <string>
 
@@ -21,9 +22,9 @@ struct ExportOptions {
 
 struct Exported {
   std::string text;
-  /// Largest deviation of any approximated piece, measured at 17 parameter-matched samples
-  /// per piece (an upper bound on the distance between curves at those samples); 0 when
-  /// every segment was written exactly.
+  /// Largest deviation of any approximated piece: a rigorous upper bound on the distance
+  /// between each written cubic and the curve at the same parameter (so also on the distance
+  /// between the curves); 0 when every segment was written exactly.
   double max_error = 0.0;
 };
 
@@ -34,13 +35,17 @@ struct Exported {
 /// - anything else (hyperbolic spans, degree > 3) → cubic Béziers within the tolerance.
 /// A closed subpath whose last segment is the closing line ends with Z instead. Numbers are
 /// written in their shortest form that reads back to the same double.
-[[nodiscard]] Exported write_path(std::span<const Subpath> paths,
-                                  const ExportOptions& options = {});
+/// Errors: a tolerance that is not positive and finite, or one the geometry cannot reach
+/// (below the floating-point resolution of the curve).
+[[nodiscard]] std::expected<Exported, std::string> write_path(std::span<const Subpath> paths,
+                                                              const ExportOptions& options = {});
 
 /// A standalone SVG document of model-space curves (millimetres, y up). y is negated into
 /// SVG's y-down user space; the viewBox is the control points' bounding box and width and
 /// height give it in millimetres, so one user unit is one millimetre.
-[[nodiscard]] Exported write_document(std::span<const Subpath> model_paths,
-                                      const ExportOptions& options = {});
+/// A degenerate box (one straight horizontal or vertical line) is padded to 1 mm so the
+/// viewport is never empty.
+[[nodiscard]] std::expected<Exported, std::string> write_document(
+    std::span<const Subpath> model_paths, const ExportOptions& options = {});
 
 }  // namespace nf::svg
