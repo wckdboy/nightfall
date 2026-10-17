@@ -44,9 +44,9 @@
     },
     {
       "name": "bakeoff",
-      "displayName": "Release + both kernels (RFC 0001)",
+      "displayName": "Release + both kernels + USD import path (RFC 0001, 0002)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_SMLIB": "ON", "NF_WITH_OCCT": "ON" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_SMLIB": "ON", "NF_WITH_OCCT": "ON", "NF_WITH_USD": "ON" }
     }
   ],
   "buildPresets": [

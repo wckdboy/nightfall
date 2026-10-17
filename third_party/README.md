@@ -9,13 +9,14 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
 | --- | --- | --- | --- | --- | --- |
 | Catch2 | v3.16.1 (`5010924c`) | BSL-1.0 | tests only | C++ unit and property tests | CMake FetchContent, pinned commit |
 | OpenCASCADE | 7.9.3 (`a016080b`) | LGPL-2.1 (dynamic linking only) | `NF_WITH_OCCT=ON` only | Comparison/fallback kernel and STEP translator (RFC 0001) | `third_party/build-occt.sh`, used via `third_party/occt/CMakeLists.txt` |
+| OpenUSD | 25.11 (`363a7c8d`), C++-only | TOST-1.0 (Apache-2.0 with a trademark section; RFC 0002) | `NF_WITH_USD=ON` only | Only route for external geometry into SMLib; later exact-solid storage | `third_party/build-usd.sh` (`build_usd.py`; also fetches oneTBB, Apache-2.0) |
+| usd-brep USD modules | 1.0.0 (`c9c5979f`) | Apache-2.0 | `NF_WITH_USD=ON` only | `.brep` → USD → SMLib (`BREP_USD_DATA`, `BREP_STAGING`, `OCCT_BREP_IMPORT`, `BREP_SM_USD`, `SM_API_USD`) | `third_party/usd-brep-usd/CMakeLists.txt` |
 | usd-brep (SMLib + SM_API) | 1.0.0 (`c9c5979f`) | Apache-2.0 | `NF_WITH_SMLIB=ON` only | Kernel candidate under evaluation (RFC 0001) | `third_party/fetch-smlib.sh`, built by `third_party/smlib/CMakeLists.txt` |
 
 ## Planned (pending RFCs)
 
 | Name | License | Purpose | RFC |
 | --- | --- | --- | --- |
-| OpenUSD | Apache-2.0 (modified) | Scene and exact-geometry storage | — |
 | planegcs | LGPL-2.1 | 2D sketch constraint solver | — |
 | sucrase | MIT | TypeScript type stripping for Nightfall Script | — |
 | Sparkle | MIT | Direct-download updates | — |

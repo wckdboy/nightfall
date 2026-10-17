@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Both kernels plus the USD import path (RFC 0001, 0002): restores OCCT and OpenUSD from
+# caches saved on main, fetches SMLib, runs tools/check.sh --preset bakeoff. Not required.
+
+name: bakeoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "third_party/**"
+      - "tools/bakeoff/**"
+      - "core/**"
+      - "tools/check.sh"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/workflows/bakeoff.yml"
+  pull_request:
+    paths:
+      - "third_party/**"
+      - "tools/bakeoff/**"
+      - "core/**"
+      - "tools/check.sh"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/workflows/bakeoff.yml"
+  schedule:
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bakeoff-${{ github.ref }}
+  # Superseded PR runs are cancelled; main runs always finish (they save the caches).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  bakeoff:
+    name: both kernels + USD path (macOS arm64)
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: brew install ninja
+
+      - name: Restore OCCT install
+        id: occt
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install  # same path + key as occt.yml, so main's cache is shared
+          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh') }}
+      - name: Build OCCT
+        if: steps.occt.outputs.cache-hit != 'true'
+        run: third_party/build-occt.sh
+      - name: Save OCCT install
+        if: steps.occt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install
+          key: ${{ steps.occt.outputs.cache-primary-key }}
+
+      - name: Restore OpenUSD install
+        id: usd
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install/usd-25.11
+          key: usd-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-usd.sh') }}
+      - name: Build OpenUSD
+        if: steps.usd.outputs.cache-hit != 'true'
+        run: third_party/build-usd.sh
+      - name: Save OpenUSD install
+        if: steps.usd.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: third_party/install/usd-25.11
+          key: ${{ steps.usd.outputs.cache-primary-key }}
+
+      - run: third_party/fetch-smlib.sh
+      - run: tools/check.sh --preset bakeoff --skip-format
