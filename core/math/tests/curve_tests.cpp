@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -16,6 +17,7 @@
 
 using namespace nf::math;
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 
 namespace {
 
@@ -104,5 +106,39 @@ TEST_CASE("evaluation is affine invariant", "[curve][property]") {
           .value();
   for (double u = 0; u <= 1.0; u += 0.125) {
     CHECK(near(m.point(u), c.point(u) + t, Tolerance{.linear = 1e-12}));
+  }
+}
+
+TEST_CASE("weights are normalised exactly and huge weights evaluate", "[curve]") {
+  const KnotVector kv = KnotVector::make({0, 0, 1, 1}, 1).value();
+  const double big = std::numeric_limits<double>::max();
+  const auto equal = NurbsCurve2::make(kv, {{2, 0}, {2, 0}}, {big, big}).value();
+  CHECK_FALSE(equal.rational());
+  CHECK(equal.weights()[0] == 1.0);
+  CHECK(equal.point(0.5) == Vec2{2, 0});
+  const auto huge = NurbsCurve2::make(kv, {{0, 0}, {1, 0}}, {big, big / 2}).value();
+  CHECK(huge.rational());
+  CHECK(huge.weights()[0] >= 1.0);
+  CHECK(huge.weights()[0] < 2.0);
+  CHECK(std::isfinite(huge.point(0.5).x));
+  // Scaling by a power of two changes no point on the curve, bit for bit.
+  const auto a = NurbsCurve2::make(kv, {{0, 0}, {1, 3}}, {1, 3}).value();
+  const auto b = NurbsCurve2::make(kv, {{0, 0}, {1, 3}}, {4, 12}).value();
+  for (double u : {0.0, 0.1, 0.5, 0.77, 1.0}) CHECK(a.point(u) == b.point(u));
+  CHECK_FALSE(NurbsCurve2::make(kv, {{0, 0}, {1, 0}}, {big, 1e-300}).has_value());
+}
+
+TEST_CASE("rational derivatives are computed above the degree", "[curve]") {
+  // Points 0 and 1 with weights 1 and 2: x(u) = 2u / (1 + u) = 2 − 2 / (1 + u), so
+  // x^(k)(u) = −2 (−1)^k k! (1 + u)^−(k+1) for k ≥ 1.
+  const KnotVector kv = KnotVector::make({0, 0, 1, 1}, 1).value();
+  const auto c = NurbsCurve2::make(kv, {{0, 0}, {1, 0}}, {1, 2}).value();
+  std::array<Vec2, 13> d{};
+  c.derivatives(0.5, 12, d);
+  double factorial = 1.0;
+  for (int k = 1; k <= 12; ++k) {
+    factorial *= k;
+    const double expected = -2.0 * (k % 2 ? -1.0 : 1.0) * factorial / std::pow(1.5, k + 1);
+    CHECK_THAT(d[static_cast<std::size_t>(k)].x, WithinRel(expected, 1e-10));
   }
 }

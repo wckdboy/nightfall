@@ -22,6 +22,8 @@ class NurbsCurve {
  public:
   /// Validated construction: points.size() == knots.control_point_count(), weights empty
   /// (non-rational, all 1) or one positive finite weight per point, finite coordinates.
+  /// Equal weights are stored as all 1 (non-rational); otherwise the weights are scaled by a
+  /// power of two (exact; the curve is unchanged) so the largest lies in [1, 2).
   [[nodiscard]] static std::expected<NurbsCurve, std::string> make(
       KnotVector knots, std::vector<Point> points, std::vector<double> weights = {});
 
@@ -38,7 +40,8 @@ class NurbsCurve {
   [[nodiscard]] Point point(double u) const noexcept;
 
   /// C(u) and its derivatives: out[k] = d^k C / du^k for k < out.size(), k ≤ n (A4.2 for
-  /// rational curves). Orders above the degree are zero for non-rational curves.
+  /// rational curves), to any order. Orders above the degree are zero for non-rational
+  /// curves but not, in general, for rational ones.
   void derivatives(double u, int n, std::span<Point> out) const noexcept;
 
  private:
