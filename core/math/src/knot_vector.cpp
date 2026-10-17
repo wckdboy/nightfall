@@ -47,6 +47,9 @@ std::expected<KnotVector, std::string> KnotVector::make(std::vector<double> knot
 }
 
 KnotVector KnotVector::uniform_clamped(int degree, int control_points) {
+  if (degree < 1 || degree > kMaxDegree) {
+    throw std::invalid_argument("uniform_clamped: degree must be 1..kMaxDegree");
+  }
   if (control_points < degree + 1) {
     throw std::invalid_argument("uniform_clamped: need at least degree + 1 control points");
   }

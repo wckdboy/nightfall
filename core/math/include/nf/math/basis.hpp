@@ -29,11 +29,13 @@ struct BasisDerivatives {
   }
 };
 
-/// Non-vanishing basis functions at u (A2.2). `span` must be find_span(u).
+/// Non-vanishing basis functions at u (A2.2); u is clamped to the domain, like find_span.
+/// `span` must be find_span(u).
 void basis_functions(const KnotVector& knots, int span, double u, BasisValues& out) noexcept;
 
 /// Basis functions and their derivatives up to order `n` at u (A2.3); orders above the
-/// degree are zero. `span` must be find_span(u); n ≤ KnotVector::kMaxDegree.
+/// degree are zero. u is clamped to the domain; `span` must be find_span(u);
+/// n ≤ KnotVector::kMaxDegree.
 void basis_derivatives(const KnotVector& knots, int span, double u, int n,
                        BasisDerivatives& out) noexcept;
 

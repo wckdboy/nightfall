@@ -20,6 +20,7 @@ double knot(const KnotVector& k, int i) noexcept { return k[static_cast<std::siz
 // The NURBS Book, A2.2.
 void basis_functions(const KnotVector& kv, int span, double u, BasisValues& out) noexcept {
   const int p = kv.degree();
+  u = std::clamp(u, kv.domain_start(), kv.domain_end());
   Row left{}, right{};
   out[0] = 1.0;
   for (int j = 1; j <= p; ++j) {
@@ -41,6 +42,7 @@ void basis_functions(const KnotVector& kv, int span, double u, BasisValues& out)
 void basis_derivatives(const KnotVector& kv, int span, double u, int n,
                        BasisDerivatives& out) noexcept {
   const int p = kv.degree();
+  u = std::clamp(u, kv.domain_start(), kv.domain_end());
   const int orders = std::min(n, p);  // higher derivatives of a degree-p basis are zero
   std::array<Row, kSide> ndu{};
   Row left{}, right{};

@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 #include "nf/math/basis.hpp"
@@ -52,6 +53,31 @@ TEST_CASE("uniform clamped knot vectors", "[knots]") {
   CHECK(kv.control_point_count() == 7);
   const std::vector<double> expected{0, 0, 0, 0, 0.25, 0.5, 0.75, 1, 1, 1, 1};
   CHECK(std::vector<double>(kv.knots().begin(), kv.knots().end()) == expected);
+}
+
+TEST_CASE("uniform_clamped rejects invalid degrees and counts", "[knots]") {
+  CHECK_THROWS_AS(KnotVector::uniform_clamped(-2, 0), std::invalid_argument);
+  CHECK_THROWS_AS(KnotVector::uniform_clamped(0, 3), std::invalid_argument);
+  CHECK_THROWS_AS(KnotVector::uniform_clamped(KnotVector::kMaxDegree + 1, 20),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(KnotVector::uniform_clamped(3, 3), std::invalid_argument);
+}
+
+TEST_CASE("basis functions clamp u to the domain", "[basis]") {
+  const KnotVector kv = KnotVector::make({0, 0, 1, 1}, 1).value();
+  for (const double u : {-1.0, 2.0}) {
+    BasisValues n;
+    basis_functions(kv, kv.find_span(u), u, n);
+    BasisDerivatives d;
+    basis_derivatives(kv, kv.find_span(u), u, 1, d);
+    const double inside = u < 0 ? 0.0 : 1.0;
+    BasisValues e;
+    basis_functions(kv, kv.find_span(inside), inside, e);
+    CHECK(n[0] == e[0]);
+    CHECK(n[1] == e[1]);
+    CHECK(d.at(0, 0) == e[0]);
+    CHECK(d.at(0, 1) == e[1]);
+  }
 }
 
 TEST_CASE("span search (A2.1) finds the non-empty interval holding u", "[knots]") {

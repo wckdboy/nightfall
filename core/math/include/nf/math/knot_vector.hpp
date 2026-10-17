@@ -25,6 +25,7 @@ class KnotVector {
                                                                    int degree);
 
   /// Open uniform knots on [0, 1] for `control_points` control points (≥ degree + 1).
+  /// Throws std::invalid_argument for a degree outside 1..kMaxDegree or too few points.
   [[nodiscard]] static KnotVector uniform_clamped(int degree, int control_points);
 
   [[nodiscard]] int degree() const noexcept { return degree_; }
