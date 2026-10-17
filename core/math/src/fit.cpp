@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <optional>
 
 #include "nf/math/basis.hpp"
@@ -193,13 +194,23 @@ std::expected<NurbsCurve<Point>, std::string> interpolate(std::span<const Point>
 
 template <typename Point>
 std::expected<Fit<Point>, std::string> approximate(std::span<const Point> q, double tolerance,
-                                                   int degree) {
+                                                   int degree, std::span<const double> given) {
   if (auto e = check(q, degree)) return std::unexpected(*e);
   if (!(tolerance > 0 && std::isfinite(tolerance))) {
     return std::unexpected("tolerance must be positive and finite");
   }
-  const auto ub = chord_parameters(q);
-  if (!ub) return std::unexpected("consecutive points coincide");
+  std::optional<std::vector<double>> ub;
+  if (given.empty()) {
+    ub = chord_parameters(q);
+    if (!ub) return std::unexpected("consecutive points coincide");
+  } else {
+    if (given.size() != q.size() || given.front() != 0.0 || given.back() != 1.0 ||
+        !std::ranges::is_sorted(given, std::less_equal<>{})) {
+      return std::unexpected("parameters must rise strictly from 0 to 1, one per point");
+    }
+    ub.emplace(given.begin(), given.end());
+  }
+  const bool correct = given.empty();  // given parameters are the caller's to keep
   const int m = static_cast<int>(q.size()) - 1;
 
   std::optional<Fit<Point>> best;
@@ -209,7 +220,7 @@ std::expected<Fit<Point>, std::string> approximate(std::span<const Point> q, dou
     auto c = least_squares(q, u, degree, n);
     if (!c) return false;
     double dev = deviation(*c, q, u);
-    for (int round = 0; round < 200 && dev > tolerance; ++round) {
+    for (int round = 0; correct && round < 200 && dev > tolerance; ++round) {
       std::vector<double> v = u;
       if (!correct_parameters(*c, q, v)) break;
       auto refit = least_squares(q, v, degree, n);
@@ -251,7 +262,9 @@ std::expected<Fit<Point>, std::string> approximate(std::span<const Point> q, dou
 
 template std::expected<NurbsCurve2, std::string> interpolate(std::span<const Vec2>, int);
 template std::expected<NurbsCurve3, std::string> interpolate(std::span<const Vec3>, int);
-template std::expected<Fit<Vec2>, std::string> approximate(std::span<const Vec2>, double, int);
-template std::expected<Fit<Vec3>, std::string> approximate(std::span<const Vec3>, double, int);
+template std::expected<Fit<Vec2>, std::string> approximate(std::span<const Vec2>, double, int,
+                                                           std::span<const double>);
+template std::expected<Fit<Vec3>, std::string> approximate(std::span<const Vec3>, double, int,
+                                                           std::span<const double>);
 
 }  // namespace nf::math
