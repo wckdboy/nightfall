@@ -47,6 +47,10 @@ TEST_CASE("polynomials are recognised exactly", "[expression]") {
   CHECK(parse("2^3*t").polynomial() == std::vector<double>{0, 8});
   CHECK(parse("sqrt(4)*t").polynomial() == std::vector<double>{0, 2});
   CHECK_FALSE(parse("t^10").polynomial());  // beyond degree 9
+  // Intermediate terms may go higher when they cancel (review finding).
+  CHECK(parse("t^10 - t^10 + t").polynomial() == std::vector<double>{0, 1});
+  CHECK(parse("t^10 * 0").polynomial() == std::vector<double>{0});
+  CHECK_FALSE(parse("t^100").polynomial());
   CHECK_FALSE(parse("t^0.5").polynomial());
   CHECK_FALSE(parse("1/t").polynomial());
   CHECK_FALSE(parse("sin(t)").polynomial());
@@ -66,6 +70,13 @@ TEST_CASE("sinusoids of one frequency are recognised", "[expression]") {
   CHECK_FALSE(parse("cos(t)*sin(t)").sinusoid());
   CHECK_FALSE(parse("cos(t^2)").sinusoid());
   CHECK(parse("5").sinusoid()->a == 5);
+  // Zero amplitude is a constant; frequencies are normalised positive (review findings).
+  CHECK_FALSE(parse("0*cos(t)").sinusoid()->omega.has_value());
+  CHECK(parse("0*cos(t) + cos(2*t)").sinusoid()->omega == 2.0);
+  const auto neg = parse("cos(t) + sin(-t)").sinusoid();
+  REQUIRE(neg.has_value());
+  CHECK(neg->omega == 1.0);
+  CHECK(neg->c == -1.0);
 }
 
 TEST_CASE("malformed expressions are errors", "[expression]") {

@@ -29,7 +29,8 @@ class Expression {
   /// ≤ 9, without trailing zeros (t·0 is the constant 0).
   [[nodiscard]] std::optional<std::vector<double>> polynomial() const;
 
-  /// a + b·cos(ωt) + c·sin(ωt); ω is unset for a constant.
+  /// a + b·cos(ωt) + c·sin(ωt) with ω > 0; ω is unset for a constant (also when every
+  /// oscillating term has zero amplitude).
   struct Sinusoid {
     double a = 0, b = 0, c = 0;
     std::optional<double> omega;

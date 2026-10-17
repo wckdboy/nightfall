@@ -180,8 +180,11 @@ using Poly = std::vector<double>;  // coefficients of t^0, t^1, …
 
 std::optional<Poly> poly_raw(const Node& n);
 
-// The expression as a polynomial in t of degree ≤ kMaxDegree, if it is one, without
-// trailing zero coefficients (t·0 is the constant 0).
+// Intermediate polynomials may exceed the final degree limit (t^10 − t^10 is 0), up to this.
+constexpr std::size_t kIntermediateDegree = 64;
+
+// The expression as a polynomial in t, if it is one, without trailing zero coefficients
+// (t·0 is the constant 0). The final degree limit is applied by Expression::polynomial().
 std::optional<Poly> poly(const Node& n) {
   auto p = poly_raw(n);
   if (p) {
@@ -198,8 +201,7 @@ std::optional<Poly> poly_raw(const Node& n) {
     return a;
   };
   const auto times = [](const Poly& a, const Poly& b) -> std::optional<Poly> {
-    if (a.size() + b.size() - 1 > static_cast<std::size_t>(KnotVector::kMaxDegree) + 1)
-      return std::nullopt;
+    if (a.size() + b.size() - 1 > kIntermediateDegree + 1) return std::nullopt;
     Poly r(a.size() + b.size() - 1, 0.0);
     for (std::size_t i = 0; i < a.size(); ++i) {
       for (std::size_t j = 0; j < b.size(); ++j) r[i + j] += a[i] * b[j];
@@ -238,7 +240,8 @@ std::optional<Poly> poly_raw(const Node& n) {
       if (!base || !ex || ex->size() != 1) return std::nullopt;
       const double k = (*ex)[0];
       if (base->size() == 1) return Poly{std::pow((*base)[0], k)};
-      if (k < 0 || k > KnotVector::kMaxDegree || k != std::floor(k)) return std::nullopt;
+      if (k < 0 || k > static_cast<double>(kIntermediateDegree) || k != std::floor(k))
+        return std::nullopt;
       Poly r{1.0};
       for (int i = 0; i < static_cast<int>(k); ++i) {
         auto next = times(r, *base);
@@ -258,7 +261,21 @@ std::optional<Poly> poly_raw(const Node& n) {
 
 using Trig = Expression::Sinusoid;
 
+std::optional<Trig> trig_raw(const Node& n);
+
+// trig_raw, normalised: a zero amplitude is a constant (no frequency), and frequencies are
+// positive (cos(−x) = cos x, sin(−x) = −sin x), so equal frequencies compare equal.
 std::optional<Trig> trig(const Node& n) {
+  auto r = trig_raw(n);
+  if (r && r->b == 0.0 && r->c == 0.0) r->omega.reset();
+  if (r && r->omega && *r->omega < 0) {
+    r->omega = -*r->omega;
+    r->c = -r->c;
+  }
+  return r;
+}
+
+std::optional<Trig> trig_raw(const Node& n) {
   using K = Node::Kind;
   if (auto p = poly(n); p && p->size() == 1) return Trig{(*p)[0], 0, 0, std::nullopt};
   switch (n.kind) {
@@ -312,7 +329,11 @@ std::expected<Expression, std::string> Expression::parse(std::string_view text) 
 
 double Expression::operator()(double t) const { return eval(*root_, t); }
 
-std::optional<std::vector<double>> Expression::polynomial() const { return poly(*root_); }
+std::optional<std::vector<double>> Expression::polynomial() const {
+  auto p = poly(*root_);
+  if (p && p->size() > static_cast<std::size_t>(KnotVector::kMaxDegree) + 1) return std::nullopt;
+  return p;
+}
 
 std::optional<Expression::Sinusoid> Expression::sinusoid() const { return trig(*root_); }
 
