@@ -32,14 +32,17 @@ struct Fit {
 };
 
 /// A non-rational curve of `degree` whose least-squares fit (A9.7, knots by Eq. 9.69, ends
-/// interpolated, then parameter correction for as long as each round improves the fit by 1 %,
-/// up to 200 rounds) keeps every data point within `tolerance`. The number of control points
-/// is searched by doubling, then bisection: usually the fewest, but not always, since fit
+/// interpolated) keeps every data point within `tolerance`. Parameters are chord lengths,
+/// improved by parameter correction for as long as each round helps by 1 % (up to 200
+/// rounds) — or `parameters`, one per point rising strictly from 0 to 1, when the caller knows
+/// better ones (an equation's own t), kept as given. The number of control points is
+/// searched by doubling, then bisection: usually the fewest, but not always, since fit
 /// quality is not monotone in the count (each count has its own knots). Needs more than
-/// `degree` points, no two consecutive ones equal, and a positive finite tolerance; a
-/// tolerance below the fit's floating-point accuracy is an error.
+/// `degree` points, a positive finite tolerance, and, without parameters, no two
+/// consecutive points equal; a tolerance below the fit's floating-point accuracy is an error.
 template <typename Point>
-[[nodiscard]] std::expected<Fit<Point>, std::string> approximate(std::span<const Point> points,
-                                                                 double tolerance, int degree = 3);
+[[nodiscard]] std::expected<Fit<Point>, std::string> approximate(
+    std::span<const Point> points, double tolerance, int degree = 3,
+    std::span<const double> parameters = {});
 
 }  // namespace nf::math

@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 #include "bezier.hpp"
 
@@ -49,19 +50,39 @@ Closest<Point> closest_point(const NurbsCurve<Point>& curve, Point p) {
   };
   consider(curve.domain_end());
 
-  // Newton on f(u) = C'(u)·(C(u) − p) inside [lo, hi], from u.
-  const auto polish = [&](double u, double lo, double hi) {
-    for (int it = 0; it < 12; ++it) {
+  // The nearest points inside a small piece [lo, hi]: roots of f(u) = C'(u)·(C(u) − p) where
+  // f goes from − to + (local minima of the distance). f is sampled across the piece, since a
+  // piece can hold more than one critical point (a fitted curve can start with a tiny hook);
+  // each sign change is solved by safeguarded Newton: the bracket is kept and bisection takes
+  // any step that leaves it or where f' ≤ 0, where plain Newton would head for a maximum.
+  const auto polish = [&](double lo, double hi) {
+    const auto slope = [&](double x) {
       std::array<Point, 3> d{};
-      curve.derivatives(u, 2, d);
+      curve.derivatives(x, 2, d);
       const Point r = d[0] - p;
-      const double f = dot(d[1], r), df = dot(d[2], r) + dot(d[1], d[1]);
-      if (!(std::abs(df) > 0)) break;
-      const double next = std::clamp(u - f / df, lo, hi);
-      if (next == u) break;
-      u = next;
+      return std::pair{dot(d[1], r), dot(d[2], r) + dot(d[1], d[1])};
+    };
+    constexpr int kSamples = 16;
+    double prev_u = lo, prev_f = slope(lo).first;
+    for (int k = 1; k <= kSamples; ++k) {
+      const double x = lo + (hi - lo) * k / kSamples, fx = slope(x).first;
+      consider(x);
+      if (prev_f < 0 && fx > 0) {
+        double a = prev_u, b = x, u = (a + b) / 2;
+        for (int it = 0; it < 100 && b > a; ++it) {
+          const auto [f, df] = slope(u);
+          if (f == 0) break;
+          (f < 0 ? a : b) = u;
+          double next = df > 0 ? u - f / df : (a + b) / 2;
+          if (!(next > a && next < b)) next = (a + b) / 2;
+          if (next == u) break;
+          u = next;
+        }
+        consider(u);
+      }
+      prev_u = x;
+      prev_f = fx;
     }
-    consider(u);
   };
 
   // Subdivide only to isolate candidates: the box bound is first-order in a piece's size
@@ -79,8 +100,7 @@ Closest<Point> closest_point(const NurbsCurve<Point>& curve, Point p) {
     consider(um);
     if (detail::safe_diagonal(lo, hi) <= small) {
       consider(b.u0);
-      consider(b.u1);
-      polish(um, b.u0, b.u1);
+      polish(b.u0, b.u1);
       continue;
     }
     const auto [left, right] = b.split();
