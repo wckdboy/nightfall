@@ -70,6 +70,10 @@ class FaultKernel final : public kernel::IKernel {
   explicit FaultKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<kernel::Mesh, kernel::KernelError> tessellate(
+      const kernel::ShapePtr& shape, const kernel::MeshingOptions& options) override {
+    return backend.tessellate(shape, options);
+  }
   std::expected<std::vector<kernel::EntityPtr>, kernel::KernelError> edges(
       const kernel::EntityPtr& face) override {
     return backend.edges(face);

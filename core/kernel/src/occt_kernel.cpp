@@ -12,11 +12,15 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
+#include <BRepLib_ToolTriangulatedShape.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
 #include <DESTEP_Parameters.hxx>
 #include <Message_Messenger.hxx>
+#include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
 #include <STEPControl_Writer.hxx>
 #include <Standard_Version.hxx>
@@ -160,6 +164,7 @@ class OcctKernel final : public IKernel {
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
+                "mesh=indexed-faces-copy-v1;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
@@ -206,6 +211,91 @@ class OcctKernel final : public IKernel {
       if (writer.WriteStream(stream) != IFSelect_RetDone || !stream.good())
         fail("STEP text encoding failed");
       return stream.str();
+    });
+  }
+  std::expected<Mesh, KernelError> tessellate(const ShapePtr& input,
+                                              const MeshingOptions& options) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || !std::isfinite(options.linear_deflection) ||
+          !std::isfinite(options.angular_deflection) ||
+          options.linear_deflection < tolerance_.linear ||
+          options.angular_deflection < tolerance_.angular ||
+          options.angular_deflection > std::numbers::pi || !options.max_triangles ||
+          options.max_triangles > 1'000'000)
+        fail("invalid mesh source or meshing options");
+      BRepBuilderAPI_Copy copy(source->geometry, true, false);
+      if (!copy.IsDone()) fail("mesh input copy failed");
+      IMeshTools_Parameters parameters;
+      parameters.Deflection = parameters.DeflectionInterior = options.linear_deflection;
+      parameters.Angle = parameters.AngleInterior = options.angular_deflection;
+      parameters.EnableControlSurfaceDeflectionAllSurfaces = true;
+      BRepMesh_IncrementalMesh mesher(copy.Shape(), parameters);
+      if (!mesher.IsDone()) fail("solid tessellation failed");
+      Mesh result;
+      TopTools_IndexedMapOfShape originals, copied;
+      TopExp::MapShapes(source->geometry, TopAbs_FACE, originals);
+      TopExp::MapShapes(copy.Shape(), TopAbs_FACE, copied);
+      for (int f = 1; f <= originals.Extent(); ++f) {
+        const auto index = copied.FindIndex(copy.ModifiedShape(originals(f)));
+        if (!index) fail("meshed face is absent from the copied solid");
+        // Copy history may omit orientation; read it from the actual solid boundary.
+        const auto face = TopoDS::Face(copied(index));
+        TopLoc_Location location;
+        const auto triangulation = BRep_Tool::Triangulation(face, location);
+        if (triangulation.IsNull() || triangulation->NbTriangles() <= 0 ||
+            triangulation->NbNodes() <= 0)
+          fail("source face has no complete triangulation");
+        const auto nodes = static_cast<std::size_t>(triangulation->NbNodes());
+        const auto triangles = static_cast<std::size_t>(triangulation->NbTriangles());
+        if (result.indices.size() / 3 + triangles > options.max_triangles ||
+            result.vertices.size() + nodes > 3 * options.max_triangles)
+          fail("mesh output exceeds its triangle or vertex budget");
+        BRepLib_ToolTriangulatedShape::ComputeNormals(face, triangulation);
+        if (!triangulation->HasNormals()) fail("mesh face has no surface normals");
+        const bool reversed = face.Orientation() == TopAbs_REVERSED;
+        const auto base = static_cast<std::uint32_t>(result.vertices.size());
+        const auto first = static_cast<std::uint32_t>(result.indices.size());
+        for (int i = 1; i <= triangulation->NbNodes(); ++i) {
+          const auto p = triangulation->Node(i).Transformed(location.Transformation());
+          auto n = triangulation->Normal(i).Transformed(location.Transformation());
+          if (reversed) n.Reverse();
+          const MeshVertex vertex{{p.X(), p.Y(), p.Z()}, {n.X(), n.Y(), n.Z()}};
+          if (!finite(vertex.position) || !finite(vertex.normal))
+            fail("mesh has non-finite vertex data");
+          result.vertices.push_back(vertex);
+        }
+        for (int i = 1; i <= triangulation->NbTriangles(); ++i) {
+          int a, b, c;
+          triangulation->Triangle(i).Get(a, b, c);
+          if (a < 1 || b < 1 || c < 1 || a > triangulation->NbNodes() ||
+              b > triangulation->NbNodes() || c > triangulation->NbNodes())
+            fail("mesh triangle has an invalid node index");
+          if (reversed) std::swap(b, c);
+          const auto ia = base + static_cast<std::uint32_t>(a - 1);
+          const auto ib = base + static_cast<std::uint32_t>(b - 1);
+          const auto ic = base + static_cast<std::uint32_t>(c - 1);
+          const auto& va = result.vertices[ia];
+          const auto& vb = result.vertices[ib];
+          const auto& vc = result.vertices[ic];
+          // Pole nodes can have distinct indices but identical positions. Test before
+          // cross products: fused arithmetic can leave a nonzero cancellation residual.
+          if (va.position == vb.position || va.position == vc.position ||
+              vb.position == vc.position)
+            continue;
+          const auto normal = math::cross(vb.position - va.position, vc.position - va.position);
+          const auto area = math::length(normal);
+          if (!std::isfinite(area)) fail("mesh triangle area is not finite");
+          if (area > 0 && !(math::dot(normal, va.normal + vb.normal + vc.normal) > 0))
+            fail("mesh normals disagree with triangle winding");
+          if (area > 0) result.indices.insert(result.indices.end(), {ia, ib, ic});
+        }
+        const auto count = static_cast<std::uint32_t>(result.indices.size()) - first;
+        if (!count) fail("mesh face has only degenerate triangles");
+        result.faces.push_back({detail::entity(source, originals(f)), first, count});
+      }
+      if (result.faces.empty()) fail("solid tessellation has no faces");
+      return result;
     });
   }
   std::expected<std::vector<EntityPtr>, KernelError> edges(const EntityPtr& input) override {

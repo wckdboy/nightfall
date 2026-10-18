@@ -46,6 +46,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#127](https://github.com/wckdboy/nightfall/issues/127) | Cylindrical face selectors as modeling axes | kernel | Implemented with exact cylinder descriptions, radius filters, three axis consumers and cache/failure regressions; local evidence below |
 | [#128](https://github.com/wckdboy/nightfall/issues/128) | Extrusions terminating on selected parallel supporting planes | kernel | Implemented with supporting-plane resolution, exact displacement, result/cache/failure regressions and local evidence below |
 | [#129](https://github.com/wckdboy/nightfall/issues/129) | Equal-distance chamfers on selected face-boundary edges | kernel | Implemented with immutable exact solids, complete history, recursive edge sets and atomic cache publication; local evidence below |
+| [#130](https://github.com/wckdboy/nightfall/issues/130) | Immutable indexed viewport meshes with current face associations | kernel | Implemented under RFCs 0003/0007 for Phase 2 native integration; mesh/ownership/reference regressions and local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -875,6 +876,19 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   STEP reloads pass the local gate; sanitizer/timing evidence follows below. Backend implementers
   add the two virtual methods and capability flag, rebuilding consumers. No persisted change;
   evaluator identity advances to `evaluator/26;roles/5`. CI/review and phase sign-off stay pending.
+
+- 2026-10-18 — #130 starts the native visual-testing integration already authorized for
+  Phase 2 by RFC 0003. A typed `IKernel::tessellate` query returns indexed world positions,
+  outward surface normals and one range per original snapshot face. Deep-copy meshing keeps
+  cached exact geometry and existing triangulations unchanged. Output budgets bound returned
+  triangles/vertices, not OCCT's internal time/allocation; native admission/watchdog work follows.
+  Tests first fail to compile without the query. Geometry regressions then catch lost copied-face
+  orientations and a collapsed pole triangle with distinct node IDs; both receive explicit fixes.
+  Eight backend cases and two evaluator cases pass, including all twenty current references,
+  cavities, mirrors, chamfers, cache reuse, eviction and retained picking handles. The backend
+  identity adds `mesh=indexed-faces-copy-v1`; implementers add the virtual method and rebuild
+  consumers. No persisted format, dependency or phase-gate change. The C bridge, XPC/Metal
+  connection and portable app bundle follow as bounded increments under the accepted RFC.
 
 ## Rebuild benchmark evidence
 
@@ -1783,3 +1797,72 @@ encoding, IPC and tessellation. These are local observations, not latency guaran
 the earlier loaded-run miss and #95 follow-up remain recorded. Logs/data:
 `/tmp/nightfall-129-bench.log`, `/tmp/nightfall-129-bench.json`.
 Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Indexed viewport mesh evidence
+
+2026-10-18, #130, Apple M3 Pro / 12 cores / 36 GiB, Release, dynamically linked OCCT 7.9.3.
+The focused backend run passes eight cases / 115,686 assertions; evaluator integration passes
+two initial fine-only cases / 175,755 assertions, seed 20261018; the final suite additionally
+checks the default mesh on every reference. A 10×20×30 mm box has 24 face-local vertices,
+12 triangles and six contiguous face ranges. Outward signed mesh volume 6000 mm³ and area
+2200 mm² match analytic values within 1e-7, including after rigid placement/reflection.
+Cavity volume 5976 / area 2252 and separated solid components exercise inner-shell winding.
+Fine annular meshes converge toward exact volume 2250π / area 1050π within 0.2%; the sphere
+is within 0.5% of volume 4000π/3 / area 400π. Normals are finite and unit within 1e-6,
+including seams, poles and inward bore normals. Every range owns an original snapshot face;
+indices, winding, face coverage, geometry bounds and retained lifetime are verified.
+
+All twenty current reference parts produce default (0.1 mm / 0.2 rad) and fine
+(0.02 mm / 0.15 rad) meshes, with approximate volume/area within 1% of their exact solids. Tessellation preserves evaluator hashes, cached
+shape pointers, original serialized B-reps and existing triangulations; retained face handles
+remain usable after facade teardown and cache eviction. A chamfered, placed, mirrored
+part exercises naming/mesh ownership across geometry reconstruction. Degenerate pole nodes
+with equal positions are removed before cross products; genuine triangles require consistent
+normal/winding. Copy-history orientations are recovered from the actual copied solid.
+Invalid options/foreign snapshots and returned-data limits fail without changing inputs.
+
+`tools/check.sh --preset occt` passes 693/693 (50.62 s), including hygiene/format,
+202 schema cases and twenty reference documents, without warnings. Initial interface tests
+fail to compile; the first geometry run passes 2/8, then 7/8 after the orientation fix.
+The final pole regression also fails before its fix. Logs: `/tmp/nightfall-130-red-build.log`,
+`/tmp/nightfall-130-kernel-initial.log`, `/tmp/nightfall-130-pole-red.log`,
+`/tmp/nightfall-130-kernel.log`, `/tmp/nightfall-130-evaluator.log`,
+`/tmp/nightfall-130-check.log`. The pre-default-refinement gate also passes 693/693 (53.16 s),
+retained in `/tmp/nightfall-130-initial-check.log`. The initial meshing benchmark exposed
+1.3898% volume / 0.7454% area error for the spherical knob at 0.1 mm / 0.3 rad. A failing
+regression confirms the default miss; tightening the default angle to 0.2 rad fixes it.
+Both partial runs are retained: `/tmp/nightfall-130-mesh-bench-initial.log` and
+`/tmp/nightfall-130-mesh-bench-diagnostic.log`; the red test is
+`/tmp/nightfall-130-default-red.log`. Final sanitizer/meshing evidence follows.
+
+After the final Release gate, `nf_mesh_bench` measures twenty reference parts at default
+0.1 mm / 0.2 rad and fine 0.02 mm / 0.15 rad: one untimed warm-up plus thirty samples
+per part/quality, 1200 measured mesh queries. Every sample checks complete face coverage,
+deterministic vertex/triangle counts and approximate volume/area within 1% of exact measures.
+Default median times span 0.154–17.576 ms; fine medians span 0.153–104.057 ms. The slowest
+case in both modes is the toroidal seal:
+
+- Default: median 17.576 / p95 18.258 / max 18.438 ms; 4352 vertices, 8064 triangles,
+  four face ranges, 305,760 buffer bytes, volume error 0.325990%, area error 0.143671%.
+- Fine: 104.057 / 112.425 / 114.348 ms; 16,067 vertices, 31,160 triangles, four ranges,
+  1,145,232 buffer bytes, volume error 0.119084%, area error 0.034162%.
+
+The largest approximation error is the spherical knob: default volume 0.654812% /
+area 0.354961%, fine volume 0.285691% / area 0.154450%. Its default query takes
+6.310 / 6.469 / 6.538 ms, fine 19.524 / 19.741 / 19.750 ms. All other reference errors
+are smaller. Buffer bytes count vertices, indices and range structs, excluding retained
+face-handle objects/source solids and allocator overhead; they are not RSS measurements.
+Timing includes deep copy, meshing, surface normals, mesh checks and face associations;
+it excludes document rebuild, caller-side verification, transport, GPU upload and rendering.
+Fine meshing can exceed 100 ms and must stay on the service worker. This is separate from
+the parameter-rebuild gate and does not establish viewport frame time. Logs/data:
+`/tmp/nightfall-130-mesh-bench.log`, `/tmp/nightfall-130-mesh-bench.json`.
+The C bridge, XPC/Metal connection and portable development app bundle remain the next steps;
+there is no production visual-testing app artifact from this backend-only increment.
+Remote CI/review and full Phase 2 sign-off remain pending.
+
+Final ASan/UBSan kernel/cache/evaluator/CLI passes 455/455 (116.82 s), without diagnostics.
+The initial pre-default-refinement run also passes 455/455 (117.23 s); both are retained in
+`/tmp/nightfall-130-asan.log` and `/tmp/nightfall-130-initial-asan.log`. Nightfall code is
+instrumented; the pinned OCCT shared library remains Release. The final public query/defaults
+and both mesh-quality modes are covered; development app integration remains separate.

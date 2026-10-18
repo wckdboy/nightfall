@@ -71,6 +71,16 @@ failures have explicit states; unsupported
 constraints, selectors and modeling operations report errors. This is the headless kernel
 path; native app integration and the remaining v1 operations are still in progress.
 
+Viewport consumers can call `IKernel::tessellate(shape, {0.1, 0.2})` for an indexed display
+mesh (absolute mm/radian deflections). Positions are world-space doubles; normals point
+outward. Each face range retains its original snapshot handle for transient picking.
+Meshing deep-copies geometry and preserves existing triangulations and cached solid names.
+The default returned-data limit is one million triangles and three million vertices;
+it does not bound OCCT's internal working memory or runtime. Service admission/watchdog
+handling remains part of native integration. Backends must implement the new virtual query,
+and vtable consumers must rebuild. The C bridge, XPC/Metal connection and portable `.app`
+packaging are the next steps for visual testing under RFC 0003.
+
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 
 ```sh

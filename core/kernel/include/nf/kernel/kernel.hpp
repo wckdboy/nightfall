@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <optional>
@@ -65,6 +66,22 @@ struct FaceInfo {
   std::optional<Plane> plane;  // located outward frame for analytic planes; empty for curved faces
   std::optional<Cylinder> cylinder{};  // exact analytic cylinders only; no fitting/approximation
 };
+struct MeshingOptions {
+  double linear_deflection = 0.1, angular_deflection = 0.2;  // absolute mm and radians
+  std::size_t max_triangles = 1'000'000;                     // 1..1,000,000
+};
+struct MeshVertex {
+  math::Vec3 position, normal;  // world-space mm and outward unit surface normal
+};
+struct MeshFace {
+  EntityPtr face;  // original snapshot face, suitable for transient picking; never persist indices
+  std::uint32_t first_index, index_count;  // contiguous range in Mesh::indices, multiples of three
+};
+struct Mesh {
+  std::vector<MeshVertex> vertices;    // shared within each face; split across face boundaries
+  std::vector<std::uint32_t> indices;  // outward-wound triangle triples
+  std::vector<MeshFace> faces;         // exactly one nonempty range per unique source face
+};
 struct Extrusion {
   Plane plane;
   std::vector<math::Region> regions;
@@ -121,6 +138,13 @@ class IKernel {
   /// empty lists and null/foreign snapshots. No files are opened; serialize backend access.
   [[nodiscard]] virtual std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>&) = 0;
+  /// Derive an indexed display mesh from a deep copy; preserve exact geometry/triangulations.
+  /// Handles retain original faces across facade teardown. Reject null/foreign snapshots,
+  /// non-finite settings, deflections below kernel tolerances, angles > pi, incomplete faces
+  /// and output above max_triangles or 3*max_triangles vertices. Limits bound returned data,
+  /// not the mesher's internal allocations/time. Access remains serialized by the service.
+  [[nodiscard]] virtual std::expected<Mesh, KernelError> tessellate(const ShapePtr&,
+                                                                    const MeshingOptions&) = 0;
   /// Enumerate every unique face of a validated snapshot, including curved faces and all solids.
   /// Handles retain their owner; planar frames follow face_plane's convention. Cylinders expose
   /// their located parameter axis/radius, independent of face orientation. Other curved types
