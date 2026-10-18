@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <functional>
 #include <map>
 
 #include "nf/ir/document.hpp"
@@ -85,7 +86,11 @@ class Evaluator {
   };
   Evaluator(kernel::IKernel& kernel, Limits limits);
   ~Evaluator();
-  [[nodiscard]] std::expected<Evaluation, ir::Errors> evaluate(std::string_view document);
+  // Called before each executing feature (including cache hits), excluding suppression/rollback.
+  // The observer is synchronous, must not throw/reenter, and is never stored.
+  using Observer = std::function<void(std::size_t)>;
+  [[nodiscard]] std::expected<Evaluation, ir::Errors> evaluate(std::string_view document,
+                                                               const Observer& observer = {});
   void set_cache_limits(Limits limits);
   void clear_cache();
   [[nodiscard]] Usage cache_usage() const;

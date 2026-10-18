@@ -244,7 +244,8 @@ bool Evaluation::ok() const {
                               [](const auto& f) { return f.status == FeatureStatus::kFailed; });
 }
 
-std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view source) {
+std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view source,
+                                                          const Observer& observer) {
   auto document = ir::read_document(source);
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
@@ -278,6 +279,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         result.bodies[string(*output->find("new"))].unavailable = "input_suppressed";
       continue;
     }
+    if (observer) observer(index);
     try {
       const auto program = take(ir::FeatureInputs::compile(feature));
       const auto inputs = take(program.evaluate(document->units, parameters->values));

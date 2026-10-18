@@ -1,0 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+// SPDX-License-Identifier: Apache-2.0
+module NightfallKernelBridge {
+  header "kernel_bridge.h"
+  export *
+}

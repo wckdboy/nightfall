@@ -78,8 +78,17 @@ Meshing deep-copies geometry and preserves existing triangulations and cached so
 The default returned-data limit is one million triangles and three million vertices;
 it does not bound OCCT's internal working memory or runtime. Service admission/watchdog
 handling remains part of native integration. Backends must implement the new virtual query,
-and vtable consumers must rebuild. The C bridge, XPC/Metal connection and portable `.app`
-packaging are the next steps for visual testing under RFC 0003.
+and vtable consumers must rebuild.
+
+Native service code can now use the [plain-C bridge](services/kernel/bridge/kernel_bridge.h)
+(`nf_kernel_bridge` target; Swift module `NightfallKernelBridge`). Create a per-document
+session, pass the complete v1 JSON to `nf_session_build`, inspect its immutable manifest and
+indexed buffers, then free the result and session. Results survive later builds and session
+teardown; any error returns zero geometry. Mesh budgets apply across all live bodies.
+The signed active-feature index is safe to poll from a watchdog and is -1 outside feature
+evaluation. Serialize builds on the service worker. C17 linking and Swift 6 strict importing
+are tested; the Swift XPC worker/watchdog, shared-memory transfer, Metal viewer and portable
+`.app` packaging still follow under RFC 0003. No production visual-testing app exists yet.
 
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 
