@@ -53,6 +53,28 @@ Vec3 unit(const Value& value, const std::string& pointer) {
   if (!result) fail(pointer, "direction must be nonzero and finite");
   return *result;
 }
+std::pair<Vec3, Vec3> prepare_axis(const Value& axis, const Sketch* sketch,
+                                   const std::string& pointer) {
+  if (axis.find("origin"))
+    return {vector3(field(axis, "origin")), unit(field(axis, "direction"), pointer + "/direction")};
+  if (!axis.find("sketch")) fail(pointer, "selector axes are not implemented");
+  if (!sketch) fail(pointer + "/sketch", "axis sketch is unavailable");
+  const auto found = sketch->lines.find(*field(axis, "entity").if_string());
+  if (found == sketch->lines.end()) fail(pointer + "/entity", "axis must name a sketch line");
+  const auto& line = found->second;
+  const auto local = math::normalized(line.end - line.start, kTolerance);
+  if (!local) fail(pointer + "/entity", "axis line must be finite and nonzero");
+  const auto& plane = sketch->plane;
+  const auto y = math::cross(plane.normal, plane.x_axis);
+  const auto origin = plane.origin + plane.x_axis * line.start.x + y * line.start.y;
+  // Transform the local direction before placement; subtracting placed endpoints can
+  // erase short lines when a sketch is far from the world origin.
+  const auto direction = math::normalized(plane.x_axis * local->x + y * local->y, kTolerance);
+  if (!direction || !std::isfinite(origin.x) || !std::isfinite(origin.y) ||
+      !std::isfinite(origin.z))
+    fail(pointer + "/entity", "axis exceeds finite world coordinates");
+  return {origin, *direction};
+}
 std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::string& pointer) {
   if (math::near(points.front(), points.back(), kTolerance)) points.pop_back();
   if (points.size() < 3) fail(pointer, "polygon needs three distinct vertices");
@@ -439,6 +461,7 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
         const auto a = point2(field(entity, "start")), b = point2(field(entity, "end"));
         if (math::near(a, b, kTolerance)) fail(pointer, "zero-length line");
         segments.push_back(math::make_line(a, b));
+        sketch.lines.emplace(*field(entity, "id").if_string(), Sketch::Line{a, b});
       } else {
         fail(pointer + "/type", "sketch entity is not implemented: " + type);
       }
@@ -526,19 +549,19 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
 }
 
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inputs,
-                                                                const Sketch& sketch) {
+                                                                const Sketch& sketch,
+                                                                const Sketch* axis_sketch) {
   auto regions = prepare_regions(inputs, sketch);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
-    const auto& axis = field(inputs, "axis");
-    if (!axis.find("origin")) fail("/axis", "selector and sketch axes are not implemented");
-    return kernel::Revolution{sketch.plane, std::move(*regions), vector3(field(axis, "origin")),
-                              unit(field(axis, "direction"), "/axis/direction"),
+    const auto [origin, direction] = prepare_axis(field(inputs, "axis"), axis_sketch, "/axis");
+    return kernel::Revolution{sketch.plane, std::move(*regions), origin, direction,
                               number(field(inputs, "angle"))};
   });
 }
 
-std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& inputs) {
+std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& inputs,
+                                                                   const Sketch* axis_sketch) {
   return guarded([&] {
     std::set<std::string> bodies;
     for (const auto& body : *field(inputs, "bodies").if_array())
@@ -547,11 +570,10 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& 
     if (const auto* translation = inputs.find("translation"))
       result.translation = vector3(*translation);
     if (const auto* rotation = inputs.find("rotation")) {
-      const auto& axis = field(*rotation, "axis");
-      if (!axis.find("origin"))
-        fail("/rotation/axis", "selector and sketch axes are not implemented");
-      result.axis_origin = vector3(field(axis, "origin"));
-      result.axis_direction = unit(field(axis, "direction"), "/rotation/axis/direction");
+      const auto [origin, direction] =
+          prepare_axis(field(*rotation, "axis"), axis_sketch, "/rotation/axis");
+      result.axis_origin = origin;
+      result.axis_direction = direction;
       result.angle = number(field(*rotation, "angle"));
     }
     return result;

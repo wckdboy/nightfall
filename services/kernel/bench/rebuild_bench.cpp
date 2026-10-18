@@ -109,6 +109,16 @@ int main() {
     sleeve.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
       "axis":{"origin":[0,0,0],"direction":"z"},"angle":360,
       "result":{"new":"plate","body_type":"brep"}})");
+    auto sketch_axis = sleeve;
+    sketch_axis.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
+      {"id":"a","type":"line","start":[0,5],"end":["depth",5]},
+      {"id":"b","type":"line","start":["depth",5],"end":["depth",10]},
+      {"id":"c","type":"line","start":["depth",10],"end":[0,10]},
+      {"id":"d","type":"line","start":[0,5],"end":[0,10]}],"constraints":[]})")
+                                         .value();
+    sketch_axis.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
+      "axis":{"sketch":"outline","entity":"a"},"angle":360,
+      "result":{"new":"plate","body_type":"brep"}})");
     auto torus = sleeve;
     torus.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
       {"id":"section","type":"circle","center":[0,20],"radius":"depth / 10"}],
@@ -209,6 +219,7 @@ int main() {
          {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
+          Part{"sketch axis", sketch_axis, 25 * std::numbers::pi, 5, 28, 29, 29, 0},
           Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
           Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},

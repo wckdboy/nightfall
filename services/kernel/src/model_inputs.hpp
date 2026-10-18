@@ -9,9 +9,13 @@
 
 namespace nf::kernel_service {
 struct Sketch {
+  struct Line {
+    math::Vec2 start, end;
+  };
   kernel::Plane plane;
   std::vector<std::vector<math::NurbsCurve2>> paths;
   std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
+  std::map<std::string, Line> lines;         // authored direction, independent of path traversal
 };
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
@@ -32,11 +36,14 @@ struct Sketch {
 /// they do not pin values from a previous document or prevent subsequent parameter edits.
 /// Coordinates are checked, never solved or moved. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
+/// Revolve/rotation axes resolve named lines from the supplied evaluated axis sketch; map
+/// start and start-to-end direction through its plane. Selector axes remain unsupported.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
                                                               const Sketch& sketch);
-std::expected<kernel::Revolution, ir::Error> prepare_revolution(const ir::json::Value& inputs,
-                                                                const Sketch& sketch);
-std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const ir::json::Value& inputs);
+std::expected<kernel::Revolution, ir::Error> prepare_revolution(
+    const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr);
+std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
+    const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr);
 }  // namespace nf::kernel_service

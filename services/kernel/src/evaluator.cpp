@@ -114,6 +114,7 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
 std::size_t sketch_bytes(const Sketch& sketch) {
   std::size_t bytes = sizeof(Sketch);
   for (const auto& point : sketch.points) bytes += sizeof(point) + 64 + point.first.size();
+  for (const auto& line : sketch.lines) bytes += sizeof(line) + 64 + line.first.size();
   for (const auto& path : sketch.paths) {
     bytes += sizeof(path);
     for (const auto& curve : path)
@@ -151,7 +152,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/12;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/13;roles/3;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -191,16 +192,19 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         dependencies.emplace(pointer, *body.hash);
         bindings.push_back(body.shape);
       };
-      std::shared_ptr<const Output> sketch;
-      std::string result_mode;
-      if (profile_feature) {
-        const auto& id = string(*inputs.find("profile")->find("sketch"));
+      auto bind_sketch = [&](const std::string& id, const std::string& pointer) {
         const auto& upstream = result.features[features.at(id)];
         if (!upstream.hash)
           fail(upstream.status == FeatureStatus::kSuppressed ? "input_suppressed" : "input_failed",
-               "profile sketch is unavailable: " + id, "/inputs/profile/sketch");
-        dependencies.emplace("/inputs/profile/sketch", *upstream.hash);
-        sketch = sketches.at(id);
+               "sketch is unavailable: " + id, pointer);
+        dependencies.emplace(pointer, *upstream.hash);
+        return sketches.at(id);
+      };
+      std::shared_ptr<const Output> sketch, axis_sketch;
+      std::string result_mode;
+      if (profile_feature) {
+        const auto& id = string(*inputs.find("profile")->find("sketch"));
+        sketch = bind_sketch(id, "/inputs/profile/sketch");
         for (const auto* mode : {"join", "cut", "intersect"}) {
           if (!inputs.find("result")->find(mode)) continue;
           result_mode = mode;
@@ -221,6 +225,14 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       } else if (feature.type != "sketch") {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
+      const Value* axis = feature.type == "revolve" ? inputs.find("axis") : nullptr;
+      if (feature.type == "transform")
+        if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
+      if (axis && axis->find("sketch"))
+        axis_sketch = bind_sketch(
+            string(*axis->find("sketch")),
+            feature.type == "revolve" ? "/inputs/axis/sketch" : "/inputs/rotation/axis/sketch");
+      const auto* axis_input = axis_sketch ? &*axis_sketch->sketch : nullptr;
       std::vector<ir::Hash> upstream;
       for (const auto& [pointer, hash] : dependencies) upstream.push_back(hash);
       const auto key = ir::feature_hash(version, feature.type, inputs, upstream);
@@ -244,7 +256,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }
-            const auto operation = take(prepare_revolution(inputs, *sketch->sketch));
+            const auto operation = take(prepare_revolution(inputs, *sketch->sketch, axis_input));
             ++result.kernel_calls;
             return take(state_->kernel.revolve(operation));
           }();
@@ -263,7 +275,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           built->operations.push_back(take(state_->kernel.boolean_operation(
               bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
         } else {
-          const auto operation = take(prepare_transform(inputs));
+          const auto operation = take(prepare_transform(inputs, axis_input));
           for (const auto& input : bindings) {
             ++result.kernel_calls;
             built->operations.push_back(take(state_->kernel.transform(input, operation)));

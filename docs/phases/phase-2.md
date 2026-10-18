@@ -31,6 +31,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#112](https://github.com/wckdboy/nightfall/issues/112) | Verify analytic tangent constraints in evaluated sketches | kernel | Implemented with finite-contact, unit, tolerance and solid/cache regressions; local verification below |
 | [#113](https://github.com/wckdboy/nightfall/issues/113) | Verify angle dimensions and fixed sketch references | kernel | Implemented with direction, tolerance, reference and solid/cache regressions; local evidence below |
 | [#114](https://github.com/wckdboy/nightfall/issues/114) | Bound polynomial mass integration for planar solids | kernel | Implemented with unconstrained latency, analytic geometry, placement, cavity and curved-trim regressions; local evidence below |
+| [#115](https://github.com/wckdboy/nightfall/issues/115) | Resolve sketch-line axes for revolutions and rigid transforms | kernel | Implemented with directed-line, frame, dependency, cache and ownership regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -387,6 +388,27 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   rebuild benchmark below restores the local latency gate for the slanted profile.
   Remote CI/review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #115 resolves schema-v1 sketch-line axes for revolutions and rigid rotations.
+  Evaluated sketches retain named, authored line endpoints separately from profile traversal;
+  axes map through datum or explicitly placed frames. Direction comes from the local delta,
+  avoiding cancellation when subtracting endpoints after large world placement. Axis-sketch
+  hashes join the ordered feature dependencies; failed/suppressed sketches invalidate affected
+  bodies before backend work. Cache estimates include line metadata and evaluator identity is
+  version 13. The schema, public kernel API and dependencies are unchanged (RFCs 0005/0007).
+  Selector axes and open/construction curve chains remain unsupported; named lines in existing
+  closed sketches are supported. Revolutions retain the backend's planar-axis/one-sided-hull
+  restrictions. Eight tests-first regressions all failed on the previous unsupported axes;
+  the final focused suite passes 11 cases / 613 assertions. Coverage includes reversed path
+  traversal, signed partial turns, all datum frames and explicit placement, independent axis
+  edits, equivalent units, producer renaming, suppression/failure/rollback, out-of-plane axes,
+  overflow and large placement, typed references, eviction and kernel-facade teardown.
+  Analytic volume/area agree within 1e-7 and centroid components within 1e-8 mm. Full Release
+  `tools/check.sh --preset occt` passes 417/417 (23.30 s), including hygiene, 202 schema corpus
+  cases and 20 reference documents. The CI ASan/UBSan kernel/evaluator/cache selection passes
+  183/183 (45.35 s), with no diagnostics. Nightfall is instrumented; OCCT remains the pinned
+  Release shared library. Rebuild evidence follows; remote CI/review and full Phase 2 sign-off
+  remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -738,3 +760,34 @@ point-reference plate 2.019/2.117/2.118 ms, tangent-constrained rounded part
 The run follows all builds/tests and includes parsing, validation, expressions,
 constraint verification, hashing, exact geometry, validity and naming. Serialization,
 IPC and tessellation remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Sketch-line axis rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has a four-line rectangular sketch in the zx plane, a full revolution
+about the named bottom edge, and 28 transforms. Each unique depth edit changes both the
+profile and the axis line's endpoint. The result is a radius-5 mm cylinder with height D
+and axis at world x = 5 mm. Every sample checks volume `25πD` mm³ within 1e-5, centroid
+x (including translations) and z within 1e-6 mm, and kernel/cache counts. Run
+`build/occt/services/kernel/nf_evaluator_bench`. All 30 samples of every mode pass.
+
+| Sketch-axis cylinder | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 1.991 | 2.292 | 2.299 | 29 / 0 |
+| Profile + axis endpoint + depth edit | 2.190 | 2.550 | 2.679 | 29 / 0 |
+| Last transform edit | 0.629 | 0.718 | 0.732 | 1 / 29 |
+| Unused parameter edit | 0.624 | 0.905 | 1.130 | 0 / 30 |
+
+The 96-entry/64 MiB cache budget retains 96 entries / 4,376,988 estimated bytes after depth
+edits (not RSS). Same-run depth-edit median/p95/max: plate 2.046/2.114/2.126 ms,
+bored plate 8.165/9.098/10.548 ms, boolean-cut plate 9.320/10.478/11.571 ms,
+sleeve 3.418/3.649/3.829 ms, elliptic tube 10.531/11.135/11.380 ms,
+shared-edge plate 2.831/3.477/4.293 ms, shared-arc notch 3.599/3.658/3.666 ms,
+constrained plate 2.228/2.319/2.371 ms, point-reference plate 2.293/2.459/2.504 ms,
+tangent-constrained rounded part 4.357/4.488/4.517 ms, angle/fixed slanted part
+2.305/2.455/2.521 ms and toroidal seal 77.410/78.681/80.260 ms. All parameter-edit
+samples across the thirteen-part catalogue stay below 100 ms in this run. These are local
+observations, not universal bounds or an optimization claim. The run follows all builds/tests
+and includes parsing, validation, expressions, constraint verification, reference resolution,
+hashing, exact geometry, validity and naming. Serialization, IPC and tessellation remain
+excluded. Remote CI/review and full Phase 2 sign-off remain pending.
