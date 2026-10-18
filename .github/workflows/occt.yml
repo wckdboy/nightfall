@@ -18,6 +18,8 @@ on:
       - "tools/cli/**"
       - "core/**"
       - "services/kernel/**"
+      - "app/**"
+      - "tools/embed_service.py"
       - "examples/parts/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
@@ -31,6 +33,8 @@ on:
       - "tools/cli/**"
       - "core/**"
       - "services/kernel/**"
+      - "app/**"
+      - "tools/embed_service.py"
       - "examples/parts/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
@@ -86,7 +90,7 @@ jobs:
       - run: tools/check.sh --preset occt --skip-format
       - name: Sanitize Swift worker concurrency
         run: |
-          cmake --preset occt -B build/swift-tsan -DCMAKE_Swift_FLAGS=-sanitize=thread -DFETCHCONTENT_SOURCE_DIR_CATCH2="$PWD/build/occt/_deps/catch2-src"
+          cmake --preset occt -B build/swift-tsan -DNF_BUILD_XPC_BUNDLE=OFF -DCMAKE_Swift_FLAGS=-sanitize=thread -DFETCHCONTENT_SOURCE_DIR_CATCH2="$PWD/build/occt/_deps/catch2-src"
           cmake --build build/swift-tsan --target nf_native_worker_tests --parallel 2
           ctest --test-dir build/swift-tsan -R '^native\.' --output-on-failure
       - name: Sanitize production geometry and evaluator ownership
