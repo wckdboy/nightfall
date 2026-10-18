@@ -23,6 +23,9 @@ struct Sketch {
 /// one point and one entire line in either order, symmetry of two points about a third
 /// entire line. Resolve named points, line/arc start/end and arc/circle/ellipse centers.
 /// Bare curve IDs never imply a point; point-qualified IDs cannot stand for entire curves.
+/// Tangency supports line/circle/arc pairs with at least one circular curve: radial gap
+/// and segment extent within 1e-6 mm, contact inside each arc within 1e-9 rad. Check
+/// internal/external circle contact; centers must be separated by more than 1e-6 mm.
 /// Coordinates are checked, never solved or moved. Other constraints fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
 /// Unimplemented entity/selector/mode semantics fail explicitly.

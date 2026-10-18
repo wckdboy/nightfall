@@ -28,6 +28,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#109](https://github.com/wckdboy/nightfall/issues/109) | Certified shared curved spans in sketch profiles | math | Implemented with rational-curve, fill-rule and production evaluator regressions |
 | [#110](https://github.com/wckdboy/nightfall/issues/110) | Verify line and radius constraints in evaluated sketches | kernel | Implemented with tolerance, unit, dependency and cache regressions; local evidence below |
 | [#111](https://github.com/wckdboy/nightfall/issues/111) | Resolve point references and verify point constraints | kernel | Implemented with reference-safety, point-retention, constraint and solid regressions |
+| [#112](https://github.com/wckdboy/nightfall/issues/112) | Verify analytic tangent constraints in evaluated sketches | kernel | Implemented with finite-contact, unit, tolerance and solid/cache regressions; local verification below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -308,6 +309,26 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   without diagnostics or retries. Nightfall is instrumented; OCCT uses the pinned Release
   shared libraries. Benchmark evidence follows; remote CI/review and phase sign-off remain open.
 
+- 2026-10-18 — #112 verifies analytic tangent constraints between line segments and circular
+  curves, or between two circles/arcs. Internal and external contact use a 1e-6 mm radial-gap
+  bound; contact must lie on the finite segment (1e-6 mm) and each arc (1e-9 rad). Centers
+  within linear tolerance, degenerate geometry, point-qualified references and unsupported
+  curve kinds fail explicitly. Authored coordinates remain unchanged; no solver, schema,
+  public kernel API or dependency is added. The evaluator cache identity is bumped.
+  Ten tests-first regressions originally failed 123 assertions. They cover unit normalization,
+  signed/wrapped/full-turn arcs, operand order, finite extents, tolerance boundaries, overflow,
+  and 48 fixed-seed placements at two scales with reversed curves. Rounded extrusions check
+  radius edits from 5 to 6 mm: volumes 6000+750π / 7200+1080π mm³ and areas
+  1600+350π / 1680+432π mm² within 1e-5, plus centroids within 1e-7 mm. Invalid edits block
+  both dependents without kernel work; restoring equivalent units reuses all three cached
+  outputs. Cold comparison and retained names after cache eviction also pass.
+  The combined constraint selection passes 31 cases / 1110 assertions. Full Release
+  `tools/check.sh --preset occt` passes 392/392 (19.69 s), including hygiene, 202 schema corpus
+  cases and 20 reference documents. The exact CI ASan/UBSan kernel/evaluator/cache selection
+  passes 158/158 (38.50 s), with no diagnostics. Nightfall is instrumented; OCCT remains the
+  pinned Release shared library. Benchmark evidence follows; remote CI/review and full
+  phase sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -561,3 +582,33 @@ substantial timing variation and do not establish a universal bound or optimizat
 The run follows all builds/tests and includes parsing, validation, expressions, point/constraint
 verification, hashing, exact geometry, validity and naming. Serialization, IPC and tessellation
 remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Tangent-constrained rounded profile rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature rounded part has two semicircles, two line segments, four tangent constraints,
+one extrusion and 28 transforms. The radius is `5 mm × sqrt(depth / (30 mm))`; each line is
+four radii long. Unique depth edits change the whole profile and extrusion, recheck all four
+contacts and rebuild 29 solid operations. Every sample checks volume
+`(25/30) × (8+π) × D²` mm³ for depth D in mm within 1e-5, centroid x/z within 1e-6 mm,
+and kernel/cache counts. Run `build/occt/services/kernel/nf_evaluator_bench`.
+
+| Tangent-constrained rounded part | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 3.441 | 3.509 | 3.529 | 29 / 0 |
+| Profile + depth edit | 3.642 | 3.841 | 3.940 | 29 / 0 |
+| Last transform edit | 0.624 | 0.670 | 0.699 | 1 / 29 |
+| Unused parameter edit | 0.593 | 0.631 | 0.643 | 0 / 30 |
+
+The 96-entry/64 MiB cache budget retains 96 entries / 14,632,896 estimated bytes after profile
+edits (not RSS). Same-run depth-edit median/p95/max: plate 1.727/1.803/1.877 ms,
+bored plate 6.660/6.761/6.769 ms, boolean-cut plate 7.279/7.457/7.489 ms,
+sleeve 2.666/2.706/2.771 ms, elliptic tube 9.297/9.490/9.812 ms,
+shared-edge plate 2.476/2.578/2.690 ms, shared-arc notch 3.089/3.179/3.247 ms,
+constrained plate 1.801/1.866/1.881 ms, point-reference plate 1.865/1.974/2.009 ms,
+toroidal seal 70.343/74.703/74.914 ms. All samples remain below 100 ms in this run; earlier
+slower tails remain recorded above. These are local observations, not universal bounds or
+an optimization claim. The run follows all builds/tests and includes parsing, validation,
+expressions, constraint verification, hashing, exact geometry, validity and naming.
+Serialization, IPC and tessellation remain excluded. Remote CI/review and full Phase 2
+sign-off remain pending.

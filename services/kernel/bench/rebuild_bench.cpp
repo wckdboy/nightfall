@@ -161,6 +161,16 @@ int main() {
         ir::json::Object{{"plane", *constrained.features[0].inputs.find("plane")},
                          {"entities", std::move(point_entities)},
                          {"constraints", std::move(point_constraints)}};
+    auto rounded = plate;
+    rounded.params.push_back({"r", "sqrt(depth / 30 mm) * 5 mm", {}, {}, {}, {}});
+    rounded.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+      {"id":"a","type":"line","start":["-2 * r","-r"],"end":["2 * r","-r"]},
+      {"id":"b","type":"arc","center":["2 * r",0],"radius":"r","start_angle":-90,"sweep_angle":180},
+      {"id":"c","type":"line","start":["2 * r","r"],"end":["-2 * r","r"]},
+      {"id":"d","type":"arc","center":["-2 * r",0],"radius":"r","start_angle":90,"sweep_angle":180}],
+      "constraints":[{"type":"tangent","entities":["a","b"]},{"type":"tangent","entities":["b","c"]},
+      {"type":"tangent","entities":["c","d"]},{"type":"tangent","entities":["d","a"]}]})")
+                                     .value();
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -186,6 +196,7 @@ int main() {
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
           Part{"constrained", constrained, 200, 0, 28, 29, 29, 0, true},
           Part{"point refs", point_constrained, 200, 0, 28, 29, 29, 0, true},
+          Part{"tangent", rounded, 25 * (8 + std::numbers::pi), 0, 28, 29, 29, 0, true},
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

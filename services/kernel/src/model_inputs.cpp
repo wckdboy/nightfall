@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "model_inputs.hpp"
 
+#include <algorithm>
 #include <map>
 #include <numbers>
 #include <numeric>
@@ -157,7 +158,7 @@ void verify_constraints(const Value& inputs) {
     const auto pointer = "/constraints/" + std::to_string(i);
     if (kind != "horizontal" && kind != "vertical" && kind != "parallel" &&
         kind != "perpendicular" && kind != "equal" && kind != "radius" && kind != "coincident" &&
-        kind != "distance" && kind != "midpoint" && kind != "symmetric")
+        kind != "distance" && kind != "midpoint" && kind != "symmetric" && kind != "tangent")
       fail(pointer + "/type", "constraint is not implemented: " + kind);
     const auto reference = [&](std::size_t index) {
       return pointer + "/entities/" + std::to_string(index);
@@ -231,7 +232,67 @@ void verify_constraints(const Value& inputs) {
       return Vec2{std::midpoint(a.x, b.x), std::midpoint(a.y, b.y)};
     };
     double residual = 0, tolerance = kTolerance.linear;
-    if (kind == "coincident" || kind == "distance") {
+    if (kind == "tangent") {
+      const Value* curves[] = {&whole(0), &whole(1)};
+      bool lines[2]{};
+      constexpr double turn = 2 * std::numbers::pi;
+      for (std::size_t j = 0; j < 2; ++j) {
+        const auto& type = *field(*curves[j], "type").if_string();
+        lines[j] = type == "line";
+        if (!lines[j] && type != "circle" && type != "arc")
+          fail(reference(j), "tangent constraint requires a line, circle or arc");
+        if (type == "arc") {
+          const double sweep = number(field(*curves[j], "sweep_angle"));
+          if (!(std::abs(sweep) > kTolerance.angular && std::abs(sweep) <= turn))
+            fail(reference(j), "tangent arc requires a nonzero sweep of at most one full turn");
+        }
+      }
+      const auto on_arc = [&](std::size_t j, Vec2 radial) {
+        if (*field(*curves[j], "type").if_string() != "arc") return;
+        const double start = std::remainder(number(field(*curves[j], "start_angle")), turn),
+                     sweep = number(field(*curves[j], "sweep_angle"));
+        double angle = std::copysign(1.0, sweep) *
+                       std::remainder(std::atan2(radial.y, radial.x) - start, turn);
+        if (angle < -kTolerance.angular) angle += turn;
+        if (angle > std::abs(sweep) + kTolerance.angular)
+          fail(reference(j), "tangent contact lies outside the arc");
+      };
+      if (lines[0] && lines[1])
+        fail(pointer, "tangent constraint requires at least one circle or arc");
+      if (lines[0] || lines[1]) {
+        const std::size_t l = lines[0] ? 0 : 1, c = 1 - l;
+        const auto delta = line(l);
+        const double length = math::length(delta), r = radius(c);
+        const auto direction = delta / length;
+        const auto offset =
+            point2(field(*curves[c], "center")) - point2(field(*curves[l], "start"));
+        const double along = math::dot(offset, direction),
+                     distance = math::cross(direction, offset);
+        if (!std::isfinite(along) || !std::isfinite(distance))
+          fail(pointer, "tangent calculation exceeds finite coordinates");
+        const double outside = along < 0 ? -along : std::max(0.0, along - length);
+        residual = std::max(std::abs(std::abs(distance) - r), outside);
+        on_arc(c, Vec2{direction.y, -direction.x} * std::copysign(1.0, distance));
+      } else {
+        const double a = radius(0), b = radius(1);
+        const auto delta =
+            point2(field(*curves[1], "center")) - point2(field(*curves[0], "center"));
+        const double distance = math::length(delta);
+        if (!std::isfinite(distance))
+          fail(pointer, "tangent calculation exceeds finite coordinates");
+        if (!(distance > kTolerance.linear))
+          fail(pointer, "tangent circles require distinct centers beyond linear tolerance");
+        // Subtract before summing radii to avoid overflow for large internal tangencies.
+        const double external = std::abs((distance - a) - b),
+                     internal = std::abs(distance - std::abs(a - b));
+        const auto direction = delta / distance;
+        const bool outside = external <= internal;
+        residual = outside ? external : internal;
+        const auto radial = direction * (outside || a >= b ? 1.0 : -1.0);
+        on_arc(0, radial);
+        on_arc(1, outside ? -radial : radial);
+      }
+    } else if (kind == "coincident" || kind == "distance") {
       const double expected = kind == "distance" ? number(field(constraint, "value")) : 0;
       if (expected < 0) fail(pointer + "/value", "distance dimension must be nonnegative");
       const auto a = point(0), b = point(1);
