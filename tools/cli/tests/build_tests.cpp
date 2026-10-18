@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -142,6 +143,37 @@ TEST_CASE("build command publishes exact STEP and a machine readable success rec
   measures(reload(output), 6000, 2200, {8, 10, 15});
   CHECK(read(input) == text);
   temp.no_temporary_outputs();
+}
+
+TEST_CASE("chamfer parameter variants export and reload as exact closed STEP solids",
+          "[cli-build][cli-chamfer]") {
+  Temp temp;
+  auto d = part(2);
+  d.params.push_back({"bevel", "1 mm", {}, {}, {}, {}});
+  d.features.push_back(feature("bevel_top", "chamfer", R"({"distance":"bevel",
+    "edges":{"edges_of":{"created_by":"base","role":"cap_end","expect":"one"}}})"));
+  const auto text = source(d);
+  const auto input = temp.path("chamfer.nightfall");
+  const auto output = temp.path("chamfer.step");
+  write(input, text);
+  for (const double bevel : {1., 2.}) {
+    const auto process = run(temp, {"build", input.string(), "--out", output.string(), "--set",
+                                    "bevel=" + std::to_string(bevel) + " mm"});
+    INFO(process.error);
+    REQUIRE(process.status == 0);
+    const double removed = 30 * bevel * bevel - 4 * std::pow(bevel, 3) / 3;
+    const double volume = 6000 - removed;
+    const double area =
+        2200 - 120 * bevel + 4 * bevel * bevel + (60 * bevel - 4 * bevel * bevel) * std::sqrt(2.);
+    const double moment = 90000 - 30 * removed + 10 * std::pow(bevel, 3) - std::pow(bevel, 4) / 3;
+    const auto shape = reload(output);
+    measures(shape, volume, area, {5, 10, moment / volume});
+    CHECK(shape->measures().faces == 10);
+    CHECK(shape->measures().edges == 20);
+    CHECK(read(output).find("TESSELLATED") == std::string::npos);
+    CHECK(read(input) == text);
+    temp.no_temporary_outputs();
+  }
 }
 
 TEST_CASE("build command validates syntax and offers help without opening a model", "[cli-build]") {

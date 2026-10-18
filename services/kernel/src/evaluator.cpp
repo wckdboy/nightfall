@@ -249,7 +249,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/25;roles/5;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/26;roles/5;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -263,7 +263,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                                  feature.type == "pattern_circular" || feature.type == "mirror";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
-    const auto affected = targets(feature, previous);
+    auto affected = targets(feature, previous);
     previous.emplace(feature.id, affected);
     features.emplace(feature.id, index);
     const bool skip = rolled_back;
@@ -305,6 +305,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       std::optional<kernel::Plane> mirror;
       std::optional<kernel::Plane> selected_plane;
       std::optional<kernel::Axis> selected_axis;
+      std::vector<kernel::EntityPtr> selected_edges;
+      const bool chamfer = feature.type == "chamfer";
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -327,11 +329,11 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           bind(id, pointer);
           tools.push_back(id);
         }
-      } else if (feature.type != "sketch") {
+      } else if (feature.type != "sketch" && !chamfer) {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
       // Operation targets precede selector-only bindings retained for cache compatibility.
-      const auto target_count = bindings.size();
+      auto target_count = bindings.size();
       const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
                               ? inputs.find("axis")
                               : nullptr;
@@ -340,6 +342,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       const auto* selection = axis;
       if (feature.type == "sketch" || feature.type == "mirror") selection = inputs.find("plane");
       if (feature.type == "extrude") selection = inputs.find("to");
+      if (chamfer) {
+        if (inputs.find("angle"))
+          fail("kernel", "angled chamfer is not implemented", "/inputs/angle");
+        if (*inputs.find("distance")->if_number() <= math::Tolerance::standard().linear)
+          fail("kernel", "chamfer distance must exceed linear tolerance", "/inputs/distance");
+        selection = inputs.find("edges");
+      }
       if (selection) {
         const auto& plane = *selection;
         if (!plane.find("datum") && !plane.find("origin") && !plane.find("sketch")) {
@@ -381,20 +390,36 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           };
           std::function<std::vector<kernel::EntityPtr>(const Value&, const std::string&)> select;
           select = [&](const Value& node, const std::string& pointer) {
-            if (node.find("edges_of"))
-              fail("kernel", "selector field is not implemented", pointer + "/edges_of");
+            if (!chamfer && node.find("edges_of"))
+              fail("kernel", "face selector cannot use edges_of", pointer + "/edges_of");
             if (const auto* from = node.find("from")) {
               const auto& id = string(*from);
               (void)bind_sketch(id.substr(0, id.find('/')), pointer + "/from");
             }
             const auto* where = node.find("where");
+            if (where && node.find("edges_of"))
+              fail("kernel", "edge filters are not implemented", pointer + "/where");
             const auto filter = where ? face_filter(*where, pointer + "/where") : FaceFilter{};
             std::vector<kernel::EntityPtr> matches;
             auto append = [&](const kernel::EntityPtr& entity) {
               if (std::ranges::none_of(matches, [&](const auto& m) { return m->same_as(*entity); }))
                 matches.push_back(entity);
             };
-            if (const auto* any = node.find("any")) {
+            if (const auto* boundary = node.find("edges_of")) {
+              for (const auto& face : select(*boundary, pointer + "/edges_of")) {
+                if (face->kind() != kernel::EntityKind::kFace)
+                  fail("kernel", "edges_of requires faces", pointer + "/edges_of");
+                ++result.kernel_calls;
+                auto edges = state_->kernel.edges(face);
+                if (!edges) fail(edges.error().code, edges.error().message, pointer + "/edges_of");
+                for (const auto& edge : *edges) {
+                  if (!edge || edge->owner() != face->owner() ||
+                      edge->kind() != kernel::EntityKind::kEdge)
+                    fail("kernel", "edge query returned an invalid snapshot handle", pointer);
+                  append(edge);
+                }
+              }
+            } else if (const auto* any = node.find("any")) {
               const auto& children = *any->if_array();
               for (std::size_t i = 0; i < children.size(); ++i)
                 for (const auto& entity :
@@ -427,7 +452,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                       continue;
                     if (!name.entity || name.entity->owner() != body.shape)
                       fail("kernel", "selected name belongs to a different snapshot", pointer);
-                    if (name.entity->kind() == kernel::EntityKind::kFace) append(name.entity);
+                    if (chamfer || name.entity->kind() == kernel::EntityKind::kFace)
+                      append(name.entity);
                   }
                 }
               }
@@ -439,6 +465,10 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                                            [&](const auto& e) { return e->same_as(*entity); });
               });
             }
+            if (where && std::ranges::any_of(matches, [](const auto& e) {
+                  return e->kind() != kernel::EntityKind::kFace;
+                }))
+              fail("kernel", "edge filters are not implemented", pointer + "/where");
             if (where)
               std::erase_if(matches, [&](const auto& entity) {
                 return !filter.matches(inspect(entity, pointer));
@@ -472,32 +502,55 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                    pointer);
             return matches;
           };
-          const std::string pointer = feature.type == "extrude"     ? "/inputs/to"
+          const std::string pointer = chamfer                       ? "/inputs/edges"
+                                      : feature.type == "extrude"   ? "/inputs/to"
                                       : !axis                       ? "/inputs/plane"
                                       : feature.type == "transform" ? "/inputs/rotation/axis"
                                                                     : "/inputs/axis";
           const auto matches = select(plane, pointer);
-          if (matches.size() != 1)
-            fail("selector_count",
-                 std::string(axis ? "axis" : "plane") + " requires one face; selector matched " +
-                     std::to_string(matches.size()),
-                 pointer);
-          if (axis) {
-            const auto& face = inspect(matches.front(), pointer);
-            if (!face.cylinder) fail("kernel", "selected axis face is not cylindrical", pointer);
-            selected_axis = face.cylinder->axis;
-          } else if (face_queries.contains(matches.front()->owner())) {
-            const auto& face = inspect(matches.front(), pointer);
-            if (!face.plane) fail("kernel", "selected face is not planar", pointer);
-            selected_plane = face.plane;
+          if (chamfer) {
+            if (matches.empty() || std::ranges::any_of(matches, [](const auto& e) {
+                  return e->kind() != kernel::EntityKind::kEdge;
+                }))
+              fail("kernel", "chamfer requires a nonempty edge selection", pointer);
+            selected_edges = matches;
           } else {
-            ++result.kernel_calls;
-            auto resolved = state_->kernel.face_plane(matches.front());
-            if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
-            selected_plane = *resolved;
+            if (matches.size() != 1 || matches.front()->kind() != kernel::EntityKind::kFace)
+              fail("selector_count",
+                   std::string(axis ? "axis" : "plane") + " requires one face; selector matched " +
+                       std::to_string(matches.size()),
+                   pointer);
+            if (axis) {
+              const auto& face = inspect(matches.front(), pointer);
+              if (!face.cylinder) fail("kernel", "selected axis face is not cylindrical", pointer);
+              selected_axis = face.cylinder->axis;
+            } else if (face_queries.contains(matches.front()->owner())) {
+              const auto& face = inspect(matches.front(), pointer);
+              if (!face.plane) fail("kernel", "selected face is not planar", pointer);
+              selected_plane = face.plane;
+            } else {
+              ++result.kernel_calls;
+              auto resolved = state_->kernel.face_plane(matches.front());
+              if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
+              selected_plane = *resolved;
+            }
+            if (selected_plane) check_plane_frame(*selected_plane, pointer);
           }
-          if (selected_plane) check_plane_frame(*selected_plane, pointer);
         }
+      }
+      if (chamfer) {
+        std::vector<kernel::ShapePtr> targets;
+        std::erase_if(affected, [&](const auto& id) {
+          const auto& shape = result.bodies.at(id).shape;
+          if (std::ranges::none_of(selected_edges,
+                                   [&](const auto& e) { return e->owner() == shape; }))
+            return true;
+          targets.push_back(shape);
+          return false;
+        });
+        target_count = targets.size();
+        bindings.insert(bindings.begin(), targets.begin(), targets.end());
+        previous[feature.id] = affected;
       }
       if (feature.type == "mirror")
         mirror = take(prepare_mirror(inputs, selected_plane ? &*selected_plane : nullptr));
@@ -549,6 +602,15 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             ++result.kernel_calls;
             built->operations.push_back(take(state_->kernel.boolean_operation(
                 bindings.front(), {built->tool->shape}, boolean_kind(result_mode))));
+          }
+        } else if (chamfer) {
+          for (std::size_t i = 0; i < target_count; ++i) {
+            std::vector<kernel::EntityPtr> edges;
+            for (const auto& e : selected_edges)
+              if (e->owner() == bindings[i]) edges.push_back(e);
+            ++result.kernel_calls;
+            built->operations.push_back(take(
+                state_->kernel.chamfer(bindings[i], edges, *inputs.find("distance")->if_number())));
           }
         } else if (feature.type == "boolean") {
           const auto& op = string(*inputs.find("op"));

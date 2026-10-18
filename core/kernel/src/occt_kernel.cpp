@@ -11,6 +11,7 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
@@ -158,7 +159,7 @@ class OcctKernel final : public IKernel {
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
-                "cylinder-axis=parameter-z-v1;"
+                "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
@@ -168,7 +169,9 @@ class OcctKernel final : public IKernel {
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
-  Capabilities capabilities() const noexcept override { return {true, true, true, true, true}; }
+  Capabilities capabilities() const noexcept override {
+    return {true, true, true, true, true, true};
+  }
   std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>& inputs) override {
     return guarded([&] {
@@ -203,6 +206,83 @@ class OcctKernel final : public IKernel {
       if (writer.WriteStream(stream) != IFSelect_RetDone || !stream.good())
         fail("STEP text encoding failed");
       return stream.str();
+    });
+  }
+  std::expected<std::vector<EntityPtr>, KernelError> edges(const EntityPtr& input) override {
+    return guarded([&] {
+      const auto face = checked_face(input);
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input->owner());
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(face, TopAbs_EDGE, members);
+      std::vector<EntityPtr> result;
+      for (int i = 1; i <= members.Extent(); ++i)
+        result.push_back(detail::entity(source, members(i)));
+      return result;
+    });
+  }
+  std::expected<OperationResult, KernelError> chamfer(const ShapePtr& input,
+                                                      const std::vector<EntityPtr>& edges,
+                                                      double distance) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || edges.empty() || !std::isfinite(distance) || distance <= tolerance_.linear)
+        fail("chamfer requires a solid, edges and distance above linear tolerance");
+      BRepBuilderAPI_Copy copy(source->geometry, true, false);
+      if (!copy.IsDone()) fail("chamfer input copy failed");
+      BRepFilletAPI_MakeChamfer operation(copy.Shape());
+      TopTools_IndexedMapOfShape originals;
+      TopExp::MapShapes(source->geometry, TopAbs_EDGE, originals);
+      TopTools_MapOfShape selected;
+      for (const auto& edge : edges) {
+        const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(edge);
+        if (!entity || entity->owner() != input || entity->kind() != EntityKind::kEdge ||
+            !originals.Contains(entity->geometry))
+          fail("chamfer edge is absent from its target snapshot");
+        const auto e = TopoDS::Edge(copy.ModifiedShape(entity->geometry));
+        if (selected.Add(e)) operation.Add(distance, e);
+        if (!operation.Contour(e)) fail("chamfer cannot use the selected edge");
+      }
+      operation.Build();
+      if (!operation.IsDone()) fail("solid chamfer failed");
+      auto shape = checked(operation.Shape());
+      OperationResult result{shape, {}, {}, source->estimated_bytes() + shape->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      auto member = [&](const TopoDS_Shape& geometry) {
+        const auto index = members.FindIndex(geometry);
+        if (!index) fail("incomplete chamfer history");
+        return detail::entity(shape, members(index));
+      };
+      TopTools_MapOfShape generated;
+      TopTools_MapOfShape inherited_faces;
+      for (const auto& before : detail::entities(source)) {
+        const auto geometry =
+            copy.ModifiedShape(static_cast<const detail::Subshape&>(*before).geometry);
+        History h{before, {}, {}, operation.IsDeleted(geometry)};
+        for (const auto& after : operation.Modified(geometry)) h.modified.push_back(member(after));
+        if (!h.deleted && h.modified.empty()) h.modified.push_back(member(geometry));
+        if (before->kind() == EntityKind::kFace)
+          for (const auto& after : h.modified)
+            inherited_faces.Add(static_cast<const detail::Subshape&>(*after).geometry);
+        for (const auto& after : operation.Generated(geometry)) {
+          if (after.ShapeType() != TopAbs_FACE && after.ShapeType() != TopAbs_EDGE) continue;
+          h.generated.push_back(member(after));
+          if (after.ShapeType() == TopAbs_FACE && generated.Add(after))
+            result.generated.push_back({"chamfer", member(after), {}});
+        }
+        result.estimated_bytes +=
+            sizeof(History) + sizeof(detail::Subshape) + 64 +
+            (h.modified.size() + h.generated.size()) * (sizeof(detail::Subshape) + 64);
+        result.history.push_back(std::move(h));
+      }
+      for (int i = 1; i <= members.Extent(); ++i)
+        if (members(i).ShapeType() == TopAbs_FACE && !inherited_faces.Contains(members(i)) &&
+            !generated.Contains(members(i)))
+          fail("chamfer output face has no generated provenance");
+      if (result.generated.empty()) fail("chamfer has no generated-face provenance");
+      result.estimated_bytes +=
+          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
+      return result;
     });
   }
   std::expected<std::vector<FaceInfo>, KernelError> faces(const ShapePtr& input) override {

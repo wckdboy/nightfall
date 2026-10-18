@@ -89,7 +89,7 @@ struct ProfileEdge {
   std::size_t region, loop, curve;  // loop 0 = outer; subsequent loops are holes
 };
 struct Generated {
-  std::string role;  // local cap_start, cap_end, side or intersection; never a feature ID
+  std::string role;  // operation-local semantic role; never a feature ID
   EntityPtr entity;
   std::optional<ProfileEdge> from;
 };
@@ -113,7 +113,7 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans, revolve, mirror;
+    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   /// Encode all supplied closed-solid snapshots as exact STEP AP242 B-rep text in millimetres.
@@ -128,6 +128,16 @@ class IKernel {
   /// Reject null/foreign snapshots; do not mutate.
   [[nodiscard]] virtual std::expected<std::vector<FaceInfo>, KernelError> faces(
       const ShapePtr&) = 0;
+  /// Unique boundary edges from every trimming loop of a face, including holes and seams.
+  /// Handles retain the same snapshot; reject null/foreign/non-face handles. No mutation.
+  [[nodiscard]] virtual std::expected<std::vector<EntityPtr>, KernelError> edges(
+      const EntityPtr& face) = 0;
+  /// Equal setback in mm on both incident faces, with tangent-contour propagation. Require
+  /// nonempty edges owned by target and finite distance > linear tolerance; deduplicate edges.
+  /// Return validated solids, complete face/edge history and new faces with role "chamfer".
+  /// Fail on unsupported geometry/history; preserve inputs even on failure.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> chamfer(
+      const ShapePtr& target, const std::vector<EntityPtr>& edges, double distance) = 0;
   /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
   /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
   /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.

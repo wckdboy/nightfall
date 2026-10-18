@@ -112,6 +112,16 @@ int main() {
     Part stopped_part{"extrude to", stopped, 200, 5, 26, 28, 28, 2};
     stopped_part.queries = 1;
     stopped_part.surface_area = [](double depth) { return 400 + 60 * depth; };
+    auto beveled = plate;
+    beveled.features.erase(beveled.features.begin() + 2);
+    beveled.features.insert(beveled.features.begin() + 2,
+                            test::feature("bevel", "chamfer", R"({"distance":1,"edges":{
+          "edges_of":{"created_by":"base","role":"side"},"except":{"any":[
+            {"edges_of":{"created_by":"base","role":"cap_start"}},
+            {"edges_of":{"created_by":"base","role":"cap_end"}}]}}})"));
+    Part chamfer_part{"chamfer", beveled, 198, 5, 27};
+    chamfer_part.queries = 6;  // four side boundaries and two cap boundaries, also on cache hits
+    chamfer_part.surface_area = [](double depth) { return 396 + (52 + 4 * std::sqrt(2.)) * depth; };
     auto linear = plate;
     linear.features.erase(linear.features.begin() + 2);  // 27 transforms: 30 features total
     linear.features.insert(
@@ -363,6 +373,7 @@ int main() {
     for (const auto& part :
          {Part{"plate", plate, 200, 5},
           stopped_part,
+          chamfer_part,
           linear_part,
           circular_part,
           cylinder_part,

@@ -45,6 +45,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#126](https://github.com/wckdboy/nightfall/issues/126) | Generated side-face selectors qualified by sketch entity | kernel | Implemented with exact curve ancestry, current naming, cache and atomic-failure regressions; local evidence below |
 | [#127](https://github.com/wckdboy/nightfall/issues/127) | Cylindrical face selectors as modeling axes | kernel | Implemented with exact cylinder descriptions, radius filters, three axis consumers and cache/failure regressions; local evidence below |
 | [#128](https://github.com/wckdboy/nightfall/issues/128) | Extrusions terminating on selected parallel supporting planes | kernel | Implemented with supporting-plane resolution, exact displacement, result/cache/failure regressions and local evidence below |
+| [#129](https://github.com/wckdboy/nightfall/issues/129) | Equal-distance chamfers on selected face-boundary edges | kernel | Implemented with immutable exact solids, complete history, recursive edge sets and atomic cache publication; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -864,6 +865,16 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   No persisted schema, kernel API, public value-layout, backend identity or dependency change;
   evaluator identity advances to `evaluator/25;roles/5`. Verification and timings follow;
   remote CI/review and full Phase 2 sign-off remain pending.
+
+- 2026-10-18 — #129 implements equal-distance chamfers and face-boundary edge queries
+  under RFCs 0005/0007. Deep copies preserve input geometry; validated solids require complete
+  face/edge history and provenance for every new face. Recursive edge unions/exclusions use
+  current face names and existing face filters; only selected owners become operation targets.
+  Queries validate handles before cache reuse, and multi-body geometry/naming publish atomically.
+  Six of seven initial evaluator cases fail before implementation. The expanded suite and CLI
+  STEP reloads pass the local gate; sanitizer/timing evidence follows below. Backend implementers
+  add the two virtual methods and capability flag, rebuilding consumers. No persisted change;
+  evaluator identity advances to `evaluator/26;roles/5`. CI/review and phase sign-off stay pending.
 
 ## Rebuild benchmark evidence
 
@@ -1717,4 +1728,58 @@ startup, file I/O, STEP encoding, IPC and tessellation. These are local observat
 latency guarantees; the earlier loaded-run miss and #95 follow-up remain recorded.
 Logs: `/tmp/nightfall-128-check.log`, `/tmp/nightfall-128-asan.log`,
 `/tmp/nightfall-128-bench.log`; per-mode data: `/tmp/nightfall-128-bench.json`.
+Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Selected-edge chamfer rebuild evidence
+
+2026-10-18, #129, Apple M3 Pro / 12 cores / 36 GiB, Release, dynamically linked OCCT 7.9.3.
+A 10×20×30 mm box with its four top edges chamfered by 1 mm has volume
+6000−86/3 mm³, area 2084+56√2 mm², centroid (5,10,(90000−860+29/3)/(6000−86/3)) mm,
+ten faces and twenty edges. Volume/area tolerance is 1e-6, centroid components 1e-8 mm.
+Chamfering both upper rims of a 30 mm annulus with radii 10/5 mm gives volume 2235π mm³,
+area (990+30√2)π mm² within 1e-5. Annular boundaries, rigid placement, complete
+face/edge history, generated-face coverage and unchanged serialized inputs are checked.
+The five backend and thirteen evaluator cases cover edge-set composition, cardinality,
+current names, excluded dependencies, atomic multi-body failures, invalid handles before
+cache reuse, renamed producers, suppression, rollback, eviction and retained readers.
+Unsupported angle/edge-filter forms and incomplete provenance remain explicit errors.
+
+`tools/check.sh --preset occt` passes 683/683 (53.44 s), including hygiene/format,
+202 schema cases and twenty reference documents, without warnings. The initial run passed
+681/682; an existing unsupported-filter regression caught queries running before validation.
+Restoring early face-filter validation fixes it; both full-run logs are retained. The CLI
+regression independently reloads 1/2 mm chamfer variants as valid closed STEP solids with
+analytic volume/area tolerance 1e-5 and centroid tolerance 1e-6 mm. Source files stay intact.
+The actual CLI exports `/tmp/nightfall-129-chamfer.nightfall` with `--set 'bevel=2 mm'`
+to `/tmp/nightfall-129-chamfer.step`: 25,589 bytes, one exact AP242 manifold solid,
+no tessellation. Public backend migration adds `edges`, `chamfer` and the capability flag;
+rebuild vtable/value-layout consumers. No schema, document or dependency migration.
+
+ASan/UBSan kernel/cache/evaluator/CLI passes 445/445 (117.07 s) without diagnostics.
+Nightfall is instrumented; the pinned OCCT shared library remains Release. Logs:
+`/tmp/nightfall-129-check.log`, `/tmp/nightfall-129-initial-check.log`,
+`/tmp/nightfall-129-asan.log`; initial red tests: `/tmp/nightfall-129-red.log`.
+
+After all builds/tests, the catalogue covers 26 parts × 4 modes × 30 samples: 3120 measured
+rebuilds, every analytic geometry and execution-count check passing. The new chamfered plate
+has one sketch, one extrusion, one chamfer and 27 transforms. It selects the four vertical
+edges by subtracting both cap boundaries from side boundaries. At depth D, its volume is
+198D mm³, area 396+(52+4√2)D mm², centroid z = D/2 and the expected translated x.
+Volume/area tolerance is 1e-5, centroid components 1e-6 mm. Six boundary queries execute
+on every evaluation, including complete cache hits.
+
+- Cold: median 4.699 ms / p95 4.901 / max 4.982; 35 kernel calls / 0 cache hits.
+- Depth edit: 4.940 / 5.103 / 5.138 ms; 35 calls / 1 hit.
+- Last transform edit: 0.690 / 0.734 / 0.736 ms; 7 calls / 29 hits.
+- Unused parameter edit: 0.655 / 0.685 / 0.694 ms; 6 calls / 30 hits.
+
+The 96-entry/64 MiB estimated cache budget retains 96 entries / 19,389,688 bytes after
+chamfer depth edits, including separately retained selector sources (not RSS). Every catalogue
+parameter-edit sample stays below 100 ms in this run; largest is toroidal depth editing at
+median 75.727 / p95 79.120 / max 79.429 ms. Timing includes IR parsing, schema/parameter/input
+evaluation, current references, recursive selectors, queries, hashing, exact modeling,
+validation and naming. It excludes authoring serialization, CLI startup, file I/O, STEP
+encoding, IPC and tessellation. These are local observations, not latency guarantees;
+the earlier loaded-run miss and #95 follow-up remain recorded. Logs/data:
+`/tmp/nightfall-129-bench.log`, `/tmp/nightfall-129-bench.json`.
 Remote CI/review and full Phase 2 sign-off remain pending.

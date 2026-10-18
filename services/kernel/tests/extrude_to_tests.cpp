@@ -79,6 +79,15 @@ class QueryKernel final : public kernel::IKernel {
   }
   std::string_view identity() const noexcept override { return real.identity(); }
   Capabilities capabilities() const noexcept override { return real.capabilities(); }
+  std::expected<std::vector<kernel::EntityPtr>, kernel::KernelError> edges(
+      const kernel::EntityPtr& face) override {
+    return real.edges(face);
+  }
+  std::expected<kernel::OperationResult, kernel::KernelError> chamfer(
+      const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
+      double distance) override {
+    return real.chamfer(shape, edges, distance);
+  }
   std::expected<std::vector<kernel::FaceInfo>, kernel::KernelError> faces(
       const kernel::ShapePtr& shape) override {
     ++queries;

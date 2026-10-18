@@ -150,6 +150,23 @@ nonzero draft and `symmetric: true` with `to` are explicit errors. Select `direc
 or another direction to reach a plane behind the default normal. Finite-distance extrusion
 semantics are unchanged; no schema, kernel API or document migration is needed.
 
+Equal-distance chamfers bevel selected face boundaries, for example:
+
+```json
+{"id":"bevel","type":"chamfer","inputs":{"distance":"1 mm",
+ "edges":{"edges_of":{"created_by":"base","role":"cap_end","expect":"one"}}}}
+```
+
+`edges_of` includes all trimming loops, including holes, and deduplicates shared edges.
+Compose edge sets with `any` and `except`; apply existing face filters inside `edges_of`.
+Only bodies retaining selected edges are modified; excluded candidates remain dependencies.
+Distance must exceed 1e-6 mm. OCCT propagates along tangent contours. Unsupported geometry,
+incomplete history, explicit `angle` and edge-level `where` filters report errors. New faces
+have role `chamfer`; surviving face names follow modifications through placements and cache hits.
+Queries run before cache reuse, and multiple target bodies publish atomically.
+Backend implementers must add `IKernel::edges`, `IKernel::chamfer` and the `chamfer` capability,
+and rebuild consumers for the changed vtable/value layout. Documents need no migration.
+
 Revolutions and rigid rotations accept an explicit axis or a named line in an earlier sketch,
 such as `{"sketch":"centerline","entity":"axis"}`. A standalone line can define the axis;
 its start and start-to-end direction map through the evaluated sketch plane. Axis-sketch edits
