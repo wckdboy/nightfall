@@ -311,7 +311,7 @@ TEST_CASE("generative face provenance follows successive boolean retirements", "
 }
 
 TEST_CASE("consumed cutting tool cap planes keep current reversed face orientation",
-          "[face-attached][face-filters]") {
+          "[face-attached][face-filters][selector-sets]") {
   auto d = attached();
   d.features.insert(
       d.features.begin() + 2,
@@ -326,6 +326,11 @@ TEST_CASE("consumed cutting tool cap planes keep current reversed face orientati
   SECTION("normal-filtered cap") {
     selector(d, R"({"created_by":"drill","role":"cap_end","where":{"normal":"-z"}})", 5);
   }
+  SECTION("composed cap") {
+    selector(d, R"({"any":[{"created_by":"drill","role":"cap_end"}],
+      "except":{"created_by":"base","role":"side"}})",
+             5);
+  }
   d.features[5].inputs =
       set(d.features[5].inputs, "entities",
           ir::json::parse(R"([{"id":"r","type":"circle","center":[5,-5],"radius":2}])").value());
@@ -339,17 +344,15 @@ TEST_CASE("consumed cutting tool cap planes keep current reversed face orientati
         "plate");
 }
 
-TEST_CASE("unsupported face selector sets and qualifiers fail at their fields", "[face-attached]") {
+TEST_CASE("unsupported face selector qualifiers and edges fail at their fields",
+          "[face-attached]") {
   struct Invalid {
     const char* selector;
     const char* field;
   };
   auto kernel = kernel::make_occt_kernel().value();
-  for (const auto& [text, field] :
-       {Invalid{R"({"created_by":"base","from":"outline/r"})", "from"},
-        Invalid{R"({"created_by":"base","except":{"created_by":"base","role":"side"}})", "except"},
-        Invalid{R"({"any":[{"created_by":"base"}]})", "any"},
-        Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"}}) {
+  for (const auto& [text, field] : {Invalid{R"({"created_by":"base","from":"outline/r"})", "from"},
+                                    Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"}}) {
     auto d = attached();
     selector(d, text);
     Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
@@ -452,7 +455,7 @@ TEST_CASE("face sketch cache bindings reject recreated snapshots and rebind prod
 }
 
 TEST_CASE("face selectors invalidate cached planes when producer IDs swap on identical snapshots",
-          "[face-attached][face-filters][nearest-face]") {
+          "[face-attached][face-filters][nearest-face][selector-sets]") {
   auto d = attached();
   d.features.insert(
       d.features.begin() + 2,
@@ -469,6 +472,11 @@ TEST_CASE("face selectors invalidate cached planes when producer IDs swap on ide
   SECTION("nearest cap") {
     selector(d, R"({"created_by":"base","role":"cap_end","where":{"near":[5,10,35]}})", 4);
     extra_queries = 1;
+  }
+  SECTION("composed cap") {
+    selector(d, R"({"any":[{"created_by":"base","role":"cap_end"},
+      {"created_by":"base","role":"missing","expect":"any"}]})",
+             4);
   }
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
@@ -841,7 +849,7 @@ TEST_CASE("filtered selectors reject malformed handles and missing provenance in
 }
 
 TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account for retained bytes",
-          "[face-filters][nearest-face]") {
+          "[face-filters][nearest-face][selector-sets]") {
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
   auto d = attached();
@@ -851,6 +859,10 @@ TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account f
   SECTION("nearest face") {
     selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[5,10,31]}})");
     extra_queries = 1;
+  }
+  SECTION("composed face") {
+    selector(d, R"({"any":[{"faces_of":"plate"},{"created_by":"base","role":"cap_end"}],
+      "except":{"created_by":"base","role":"missing","expect":"any"},"where":{"normal":"z"}})");
   }
   const auto first = evaluator.evaluate(source(d)).value();
   boss(first);
@@ -873,7 +885,7 @@ TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account f
 }
 
 TEST_CASE("filtered snapshots survive cache eviction and producing facade teardown",
-          "[face-filters][nearest-face]") {
+          "[face-filters][nearest-face][selector-sets]") {
   Evaluation retained;
   std::size_t extra_queries = 0;
   auto d = attached();
@@ -882,6 +894,10 @@ TEST_CASE("filtered snapshots survive cache eviction and producing facade teardo
   SECTION("nearest face") {
     selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[5,10,31]}})");
     extra_queries = 1;
+  }
+  SECTION("composed face") {
+    selector(d, R"({"any":[{"faces_of":"plate"},{"created_by":"base","role":"cap_end"}],
+      "except":{"created_by":"base","role":"missing","expect":"any"},"where":{"normal":"z"}})");
   }
   {
     auto kernel = kernel::make_occt_kernel().value();
@@ -1189,4 +1205,362 @@ TEST_CASE("nearest queries respect rollback suppression and failed current sourc
   REQUIRE_FALSE(failed.ok());
   CHECK(failed.features[3].errors.front().code == "input_failed");
   CHECK(kernel.distances == 0);
+}
+
+TEST_CASE("recursive selector unions deduplicate current face identity before plane selection",
+          "[selector-sets]") {
+  auto d = attached();
+  selector(d, R"({"any":[{"created_by":"base","role":"cap_end"},{"any":[
+    {"created_by":"base","role":"cap_end"},{"created_by":"base","role":"cap_end"}],"expect":"one"}],
+    "expect":"one"})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  CHECK(first.kernel_calls == 3);
+  CHECK(kernel.queries == 1);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(cached.kernel_calls == 1);
+  CHECK(cached.cache_hits == 4);
+  d.params[0].value = "40 mm";
+  boss(evaluator.evaluate(source(d)).value(), {5, 10, 41});
+  d.params[0].value = "4 cm";
+  const auto equivalent = evaluator.evaluate(source(d)).value();
+  boss(equivalent, {5, 10, 41});
+  CHECK(equivalent.kernel_calls == 1);
+  CHECK(equivalent.cache_hits == 4);
+  boss(first);
+}
+
+TEST_CASE("selector unions share face descriptions across leaves and parent filters",
+          "[selector-sets]") {
+  auto d = attached();
+  selector(d, R"({"any":[{"faces_of":"plate"},{"created_by":"base","where":{"type":"plane"}},
+    {"any":[{"created_by":"base","role":"cap_end"},{"faces_of":"plate","where":{"normal":"z"}}]}],
+    "where":{"normal":"z","near":[5,10,"depth + 1 mm"]}})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  CHECK(kernel.queries == 1);
+  CHECK(kernel.distances == 1);
+  CHECK(first.kernel_calls == 4);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(kernel.queries == 2);
+  CHECK(kernel.distances == 2);
+  CHECK(cached.kernel_calls == 2);
+  CHECK(cached.cache_hits == 4);
+}
+
+TEST_CASE("recursive selector exclusions preserve exact set difference and optional empty sets",
+          "[selector-sets]") {
+  auto real = kernel::make_occt_kernel().value();
+  for (const auto* text : {
+           R"({"created_by":"base","except":{"any":[{"created_by":"base","role":"cap_start"},
+           {"created_by":"base","role":"side"}]}})",
+           R"({"faces_of":"plate","except":{"faces_of":"plate",
+           "except":{"created_by":"base","role":"cap_end"}}})",
+           R"({"any":[{"faces_of":"plate","except":{"faces_of":"plate"},"expect":"any"},
+           {"created_by":"base","role":"cap_end"}]})",
+           R"({"any":[{"created_by":"base","role":"missing","expect":"any"},
+           {"created_by":"base","role":"cap_end"}],
+           "except":{"created_by":"base","role":"missing","expect":"any"}})"}) {
+    auto d = attached();
+    selector(d, text);
+    QueryKernel kernel(*real);
+    Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+    boss(evaluator.evaluate(source(d)).value());
+    CHECK(kernel.queries == 1);
+    CHECK(kernel.distances == 0);
+  }
+}
+
+TEST_CASE("every selector node enforces its own cardinality at its nested pointer",
+          "[selector-sets]") {
+  struct Invalid {
+    const char* text;
+    const char* pointer;
+    const char* count;
+  };
+  auto kernel = kernel::make_occt_kernel().value();
+  for (
+      const auto& [text, pointer, count] :
+      {Invalid{
+           R"({"any":[{"created_by":"base","role":"missing"},{"created_by":"base","role":"cap_end"}]})",
+           "/any/0", "0"},
+       Invalid{R"({"any":[{"created_by":"base","expect":"one"}],"where":{"normal":"z"}})", "/any/0",
+               "6"},
+       Invalid{
+           R"({"created_by":"base","role":"cap_end","except":{"created_by":"base","role":"missing"}})",
+           "/except", "0"},
+       Invalid{R"({"any":[{"any":[{"created_by":"base","role":"missing","expect":"one"}]}]})",
+               "/any/0/any/0", "0"},
+       Invalid{R"({"any":[{"created_by":"base","role":"cap_end","except":{
+           "created_by":"base","role":"cap_end"},"expect":"one"}]})",
+               "/any/0", "0"},
+       Invalid{R"({"any":[{"created_by":"base","role":"cap_start"},
+           {"created_by":"base","role":"cap_end"}],"expect":"any"})",
+               "", "2"},
+       Invalid{R"({"faces_of":"plate","except":{"created_by":"base"},"expect":"any"})", "", "0"}}) {
+    auto d = attached();
+    selector(d, text);
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.features[2].errors.front().code == "selector_count");
+    CHECK(result.features[2].errors.front().pointer ==
+          "/features/2/inputs/plane" + std::string(pointer));
+    CHECK(result.features[2].errors.front().message.find(count) != std::string::npos);
+    CHECK_FALSE(result.bodies.at("boss_body").shape);
+  }
+}
+
+TEST_CASE("exclusions remove the nearest face before parent nearest filtering", "[selector-sets]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("repeat", "pattern_linear", R"({"bodies":["plate"],"count":2,
+      "spacing":20,"direction":"x"})"));
+  selector(d, R"({"faces_of":"plate","except":{"created_by":"base","role":"cap_end",
+    "where":{"near":[25,10,31]},"expect":"one"},"where":{"normal":"z","near":[25,10,31]}})",
+           3);
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  CHECK(kernel.queries == 1);
+  CHECK(kernel.distances == 3);
+  CHECK(first.kernel_calls == 8);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(cached.kernel_calls == 4);
+  CHECK(cached.cache_hits == 5);
+}
+
+TEST_CASE("nearest filters on unions compare every current candidate body globally",
+          "[selector-sets]") {
+  auto d = transferred(true);
+  d.features.insert(
+      d.features.begin() + 4,
+      feature("shift", "transform", R"({"bodies":["plate"],"translation":[100,0,0]})"));
+  selector(d, R"({"any":[{"created_by":"tool","role":"cap_end"},
+    {"faces_of":"plate","where":{"normal":"z"}}],"where":{"near":[105,10,41]}})",
+           5);
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value(), {105, 10, 41});
+  CHECK(kernel.queries == 2);
+  CHECK(kernel.distances == 2);
+  selector(d, R"({"any":[{"created_by":"tool","role":"cap_end"},
+    {"faces_of":"plate","where":{"normal":"z"}}],"where":{"near":[5,10,41]}})",
+           5);
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first, {5, 10, 41});
+  d.params[0].value = "20 mm";
+  const auto edit = evaluator.evaluate(source(d)).value();
+  boss(edit, {5, 10, 41});
+  CHECK(edit.features[5].hash != first.features[5].hash);
+  CHECK(edit.bodies.at("other").shape == first.bodies.at("other").shape);
+}
+
+TEST_CASE("selector differences distinguish coincident faces owned by different snapshots",
+          "[selector-sets]") {
+  auto d = transferred(true);
+  selector(d, R"({"created_by":"tool","role":"cap_end",
+    "except":{"faces_of":"other","where":{"normal":"z"}}})",
+           4);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first, {5, 10, 41});
+  REQUIRE(first.bodies.at("plate").shape != first.bodies.at("other").shape);
+  solid(first, 8000, 2800, {5, 10, 20}, "plate");
+  solid(first, 8000, 2800, {5, 10, 20}, "other");
+}
+
+TEST_CASE("unsupported fields and directions retain full selector tree pointers",
+          "[selector-sets]") {
+  struct Invalid {
+    const char* text;
+    const char* pointer;
+  };
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto& [text, pointer] :
+       {Invalid{R"({"any":[{"created_by":"base","from":"outline/r"}]})", "/any/0/from"},
+        Invalid{R"({"faces_of":"plate","except":{"edges_of":{"created_by":"base"}}})",
+                "/except/edges_of"},
+        Invalid{R"({"any":[{"any":[{"faces_of":"plate","where":{"type":"cylinder"}}]}]})",
+                "/any/0/any/0/where/type"},
+        Invalid{R"({"any":[{"faces_of":"plate","where":{"normal":[0,0,0]}}]})",
+                "/any/0/where/normal"}}) {
+    auto d = attached();
+    selector(d, text);
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto failed = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(failed.ok());
+    CHECK(failed.features[2].errors.front().code == "kernel");
+    CHECK(failed.features[2].errors.front().pointer ==
+          "/features/2/inputs/plane" + std::string(pointer));
+    CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  }
+}
+
+TEST_CASE("empty union branches still bind producer and body dependencies", "[selector-sets]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("spare", "extrude", R"({"profile":{"sketch":"outline"},"distance":40,
+      "result":{"new":"spare_body","body_type":"brep"}})"));
+  selector(d, R"({"any":[{"created_by":"base","role":"cap_end"},
+    {"created_by":"spare","role":"missing","expect":"any"}]})",
+           3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  d.features[2].inputs = set(d.features[2].inputs, "distance", 50.0);
+  const auto edit = evaluator.evaluate(source(d)).value();
+  boss(edit);
+  CHECK(edit.features[3].hash != first.features[3].hash);
+  CHECK(edit.features[4].hash != first.features[4].hash);
+  d.features[2].suppressed = true;
+  const auto suppressed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(suppressed.ok());
+  CHECK(suppressed.features[3].errors.front().code == "input_suppressed");
+  CHECK(suppressed.features[3].errors.front().pointer ==
+        "/features/3/inputs/plane/any/1/created_by");
+  CHECK_FALSE(suppressed.bodies.at("boss_body").shape);
+  solid(suppressed, 6000, 2200, {5, 10, 15}, "plate", false);
+}
+
+TEST_CASE("unavailable exclusion sources fail even when the primary set is empty",
+          "[selector-sets]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    {feature("spare", "extrude", R"({"profile":{"sketch":"outline"},"distance":40,
+      "result":{"new":"spare_body","body_type":"brep"}})"),
+                     feature("bad", "transform", R"({"bodies":["spare_body"],"rotation":{
+      "axis":{"origin":[0,0,0],"direction":[0,0,0]},"angle":20}})")});
+  selector(d, R"({"created_by":"base","role":"missing","expect":"any",
+    "except":{"faces_of":"spare_body","expect":"any"}})",
+           4);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[4].errors.front().code == "input_failed");
+  CHECK(failed.features[4].errors.front().pointer == "/features/4/inputs/plane/except/faces_of");
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+}
+
+TEST_CASE("composed selectors report query failures precisely before downstream cache reuse",
+          "[selector-sets]") {
+  auto d = attached();
+  selector(d, R"({"any":[{"faces_of":"plate"}],
+    "except":{"created_by":"base","role":"cap_start"},
+    "where":{"normal":"z","near":[5,10,31]}})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value());
+  std::string pointer = "/features/2/inputs/plane";
+  SECTION("enumeration failure") {
+    kernel.fail_query = true;
+    pointer += "/any/0";
+  }
+  SECTION("distance failure") {
+    kernel.fail_distance = true;
+    pointer += "/where/near";
+  }
+  SECTION("malformed distance") {
+    kernel.distance_result = std::numeric_limits<double>::quiet_NaN();
+    pointer += "/where/near";
+  }
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[2].errors.front().code == "kernel");
+  CHECK(failed.features[2].errors.front().pointer == pointer);
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  solid(failed, 6000, 2200, {5, 10, 15}, "plate", false);
+  kernel.fail_query = kernel.fail_distance = false;
+  kernel.distance_result.reset();
+  const auto retry = evaluator.evaluate(source(d)).value();
+  boss(retry);
+  CHECK(retry.kernel_calls == 2);
+  CHECK(retry.cache_hits == 4);
+}
+
+TEST_CASE("nested nearest expressions preserve units and full diagnostic paths",
+          "[selector-sets]") {
+  auto d = attached();
+  d.params.push_back({"pick", "31 mm", {}, {}, {}, {}});
+  selector(d, R"({"any":[{"faces_of":"plate","where":{"perpendicular_to":"z",
+    "near":[5,10,"pick"]}}]})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  d.params.back().value = "3.1 cm";
+  const auto equivalent = evaluator.evaluate(source(d)).value();
+  boss(equivalent);
+  CHECK(equivalent.features[2].hash == first.features[2].hash);
+  CHECK(equivalent.kernel_calls == 3);
+  CHECK(equivalent.cache_hits == 4);
+  d.params.back().value = "5 mm";
+  boss(evaluator.evaluate(source(d)).value(), {5, -10, -1});
+  d.params.back().value = "1 rad";
+  const auto invalid = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(invalid.ok());
+  CHECK(invalid.features[2].errors.front().code == "unit");
+  CHECK(invalid.features[2].errors.front().pointer ==
+        "/features/2/inputs/plane/any/0/where/near/2");
+}
+
+TEST_CASE("deep selector composition remains bounded by the document nesting contract",
+          "[selector-sets]") {
+  auto d = attached();
+  Value selected = ir::json::parse(R"({"created_by":"base","role":"cap_end"})").value();
+  const auto empty =
+      ir::json::parse(R"({"created_by":"base","role":"missing","expect":"any"})").value();
+  for (int depth = 0; depth < 24; ++depth)
+    selected =
+        ir::json::Object{{"any", ir::json::Array{std::move(selected), empty}}, {"except", empty}};
+  d.features[2].inputs = set(d.features[2].inputs, "plane", std::move(selected));
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value());
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(cached.kernel_calls == 1);
+  CHECK(cached.cache_hits == 4);
+}
+
+TEST_CASE(
+    "excluded body edits invalidate composed attachments even when no selected face is removed",
+    "[selector-sets]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("spare", "extrude", R"({"profile":{"sketch":"outline"},"distance":40,
+      "result":{"new":"spare_body","body_type":"brep"}})"));
+  selector(d, R"({"created_by":"base","role":"cap_end","except":{"faces_of":"spare_body"}})", 3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  d.features[2].inputs = set(d.features[2].inputs, "distance", 50.0);
+  const auto edit = evaluator.evaluate(source(d)).value();
+  boss(edit);
+  CHECK(edit.features[3].hash != first.features[3].hash);
+  CHECK(edit.features[4].hash != first.features[4].hash);
+  CHECK(edit.bodies.at("plate").shape == first.bodies.at("plate").shape);
+  d.features[2].suppressed = true;
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[3].errors.front().code == "input_suppressed");
+  CHECK(failed.features[3].errors.front().pointer == "/features/3/inputs/plane/except/faces_of");
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
 }

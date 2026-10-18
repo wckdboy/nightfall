@@ -159,6 +159,16 @@ int main() {
     nearest_part.transforms = 25;
     nearest_part.cold_calls = nearest_part.depth_calls = 29;
     nearest_part.queries = 3;  // enumeration plus distances to both separated top caps
+    auto composed_part = nearest_part;
+    composed_part.name = "selector sets";
+    composed_part.document.features[3] =
+        test::feature("face_profile", "sketch",
+                      R"({"plane":{"any":[{"created_by":"base","role":"cap_end"},
+        {"faces_of":"support","where":{"normal":"z"}}],"except":{"created_by":"base","role":"cap_end",
+        "where":{"near":[5,10,"depth + 1 mm"]},"expect":"one"},
+        "where":{"normal":"z","near":[5,10,"depth + 1 mm"]},"expect":"one"},
+        "entities":[{"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]})");
+    composed_part.queries = 4;  // one shared enumeration; two exclusion and one remaining distance
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -296,6 +306,7 @@ int main() {
           attached_part,
           filtered_part,
           nearest_part,
+          composed_part,
           Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},

@@ -39,6 +39,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#120](https://github.com/wckdboy/nightfall/issues/120) | Sketches attached to generated planar faces | kernel | Implemented with oriented face queries, current provenance, boolean transfers, exact cardinality and cache-binding regressions; local evidence below |
 | [#121](https://github.com/wckdboy/nightfall/issues/121) | Body-face selectors and planar direction filters | kernel | Implemented with immutable face enumeration, signed world directions, exact cardinality and cache/failure regressions; local evidence below |
 | [#122](https://github.com/wckdboy/nightfall/issues/122) | Nearest attachment faces by trimmed B-rep distance | kernel | Implemented with exact-geometry distance queries, global candidates, tolerance ties and cache/failure regressions; local evidence below |
+| [#123](https://github.com/wckdboy/nightfall/issues/123) | Recursive face-selector unions and exclusions | kernel | Implemented with per-node cardinality, precise nested errors, complete dependencies and shared query descriptions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -640,6 +641,39 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   document nearest-point semantics, tolerance ties, limits and backend API migration.
   Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #123 composes sketch-plane face selectors with recursive `any` and
+  `except` under RFCs 0005/0007. Unions deduplicate by snapshot/entity identity.
+  Exclusions run before this node's geometric/nearest filters, then each node validates
+  `expect`: exactly one, some (default, at least one), or any (permits empty). The final
+  sketch consumer still requires one analytic planar face. Optional empty branches need
+  `expect: any`; unavailable references remain errors. Nested failures retain the complete
+  JSON Pointer, including child/filter locations.
+  Every referenced producer and candidate body remains a dependency, even for excluded or
+  empty sets. Source bindings and retained-byte accounting remain conservative. Current
+  face descriptions are shared within one feature evaluation, across children, exclusions
+  and parent filters; actual queries still execute before cache reuse. Descriptions validate
+  all returned snapshot handles and current name membership. The evaluator identity advances
+  to 21; naming stays 4. No backend API, schema, persisted-format or dependency change.
+  Entity qualifiers, edge selectors and selector planes outside sketches remain unsupported.
+  Tests first: all thirteen initial composition cases fail on unsupported `any`/`except`.
+  Final targeted attachment/filter/nearest/composition selection passes 58 cases / 3218
+  assertions, seed 20261018, including fourteen new cases. Coverage includes recursive
+  union/difference, duplicate/overlapping names, optional empty sets, per-node counts,
+  exclusions before nearest, global candidates, coincident geometry in distinct snapshots,
+  nested unsupported fields/units/query failures, empty/excluded dependency edits and
+  unavailable sources. A 24-level composition remains inside document nesting bounds.
+  Regression sections also verify consumed cutting-tool orientation, producer-ID swaps on
+  identical body snapshots, conservative rebinding, byte budgets, eviction and teardown.
+  Radius-2 mm, height-2 mm bosses retain 8π mm³ / 16π mm². Volume/area tolerance is 1e-7;
+  centroid components 1e-8 mm. Excluding the closest of two separated caps selects the
+  remaining cap without an index fallback or an empty nearest result.
+  Full Release `tools/check.sh --preset occt` passes 557/557 (32.81 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan kernel/
+  evaluator/cache selection passes 323/323 (73.64 s), with no diagnostics. Nightfall is
+  instrumented; OCCT remains the pinned Release shared library. Public evaluator contracts
+  and README document composition, filter/cardinality order and remaining limits.
+  Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1236,3 +1270,34 @@ claim. Timing includes parsing, schema/parameter/input evaluation, current refer
 provenance, enumeration/filtering/distance queries, hashing, exact geometry, validity and
 naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
 Phase 2 sign-off remain pending.
+
+### Composed face-selector rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has two sketches, two extrusions, a two-instance linear pattern
+and 25 transforms. The attachment unions generated caps with filtered support faces,
+excludes the cap nearest (5,10,D+1) mm, then chooses the nearest remaining +z cap. This
+selects the right-hand cap even though the point is closest to the excluded left cap.
+The measured 10×20 mm plate spans z = D to 2D. Every sample checks volume `200D` mm³ /
+area `400 + 60D` mm² within 1e-5, centroid x (including translations) and z = 1.5D
+within 1e-6 mm, plus exact kernel/cache counts. D is depth in mm. Run
+`build/occt/services/kernel/nf_evaluator_bench` after builds/tests. All 30 samples of
+every mode on all twenty-one benchmark parts pass (2520 measured rebuilds).
+
+- Cold: median 4.866 ms / p95 4.976 / max 5.010; 33 kernel calls / 0 cache hits.
+- Host depth + attached depth edit: 5.066 / 5.169 / 5.253 ms; 33 calls / 1 hit.
+- Last transform edit: 0.713 / 0.744 / 0.745 ms; 5 calls / 29 hits.
+- Unused parameter edit: 0.695 / 0.733 / 0.842 ms; 4 calls / 30 hits.
+
+Every evaluation performs one shared all-face enumeration and three actual trimmed-face
+distance queries (two for exclusion, one for the remaining face), including complete
+cache hits. Cold/depth samples add 29 modeling calls; last-transform edits add one, and
+unused edits none. The 96-entry/64 MiB budget retains 96 entries / 11,891,008 estimated
+bytes after depth edits, including all referenced source bindings (shared geometry may
+be charged multiple times), not RSS. All catalogue parameter-edit samples stay below
+100 ms in this local run; largest is the toroidal seal at 76.262 ms (median 75.190 /
+p95 76.076). These are observations, not universal bounds or an optimization claim.
+Timing includes parsing, schema/parameter/input evaluation, recursive set/cardinality
+resolution, current references/provenance, enumeration/filtering/distance queries, hashing,
+exact geometry, validity and naming; serialization, IPC and tessellation remain excluded.
+Remote CI/review and full Phase 2 sign-off remain pending.

@@ -160,7 +160,21 @@ After other filters, it compares distance to every remaining trimmed face, inclu
 and holes, across all candidate bodies. Every face within 1e-6 mm of the minimum survives;
 ties remain ambiguous. Distance queries also run on cache hits and count as kernel calls.
 `near` alone includes curved faces; the sketch-plane consumer still requires a planar face.
-Other surface types, radius/convexity filters, `from` qualifiers, selector sets and
+Face selectors also compose recursively, for example:
+
+```json
+{"any":[{"created_by":"base","role":"cap_end"},{"created_by":"base","role":"cap_start"}],
+ "except":{"created_by":"base","role":"cap_start"}}
+```
+
+Each node unions by snapshot/entity identity, subtracts `except`, applies its geometric
+and nearest filters, then checks `expect`: `one` means exactly one, `some` (default) means
+at least one, and `any` permits empty sets. Optional empty branches need `expect: any`.
+Failures identify the nested selector's JSON Pointer; every referenced producer/body is
+a dependency, including excluded/empty branches. The final sketch plane always needs one
+planar face. Face descriptions are shared within each feature evaluation and refreshed
+before cache reuse.
+Other surface types, radius/convexity filters, `from` qualifiers, edge selectors and
 selector planes outside sketches remain unimplemented. Backend implementers must add
 `IKernel::faces` for snapshot-owned face handles/optional outward frames, and
 `IKernel::face_distance` for finite nonnegative point-to-trimmed-face distances.

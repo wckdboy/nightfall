@@ -19,7 +19,8 @@ struct FeatureState {
 /// Operation-local roles rebound to this evaluation's IDs and current immutable snapshot.
 /// Sketch planes select generated faces by producer/role or all current faces via faces_of.
 /// Both accept planar type, normal/parallel_to/perpendicular_to and nearest-point filters.
-/// Sketch-entity qualifiers, other filters and selector sets remain unsupported.
+/// Face sets compose with recursive any/except; every node enforces its own expect.
+/// Sketch-entity qualifiers and other filters remain unsupported.
 struct NamedEntity {
   std::string feature, role;
   kernel::EntityPtr entity;
@@ -53,6 +54,9 @@ struct Evaluation {
 /// near compares trimmed-face distances after other filters, across all candidate bodies.
 /// Faces within 1e-6 mm of the minimum all survive; ties remain selector_count. near alone
 /// does not imply a planar filter. Each distance is queried/counted before cache reuse.
+/// any unions by snapshot/entity identity; except subtracts before this node's filters.
+/// Every branch binds dependencies, including excluded/empty branches. Each node checks
+/// one/some(default)/any after filtering; face descriptions are shared within a feature only.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.
