@@ -45,7 +45,11 @@ struct Arrangement {
 /// Coincident degree-1 spans are split at overlap endpoints and merged with summed signed
 /// traversal counts, including rational lines and multi-span polylines. Their curves retain
 /// the original parameterization; zero-count internal seams remain in the arrangement.
-/// Shared stretches involving higher-degree curves remain an explicit error (#74).
+/// Shared curved Bezier spans are certified by homogeneous polynomial coefficients,
+/// including reversed/partial spans, degree elevation and Mobius reparameterizations.
+/// Their pointwise discrepancy is bounded by 1e-12 of local control extent plus eight
+/// machine epsilons of coordinate magnitude, independently of drawing-wide vertex welding.
+/// Uncertifiable shared parameterizations remain an explicit error (#74).
 /// A single curve's own self-intersections (a cubic with a loop) are not split.
 [[nodiscard]] std::expected<Arrangement, std::string> arrange(
     std::span<const std::vector<NurbsCurve2>> paths);

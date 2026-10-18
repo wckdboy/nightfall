@@ -26,6 +26,7 @@ if(NF_BUILD_TESTS)
     tests/fit_tests.cpp
     tests/arrangement_tests.cpp
     tests/region_tests.cpp
+    tests/shared_curve_tests.cpp
     tests/surface_tests.cpp
     tests/expression_tests.cpp
     tests/equation_tests.cpp

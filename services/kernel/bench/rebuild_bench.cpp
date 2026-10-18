@@ -122,6 +122,13 @@ int main() {
       {"id":"right","type":"rect","corner":[0,0],"size":["depth / 3",20]}],
       "constraints":[]})")
                                     .value();
+    auto shared_arc = plate;
+    shared_arc.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+      {"id":"outer","type":"circle","center":[0,0],"radius":5},
+      {"id":"cap","type":"arc","center":[0,0],"radius":5,"start_angle":0,"sweep_angle":90},
+      {"id":"chord","type":"line","start":[0,5],"end":[5,0]}],"constraints":[]})")
+                                        .value();
+    const double shared_arc_area = 25 * (3 * std::numbers::pi / 4 + 0.5);
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -144,6 +151,7 @@ int main() {
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
           Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
+          Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

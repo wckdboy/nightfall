@@ -25,10 +25,11 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#104](https://github.com/wckdboy/nightfall/issues/104) | Exact curved sketch profiles: arcs, ellipses and NURBS splines | kernel | Implemented with regression tests and local benchmark evidence |
 | [#106](https://github.com/wckdboy/nightfall/issues/106) | Shared straight boundaries in sketch profiles | math | Implemented with arrangement, region and evaluator regressions; local benchmark evidence |
 | [#108](https://github.com/wckdboy/nightfall/issues/108) | Analytic circular profiles and fast exact mass integration | kernel | Implemented with analytic-surface regressions; local verification and rebuild evidence below |
+| [#109](https://github.com/wckdboy/nightfall/issues/109) | Certified shared curved spans in sketch profiles | math | Implemented with rational-curve, fill-rule and production evaluator regressions |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
-| [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Degree-1 slice in #106; higher-degree shared stretches remain open |
+| [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Straight spans in #106 and certified curved spans in #109; other parameterizations remain open |
 
 ## Log
 
@@ -239,6 +240,28 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Nightfall is instrumented; OCCT remains the pinned Release shared-library build.
   Remote CI, maintainer review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #109 supports shared curved sketch boundaries through exact Bezier-span
+  decomposition, overlap-endpoint splitting and signed traversal accumulation. Whole rational
+  polynomial coefficients certify a common trace, including reversed/partial spans, degree
+  elevation and Mobius parameter changes. The bound is local (1e-12 of control extent plus
+  coordinate roundoff), independent of drawing-wide vertex welding. Stored curves keep their
+  original knot parameters. Parent overlap certification prevents accidental merging of tiny
+  pieces at near-tangencies; ordinary intersections retain the original curve domains, and
+  control-hull bounds identify exact line contacts. Uncertifiable parameterizations still
+  report #74. No schema, dependency or public signature change; evaluator identity is bumped.
+  Eight math regressions include 48 fixed-seed ellipse/cap placements, duplicate open/closed
+  splines, distinct near-curves, third-path crossings and internal/external tangencies.
+  Three evaluator regressions verify duplicate circles/ellipses, a 60° shared-arc notch,
+  empty-fill errors, dependent failure, parameter edits, cold equivalence, equivalent-unit
+  cache restoration and retained names after eviction. Solid volumes/areas use 1e-5 absolute
+  tolerances and centroids 1e-7 mm. The prior implementation failed six new math reproductions.
+  Full Release `tools/check.sh --preset occt` passes 361/361 (19.54 s), including hygiene
+  and the 202-case plus 20-document schema checks. Targeted ASan/UBSan passes 48 math cases
+  (21,484 assertions across shared curves, arrangements, regions, intersections and refinement)
+  plus all 127 kernel/evaluator/cache cases (32.68 s), with no diagnostics or retries.
+  Nightfall code is instrumented; OCCT remains the pinned Release shared-library build.
+  Remote CI, maintainer review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -405,3 +428,30 @@ volume 360π² mm³ and area 240π² mm² within 1e-5, and centroid within 1e-7 
 backend failed the new analytic-surface-type assertion. These are single correctness-run
 timings, separate from the 30-sample rebuild benchmark. The complete reference selection
 passes 21/21 in 2.47 s; all original analytic and cache assertions remain intact.
+
+### Shared curved-boundary rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature shared-arc part has a circle of radius 5 mm with a 90° cap removed under
+even-odd fill, one extrusion and 28 transforms. Every sample checks cross-section area
+`A = 25 × (3π/4 + 1/2)` through volume `A × depth` mm³, centroid x `−125/(6A)` before
+translations, centroid z `depth/2`, and kernel/cache counts. Depth edits reuse the sketch
+and rebuild all 29 solid operations. Run `build/occt/services/kernel/nf_evaluator_bench`.
+
+| Shared-arc notch | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 3.160 | 3.284 | 3.344 | 29 / 0 |
+| Depth edit | 3.335 | 3.479 | 3.484 | 29 / 1 |
+| Last transform edit | 0.604 | 0.629 | 0.662 | 1 / 29 |
+| Unused parameter edit | 0.579 | 0.605 | 0.606 | 0 / 30 |
+
+The cache retains 96 entries / 10,753,680 estimated bytes after depth edits (not RSS).
+Same-run depth-edit median/p95/max: plate 1.916/2.007/2.062 ms,
+bored plate 7.424/7.672/7.990 ms, boolean-cut plate 7.857/8.089/8.117 ms,
+sleeve 2.935/3.006/3.027 ms, elliptic tube 9.812/10.015/10.139 ms,
+shared-edge plate 2.466/2.564/2.595 ms, toroidal seal 76.437/78.148/78.855 ms.
+All samples are below 100 ms in this run; earlier slower tails remain documented above.
+These local observations do not establish a universal bound or claim an optimization.
+This run follows all builds/tests and includes parsing, validation, expressions, hashing,
+exact geometry, validity and naming; serialization, IPC and tessellation remain excluded.
+Remote CI, review and full Phase 2 sign-off remain pending.

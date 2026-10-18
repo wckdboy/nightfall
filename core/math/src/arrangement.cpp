@@ -7,8 +7,10 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <optional>
+#include <set>
 
 #include "nf/math/constructors.hpp"
 #include "nf/math/intersect.hpp"
@@ -75,6 +77,138 @@ double line_parameter(const NurbsCurve2& c, Vec2 p) {
   const double numerator = s * c.weights().front();
   const double t = numerator / (numerator + (1 - s) * c.weights().back());
   return std::lerp(c.domain_start(), c.domain_end(), t);
+}
+
+double trace_tolerance(const NurbsCurve2& a, const NurbsCurve2& b) {
+  double magnitude = 0;
+  for (const auto* c : {&a, &b})
+    for (const auto p : c->points())
+      magnitude = std::max({magnitude, std::abs(p.x), std::abs(p.y)});
+  return 1e-12 * std::max(extent(a), extent(b)) +
+         8 * std::numeric_limits<double>::epsilon() * magnitude;
+}
+
+// B(q*t/(1-t+q*t)) has weights w[i]*q^i. Log space avoids overflow; common
+// scaling is immaterial. Unrepresentable weight ranges are not certified.
+std::optional<std::vector<double>> parameter_weights(const NurbsCurve2& c, bool reversed,
+                                                     double log_ratio) {
+  std::vector<double> result;
+  const auto w = c.weights();
+  for (std::size_t i = 0; i < w.size(); ++i)
+    result.push_back(std::log(w[reversed ? w.size() - 1 - i : i]) +
+                     static_cast<double>(i) * log_ratio);
+  const double maximum = std::ranges::max(result);
+  for (auto& value : result) {
+    value = std::exp(value - maximum);
+    if (!(value > 0 && std::isfinite(value))) return std::nullopt;
+  }
+  return result;
+}
+double endpoint_speed(const NurbsCurve2& c, bool end) {
+  const auto p = c.points();
+  const auto w = c.weights();
+  const std::size_t i = end ? p.size() - 1 : 0, j = end ? i - 1 : 1;
+  return std::log(c.degree()) + std::log(w[j]) - std::log(w[i]) + std::log(length(p[j] - p[i]));
+}
+double choose(int n, int k) {
+  double result = 1;
+  for (int i = 1; i <= k; ++i) result *= static_cast<double>(n - i + 1) / i;
+  return result;
+}
+
+// Prove equality on the entire normalized span, including different degrees, by the
+// Bernstein coefficients of N_a W_b - N_b W_a. Bound each residual by its positive
+// denominator coefficient, so tiny weights cannot hide a real geometric difference.
+bool same_trace(const NurbsCurve2& a, const NurbsCurve2& b, bool reversed = false) {
+  const double near = trace_tolerance(a, b);
+  if (!std::isfinite(near)) return false;
+  const auto point_b = [&](int j) { return b.points()[at(reversed ? b.degree() - j : j)]; };
+  if (length(start_of(a) - point_b(0)) > near || length(end_of(a) - point_b(b.degree())) > near)
+    return false;
+  const auto matches = [&](double log_ratio) {
+    if (!std::isfinite(log_ratio)) return false;
+    const auto wb = parameter_weights(b, reversed, log_ratio);
+    if (!wb) return false;
+    for (int k = 0; k <= a.degree() + b.degree(); ++k) {
+      Vec2 residual;
+      double denominator = 0;
+      for (int i = std::max(0, k - b.degree()); i <= std::min(a.degree(), k); ++i) {
+        const int j = k - i;
+        const double weight =
+            choose(a.degree(), i) * choose(b.degree(), j) * a.weights()[at(i)] * (*wb)[at(j)];
+        residual = residual + (a.points()[at(i)] - point_b(j)) * weight;
+        denominator += weight;
+      }
+      if (!(denominator > 0 && length(residual) <= near * denominator)) return false;
+    }
+    return true;
+  };
+  // Endpoint speed ratios propose q independently of degree elevation. The coefficient
+  // check still decides; neither tangent agreement nor endpoint agreement is sufficient.
+  return matches(0) || matches(endpoint_speed(a, false) - endpoint_speed(b, reversed)) ||
+         matches(endpoint_speed(b, !reversed) - endpoint_speed(a, true));
+}
+
+NurbsCurve2 interval(NurbsCurve2 c, double low, double high) {
+  if (low > c.domain_start()) c = split(c, low).value().second;
+  if (high < c.domain_end()) c = split(c, high).value().first;
+  return c;
+}
+
+// Endpoints propose a common interval; only a whole-curve coefficient proof accepts it.
+// Each pair stores the original parameters, with b's direction allowed to be reversed.
+std::optional<std::array<double, 4>> shared_curve(const NurbsCurve2& a, const NurbsCurve2& b,
+                                                  bool partial = false) {
+  if (same_trace(a, b))
+    return std::array{a.domain_start(), a.domain_end(), b.domain_start(), b.domain_end()};
+  if (same_trace(a, b, true))
+    return std::array{a.domain_start(), a.domain_end(), b.domain_end(), b.domain_start()};
+  if (!partial) return std::nullopt;
+  const double near = trace_tolerance(a, b);
+  std::vector<std::pair<double, double>> ends;
+  for (const double u : {a.domain_start(), a.domain_end()}) {
+    const auto hit = closest_point(b, a.point(u));
+    if (hit.distance <= near) ends.emplace_back(u, hit.u);
+  }
+  for (const double u : {b.domain_start(), b.domain_end()}) {
+    const auto hit = closest_point(a, b.point(u));
+    if (hit.distance <= near) ends.emplace_back(hit.u, u);
+  }
+  if (ends.size() < 2) return std::nullopt;
+  std::ranges::sort(ends);
+  const auto [a0, b0] = ends.front();
+  const auto [a1, b1] = ends.back();
+  if (!(a1 > a0) || b0 == b1 || length(a.point(a1) - a.point(a0)) <= near) return std::nullopt;
+  if (!same_trace(interval(a, a0, a1), interval(b, std::min(b0, b1), std::max(b0, b1)), b1 < b0))
+    return std::nullopt;
+  return std::array{a0, a1, b0, b1};
+}
+
+// Positive-weight Bezier curves stay in their control hull. If that hull lies on
+// one side of a line, only an endpoint can touch it: use that exact endpoint rather
+// than an ill-conditioned Newton root beside a newly introduced span boundary.
+std::optional<CurveCurveIntersection> line_contacts(const NurbsCurve2& line,
+                                                    const NurbsCurve2& curve) {
+  if (line.degree() != 1 || curve.degree() == 1) return std::nullopt;
+  const auto delta = end_of(line) - start_of(line);
+  const double len = length(delta), near = trace_tolerance(line, curve);
+  if (!(len > 0)) return std::nullopt;
+  const auto dir = delta / len;
+  const auto distance = [&](Vec2 p) { return cross(dir, p - start_of(line)); };
+  double low = INFINITY, high = -INFINITY;
+  for (const auto p : curve.points()) {
+    low = std::min(low, distance(p));
+    high = std::max(high, distance(p));
+  }
+  if (!((low >= -near && high > near) || (high <= near && low < -near))) return std::nullopt;
+  CurveCurveIntersection result;
+  for (const double u : {curve.domain_start(), curve.domain_end()}) {
+    const auto p = curve.point(u);
+    const double along = dot(p - start_of(line), dir);
+    if (std::abs(distance(p)) <= near && along >= -near && along <= len + near)
+      result.hits.push_back({line_parameter(line, p), u, p});
+  }
+  return result;
 }
 
 // Half-edges leaving a vertex along (nearly) the same tangent, as where curves touch, are
@@ -162,15 +296,18 @@ std::optional<int> winding_at(std::span<const NurbsCurve2> input, Vec2 p, double
 std::expected<Arrangement, std::string> arrange(std::span<const std::vector<NurbsCurve2>> paths) {
   // 1. The input curves, each path closed.
   std::vector<NurbsCurve2> input;
+  std::vector<NurbsCurve2> originals;
+  std::vector<std::size_t> parents;
   Vec2 lo{INFINITY, INFINITY}, hi{-INFINITY, -INFINITY};
   for (const auto& path : paths) {
     if (path.empty()) continue;
     for (const NurbsCurve2& c : path) {
-      if (c.degree() == 1) {
-        const auto spans = decompose(c);
-        input.insert(input.end(), spans.begin(), spans.end());
-      } else {
-        input.push_back(c);
+      const auto parent = originals.size();
+      if (c.degree() > 1) originals.push_back(c);
+      for (const auto& span : decompose(c)) {
+        parents.push_back(c.degree() > 1 ? parent : originals.size());
+        if (c.degree() == 1) originals.push_back(span);
+        input.push_back(span);
       }
       for (const Vec2 q : c.points()) {
         lo = {std::min(lo.x, q.x), std::min(lo.y, q.y)};
@@ -178,7 +315,9 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
       }
     }
     if (end_of(path.back()) != start_of(path.front())) {
+      parents.push_back(originals.size());
       input.push_back(make_line(end_of(path.back()), start_of(path.front())));
+      originals.push_back(input.back());
     }
   }
   Arrangement out;
@@ -188,8 +327,12 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
 
   // 2. Split parameters where curves meet (crossings, touches, T-junctions).
   std::vector<std::vector<double>> cuts(input.size());
+  std::set<std::pair<std::size_t, std::size_t>> shared_curves;
+  std::map<std::pair<std::size_t, std::size_t>, CurveCurveIntersection> intersections;
   for (std::size_t i = 0; i < input.size(); ++i) {
+    if (i == 0 || parents[i] != parents[i - 1]) intersections.clear();
     for (std::size_t j = i + 1; j < input.size(); ++j) {
+      if (parents[i] == parents[j]) continue;  // own self-intersections remain unsupported
       if (const auto shared = shared_line(input[i], input[j])) {
         for (const auto p : *shared) {
           cuts[i].push_back(line_parameter(input[i], p));
@@ -197,12 +340,40 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
         }
         continue;
       }
-      const auto r = intersect(input[i], input[j]);
-      if (r.overlap)
+      const auto record = [&](const std::array<double, 4>& shared) {
+        shared_curves.emplace(i, j);
+        cuts[i].insert(cuts[i].end(), {shared[0], shared[1]});
+        cuts[j].insert(cuts[j].end(), {shared[2], shared[3]});
+      };
+      if (const auto shared = shared_curve(input[i], input[j])) {
+        record(*shared);
+        continue;
+      }
+      const auto r = [&] {
+        if (const auto contacts = line_contacts(input[i], input[j])) return *contacts;
+        if (auto contacts = line_contacts(input[j], input[i])) {
+          for (auto& h : contacts->hits) std::swap(h.ua, h.ub);
+          return *contacts;
+        }
+        // Keep ordinary roots on the original curves: splitting a tangent at a knot
+        // beforehand can turn one endpoint contact into several imprecise nearby hits.
+        auto [cached, inserted] = intersections.try_emplace({parents[i], parents[j]});
+        if (inserted) cached->second = intersect(originals[parents[i]], originals[parents[j]]);
+        const auto& original = cached->second;
+        return original.overlap ? intersect(input[i], input[j]) : original;
+      }();
+      if (r.overlap) {
+        if (const auto shared = shared_curve(input[i], input[j], true)) {
+          record(*shared);
+          continue;
+        }
         return std::unexpected(
-            "curves share an unsupported stretch; only degree-1 coincident spans are supported "
-            "(#74)");
+            "curves share a stretch whose common parameterization could not be certified (#74)");
+      }
       for (const auto& h : r.hits) {
+        if (h.ua < input[i].domain_start() || h.ua > input[i].domain_end() ||
+            h.ub < input[j].domain_start() || h.ub > input[j].domain_end())
+          continue;
         const auto interior = [&](const NurbsCurve2& c, double u) {
           return length(c.point(u) - start_of(c)) > tol && length(c.point(u) - end_of(c)) > tol;
         };
@@ -213,6 +384,7 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
   }
 
   // 3. Edges: the pieces between cuts, endpoints snapped to shared vertices.
+  std::vector<std::size_t> edge_sources;
   const auto vertex = [&](Vec2 p) {
     for (std::size_t v = 0; v < out.vertices.size(); ++v) {
       if (length(out.vertices[v] - p) <= tol) return static_cast<int>(v);
@@ -238,20 +410,27 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
       // A piece with both ends at one vertex is kept only if it is a real loop.
       if (a == b && extent(piece) <= tol) continue;
       bool merged = false;
-      if (piece.degree() == 1) {
-        for (std::size_t h = 0; h < out.half_edges.size(); h += 2) {
-          auto& edge = out.half_edges[h];
-          const bool same = edge.origin == a && edge.target == b;
-          const bool opposite = edge.origin == b && edge.target == a;
-          if (!(same || opposite) || !shared_line(piece, edge.curve)) continue;
-          edge.direction += same ? 1 : -1;
-          out.half_edges[h + 1].direction = -edge.direction;
-          merged = true;
-          break;
-        }
+      for (std::size_t h = 0; h < out.half_edges.size(); h += 2) {
+        auto& edge = out.half_edges[h];
+        const bool same = edge.origin == a && edge.target == b;
+        const bool opposite = edge.origin == b && edge.target == a;
+        if (!(same || opposite)) continue;
+        const bool line = shared_line(piece, edge.curve).has_value();
+        // A tiny piece near a tangency can agree to rounding even when its parent
+        // curves are distinct. Only certified parent overlaps may merge curved pieces.
+        if (!line && !shared_curves.contains({edge_sources[h / 2], i})) continue;
+        const int direction = same && (line || same_trace(piece, edge.curve))             ? 1
+                              : opposite && (line || same_trace(piece, edge.curve, true)) ? -1
+                                                                                          : 0;
+        if (!direction) continue;
+        edge.direction += direction;
+        out.half_edges[h + 1].direction = -edge.direction;
+        merged = true;
+        break;
       }
       if (merged) continue;  // zero-winding seams still delimit arrangement faces
       const int f = static_cast<int>(out.half_edges.size());
+      edge_sources.push_back(i);
       out.half_edges.push_back({piece, a, b, f + 1, -1, -1, +1});
       out.half_edges.push_back({reverse(piece), b, a, f, -1, -1, -1});
     }
