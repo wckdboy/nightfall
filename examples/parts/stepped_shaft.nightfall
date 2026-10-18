@@ -1,0 +1,90 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Stepped shaft",
+    "doc": "Turned shaft: 16 mm diameter for the first third and 10 mm for the remaining length."
+  },
+  "params": [
+    {
+      "name": "length",
+      "value": "30 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Length"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "zx"
+        },
+        "entities": [
+          {
+            "id": "section",
+            "type": "polygon",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                "length",
+                0
+              ],
+              [
+                "length",
+                5
+              ],
+              [
+                "length / 3",
+                5
+              ],
+              [
+                "length / 3",
+                8
+              ],
+              [
+                0,
+                8
+              ]
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "turn",
+      "type": "revolve",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        },
+        "angle": "360 deg",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

@@ -1,0 +1,88 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "U-channel",
+    "doc": "30 x 20 mm section with 3 mm walls; the two side rectangles share the base boundary."
+  },
+  "params": [
+    {
+      "name": "length",
+      "value": "50 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Length"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "base",
+            "type": "rect",
+            "corner": [
+              -15,
+              0
+            ],
+            "size": [
+              30,
+              3
+            ]
+          },
+          {
+            "id": "left",
+            "type": "rect",
+            "corner": [
+              -15,
+              3
+            ],
+            "size": [
+              3,
+              17
+            ]
+          },
+          {
+            "id": "right",
+            "type": "rect",
+            "corner": [
+              12,
+              3
+            ],
+            "size": [
+              3,
+              17
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "channel",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "length",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

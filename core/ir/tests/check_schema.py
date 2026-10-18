@@ -15,3 +15,10 @@ for case in cases:
     errors = list(validator.iter_errors(case["document"]))
     assert (not errors) == case["schema_valid"], (case["name"], [e.message for e in errors])
 print(f"Published schema: {len(cases)} corpus cases passed")
+
+parts = sorted((root.parent.parent / "examples/parts").glob("*.nightfall"))
+assert len(parts) == 20, f"Expected 20 reference parts, found {len(parts)}"
+for part in parts:
+    errors = list(validator.iter_errors(json.loads(part.read_text(encoding="utf-8"))))
+    assert not errors, (part.name, [e.message for e in errors])
+print(f"Published schema: {len(parts)} reference parts passed")

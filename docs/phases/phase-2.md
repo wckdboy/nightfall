@@ -26,7 +26,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#106](https://github.com/wckdboy/nightfall/issues/106) | Shared straight boundaries in sketch profiles | math | Implemented with arrangement, region and evaluator regressions; local benchmark evidence |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
-| [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals |  |
+| [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
 | [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Degree-1 slice in #106; higher-degree shared stretches remain open |
 
 ## Log
@@ -202,6 +202,24 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Targeted local ASan/UBSan passes 40 math cases (20,936 assertions across arrangement,
   region, intersection and refinement tests) plus 93 kernel/evaluator/cache cases (74.58 s),
   with no diagnostics or retries. Nightfall is instrumented; OCCT uses pinned Release libraries.
+
+- 2026-10-18 — #95 adds [20 editable reference parts](../../examples/parts/README.md) with
+  53 authored features: brackets, an enclosure, turned parts, curved profiles and solid
+  booleans. Twenty geometry tests plus a catalogue check run through the production evaluator.
+  Each part has three analytic parameter cases, cold/incremental comparisons, equivalent-unit
+  reuse, cache restoration and eviction with retained-snapshot checks. Volumes use 1e-5 mm³,
+  centroids 1e-6 mm and bounds 1e-5 mm absolute tolerances. Nineteen parts also check analytic
+  surface area; the elliptic duct checks finite positive area. The spline wedge retains a
+  separate 2e-4 mm² area budget for OCCT numerical integration (observed error up to 1.73e-4);
+  other areas use 1e-5 mm². No runtime API, schema or dependency change. The independent schema
+  check now includes all 20 files, and example edits trigger Release and ASan/UBSan geometry CI.
+  Full Release `tools/check.sh --preset occt` passes 340/340 (504.46 s), with hygiene and both
+  schema corpora (202 cases plus 20 documents) passing. This run had substantial background
+  build load; the torus exposes expensive OCCT volume/centroid integration over NURBS surfaces
+  of revolution, confirmed by a local stack sample. No new latency claim is made.
+  The ASan/UBSan reference selection passes 21/21 (391.07 s), with no diagnostics or retries.
+  Nightfall code is instrumented; OCCT remains the pinned Release shared-library build.
+  Remote CI confirmation, maintainer review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
 

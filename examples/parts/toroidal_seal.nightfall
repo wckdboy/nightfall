@@ -1,0 +1,69 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Toroidal seal",
+    "doc": "Exact torus with 20 mm major radius and an editable circular section radius."
+  },
+  "params": [
+    {
+      "name": "radius",
+      "value": "3 mm",
+      "min": "0.5 mm",
+      "max": "10 mm",
+      "doc": "Radius"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "zx"
+        },
+        "entities": [
+          {
+            "id": "section",
+            "type": "circle",
+            "center": [
+              0,
+              20
+            ],
+            "radius": "radius"
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "turn",
+      "type": "revolve",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        },
+        "angle": "360 deg",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

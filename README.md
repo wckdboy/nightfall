@@ -117,6 +117,16 @@ analytic geometry and execution-count checks on every sample. Timings include JS
 document validation, feature evaluation and kernel validity checks; they exclude serialization,
 IPC and tessellation. Cache byte counts are retained-size estimates, not process RSS.
 
+Twenty editable [reference parts](examples/parts/README.md) exercise the production evaluator:
+mounting plates, brackets, an enclosure, turned parts, curved sections and solid booleans.
+Each `.nightfall` file has a named, bounded parameter. Headless regression tests check analytic
+measurements at three parameter values, incremental versus cold builds, equivalent units,
+cache restoration and retained geometry after eviction. Run just this suite with:
+
+```sh
+ctest --preset occt -R '^evaluator.reference'
+```
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [the development workflow](docs/process/WORKFLOW.md)

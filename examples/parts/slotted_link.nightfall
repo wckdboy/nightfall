@@ -1,0 +1,177 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Slotted link",
+    "doc": "42 x 12 mm capsule with a 24 x 4 mm capsule slot. One end uses an exact rational quadratic spline."
+  },
+  "params": [
+    {
+      "name": "thickness",
+      "value": "6 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "right",
+            "type": "spline",
+            "degree": 2,
+            "knots": [
+              0,
+              0,
+              0,
+              1,
+              1,
+              2,
+              2,
+              2
+            ],
+            "control_points": [
+              [
+                15,
+                -6
+              ],
+              [
+                21,
+                -6
+              ],
+              [
+                21,
+                0
+              ],
+              [
+                21,
+                6
+              ],
+              [
+                15,
+                6
+              ]
+            ],
+            "weights": [
+              1,
+              "sqrt(0.5)",
+              1,
+              "sqrt(0.5)",
+              1
+            ]
+          },
+          {
+            "id": "top",
+            "type": "line",
+            "start": [
+              15,
+              6
+            ],
+            "end": [
+              -15,
+              6
+            ]
+          },
+          {
+            "id": "left",
+            "type": "arc",
+            "center": [
+              -15,
+              0
+            ],
+            "radius": 6,
+            "start_angle": 90,
+            "sweep_angle": 180
+          },
+          {
+            "id": "bottom",
+            "type": "line",
+            "start": [
+              -15,
+              -6
+            ],
+            "end": [
+              15,
+              -6
+            ]
+          },
+          {
+            "id": "slot_right",
+            "type": "arc",
+            "center": [
+              10,
+              0
+            ],
+            "radius": 2,
+            "start_angle": -90,
+            "sweep_angle": 180
+          },
+          {
+            "id": "slot_top",
+            "type": "line",
+            "start": [
+              10,
+              2
+            ],
+            "end": [
+              -10,
+              2
+            ]
+          },
+          {
+            "id": "slot_left",
+            "type": "arc",
+            "center": [
+              -10,
+              0
+            ],
+            "radius": 2,
+            "start_angle": 90,
+            "sweep_angle": 180
+          },
+          {
+            "id": "slot_bottom",
+            "type": "line",
+            "start": [
+              -10,
+              -2
+            ],
+            "end": [
+              10,
+              -2
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "link",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

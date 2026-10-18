@@ -1,0 +1,70 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Washer",
+    "doc": "24 mm outer diameter and 10 mm bore; exact circular boundaries."
+  },
+  "params": [
+    {
+      "name": "thickness",
+      "value": "2 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 12
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 5
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "ring",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}
