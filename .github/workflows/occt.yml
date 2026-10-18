@@ -15,6 +15,7 @@ on:
     paths:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
+      - "tools/cli/**"
       - "core/**"
       - "services/kernel/**"
       - "examples/parts/**"
@@ -27,6 +28,7 @@ on:
     paths:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
+      - "tools/cli/**"
       - "core/**"
       - "services/kernel/**"
       - "examples/parts/**"
@@ -85,5 +87,5 @@ jobs:
       - name: Sanitize production geometry and evaluator ownership
         run: |
           cmake --preset asan -DNF_WITH_OCCT=ON
-          cmake --build --preset asan --target nf_kernel_tests nf_kernel_cache_tests nf_evaluator_tests --parallel 2
-          ctest --preset asan -R '^(kernel\.|kernel-cache\.|evaluator\.)'
+          cmake --build --preset asan --target nf_kernel_tests nf_kernel_cache_tests nf_evaluator_tests nf_cli_tests --parallel 2
+          ctest --preset asan -R '^(kernel\.|kernel-cache\.|evaluator\.|cli\.)'

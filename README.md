@@ -71,6 +71,25 @@ failures have explicit states; unsupported
 constraints, selectors and modeling operations report errors. This is the headless kernel
 path; native app integration and the remaining v1 operations are still in progress.
 
+Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
+
+```sh
+cmake --preset occt
+cmake --build --preset occt --target nf
+build/occt/tools/cli/nf build examples/parts/mounting_plate.nightfall --out /tmp/plate.step
+```
+
+`nf build` exports every live body, preserving separate and coincident bodies and excluding
+consumed tools. It respects suppression and rollback; any model error prevents export.
+Input reads are limited to 16 MiB. Success writes one JSON record to stdout with `output`
+and sorted `bodies`; errors write an `errors` array to stderr with codes, messages, JSON
+Pointers and available expression offsets. Exit codes are 0 for success, 1 for build/I/O
+failure, and 2 for usage errors (`nf --help`). An existing output is replaced only after
+successful encoding and a complete temporary-file write; input aliases are refused.
+The backend encodes in memory and preserves source snapshots. Backend implementers must add
+`IKernel::export_step(const std::vector<ShapePtr>&)` and rebuild for the new virtual interface;
+no document migration is needed. STEP carries geometry, without Nightfall history or selectors.
+
 Arc entities use `center`, `radius`, `start_angle` and a signed `sweep_angle` up to one full turn;
 ellipses use `center`, `radii` and optional `rotation`. Splines retain their clamped knot vector,
 degree (1–9), `control_points` and optional positive `weights`. Coordinates and angles accept

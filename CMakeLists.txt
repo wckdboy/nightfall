@@ -61,3 +61,6 @@ endif()
 
 add_subdirectory(tools/bakeoff)
 add_subdirectory(services/kernel)
+if(NF_WITH_OCCT)
+  add_subdirectory(tools/cli)
+endif()

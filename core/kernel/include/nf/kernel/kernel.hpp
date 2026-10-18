@@ -108,6 +108,11 @@ class IKernel {
     bool extrude, rigid_transform, booleans, revolve, mirror;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
+  /// Encode all supplied closed-solid snapshots as exact STEP AP242 B-rep text in millimetres.
+  /// Preserve each body (including coincident ones) and every input snapshot/handle. Reject
+  /// empty lists and null/foreign snapshots. No files are opened; serialize backend access.
+  [[nodiscard]] virtual std::expected<std::string, KernelError> export_step(
+      const std::vector<ShapePtr>&) = 0;
   /// Enumerate every unique face of a validated snapshot, including curved faces and all solids.
   /// Handles retain their owner; planar frames follow face_plane's convention. Order is unspecified
   /// and must never be used as persistent identity. Reject null/foreign snapshots; do not mutate.

@@ -9,7 +9,7 @@
 All of these, with evidence linked:
 
 - [ ] 20 reference parts (gear, bracket, enclosure, …) build headlessly in CI
-- [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence))
+- [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
 ## Work items (build order)
@@ -42,7 +42,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#123](https://github.com/wckdboy/nightfall/issues/123) | Recursive face-selector unions and exclusions | kernel | Implemented with per-node cardinality, precise nested errors, complete dependencies and shared query descriptions; local evidence below |
 | [#124](https://github.com/wckdboy/nightfall/issues/124) | Mirror bodies across selected current planar faces | kernel | Implemented with shared face resolution, separate source/target bindings, current dependencies and cache ownership regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
-| [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
+| [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
 | [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Straight spans in #106 and certified curved spans in #109; other parameterizations remain open |
 
@@ -705,6 +705,46 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   the input adapter and README document selected mirror planes and retained sources.
   Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #94 implements `nf build part.nightfall --out part.step` under accepted
+  RFCs 0005/0007, using RFC 0001's pinned OCCT translator. The headless executable links
+  the production evaluator; the app still uses the service boundary. It reads regular files
+  within the existing 16 MiB document limit, evaluates the complete active history and
+  refuses partial exports after any model error. Every live body is exported in stable ID
+  order, including coincident bodies; consumed tools are excluded. Suppression and inclusive
+  rollback keep their evaluator semantics. Success emits one JSON record with output path
+  and body IDs; errors retain codes, pointers and available offsets. Exit statuses are
+  0 (success), 1 (build/I/O failure) and 2 (usage).
+  Only the CLI opens files. `IKernel::export_step` encodes exact manifold STEP AP242 B-reps
+  in millimetres from deep geometry copies, with no tessellation. A per-writer messenger
+  avoids changing global output routing. Each input body remains distinct even when its
+  snapshot is shared with another body. The CLI fsyncs/closes a sibling temporary file before
+  rename, cleans it on write/publication errors, and refuses output aliases of the input.
+  Existing artifacts survive failed builds. STEP carries geometry, not editable IR history.
+  The new pure virtual method changes the backend source/ABI contract: implement
+  `export_step(const std::vector<ShapePtr>&)` and rebuild consumers. Backend identity records
+  `step=ap242-mm-v1`; evaluator/naming stay 22/4. No schema, IR version or dependency change.
+  Tests first: kernel tests fail compilation on the missing method, then five of six cases
+  fail against an unsupported stub (invalid-input rejection already passes). All ten initial
+  CLI cases fail before the executable exists. Final targeted runs pass 6 kernel cases /
+  144 assertions and 10 CLI cases / 1037 assertions, seed 20261018. Coverage includes boxes,
+  annular cavities, analytic cylinders, current rigid/reflected/multi-solid snapshots,
+  coincident bodies, unchanged B-rep serialization/face handles and retained snapshots;
+  CLI diagnostics, file bounds, aliases, failed/empty models, replacement/cleanup,
+  consumed tools, suppression/rollback and shell-sensitive filenames. A 3×4×5 mm box
+  reloads as 60 mm³ / 94 mm² with centroid (3.5,1,9.5) mm, six faces and twelve edges;
+  two coincident boxes remain two solids, 120 mm³ / 188 mm². Kernel STEP tolerances are
+  1e-6 for volume/area and 1e-7 mm for centroid components.
+  All twenty reference documents build through the CLI and reload as valid closed solids;
+  comparisons to their independently tested evaluator results use volume/area tolerance
+  1e-5 and centroid 1e-6 mm. The CLI also configures/builds with `NF_BUILD_TESTS=OFF` and
+  exports a washer successfully. The OCCT workflow includes CLI path triggers, targets and
+  sanitizer tests. Final Release `tools/check.sh --preset occt` passes 587/587 (39.88 s),
+  including hygiene, format, 202 schema corpus cases and 20 reference documents, without
+  warnings. The expanded CI-equivalent ASan/UBSan kernel/cache/evaluator/CLI selection
+  passes 353/353 (88.15 s), with no diagnostics. Nightfall is instrumented; OCCT remains
+  the pinned Release shared library. Rebuild measurements follow; remote CI/review and
+  full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1361,3 +1401,32 @@ claim. Timing includes parsing, schema/parameter/input evaluation, current refer
 recursive selector/cardinality resolution, enumeration/distance queries, hashing, exact
 reflection/union, validation and naming. Serialization, IPC and tessellation remain excluded.
 Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Headless CLI export and rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3. The CLI tests build
+and reload all twenty reference STEP files, check validity and compare volume/area within
+1e-5 and centroid within 1e-6 mm to the independently verified evaluator results. A separate
+`NF_BUILD_TESTS=OFF` build also exports the washer: one exact solid, with a 36,179-byte STEP
+artifact at `/tmp/nightfall-94-washer.step`. STEP includes geometry, without Nightfall history.
+
+After all builds/tests, two executions of `nf_evaluator_bench` each cover 22 parts × 4 modes
+× 30 samples (5280 measured rebuilds total). Both pass every geometry and execution-count
+assertion. The benchmark measures IR decoding/evaluation, selectors, geometry and naming;
+it excludes CLI startup, file I/O and STEP encoding, as well as serialization/IPC/tessellation.
+The per-evaluator budget remains 96 entries / 64 MiB estimated retained bytes, not RSS.
+
+The first run misses the 100 ms target on toroidal depth edits: median 152.992 ms /
+p95 203.727 / max 214.026. Toroidal cold builds measure 77.102 / 129.961 / 146.454 ms.
+All other parameter-edit modes/parts stay below 100 ms. A post-run process snapshot shows
+concurrent simulator and cloud-sync activity; this is context, not proof of the cause.
+The immediate repeat, with unchanged sources, measures toroidal depth edits at
+75.340 / 77.719 / 78.030 ms and cold builds at 74.987 / 77.264 / 77.641 ms. All catalogue
+parameter-edit samples stay below 100 ms on that repeat. The plate depth edit measures
+1.994 / 2.128 / 2.162 ms in the first run; these are local observations, not latency bounds.
+
+The successful repeat does not erase the observed miss. Follow-up under #95: capture
+contemporaneous system load/thermal data on a quiet-host run and profile toroidal mass
+integration if the overrun reproduces. No modeling algorithm was changed for this CLI issue.
+The baseline local criterion retains its measured pass; load sensitivity, remote CI/review
+and full Phase 2 sign-off remain pending.

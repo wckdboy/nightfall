@@ -4,6 +4,7 @@
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -13,13 +14,18 @@
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
+#include <DESTEP_Parameters.hxx>
+#include <Message_Messenger.hxx>
 #include <Precision.hxx>
+#include <STEPControl_Writer.hxx>
 #include <Standard_Version.hxx>
+#include <StepData_StepModel.hxx>
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
+#include <XSControl_WorkSession.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 
@@ -151,7 +157,7 @@ class OcctKernel final : public IKernel {
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=planar-v1;"
-                "face-distance=trimmed-v1;"
+                "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
              << detail::kMassRelativeAccuracy
@@ -161,6 +167,42 @@ class OcctKernel final : public IKernel {
   }
   std::string_view identity() const noexcept override { return identity_; }
   Capabilities capabilities() const noexcept override { return {true, true, true, true, true}; }
+  std::expected<std::string, KernelError> export_step(
+      const std::vector<ShapePtr>& inputs) override {
+    return guarded([&] {
+      if (inputs.empty()) fail("STEP export requires at least one solid body");
+      BRep_Builder builder;
+      TopoDS_Compound compound;
+      builder.MakeCompound(compound);
+      for (const auto& input : inputs) {
+        const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+        if (!source || source->geometry.IsNull())
+          fail("STEP export requires snapshots from this backend");
+        BRepBuilderAPI_Copy copy(source->geometry, true, false);
+        if (!copy.IsDone()) fail("cannot copy STEP input geometry");
+        builder.Add(compound, copy.Shape());
+      }
+      STEPControl_Writer writer;
+      Handle(Message_Messenger) messages = new Message_Messenger;
+      messages->ChangePrinters().Clear();
+      writer.WS()->TransferWriter()->FinderProcess()->SetMessenger(messages);
+      writer.Model()->SetLocalLengthUnit(1);
+      DESTEP_Parameters options;
+      options.WriteSchema = DESTEP_Parameters::WriteMode_StepSchema_AP242DIS;
+      options.WriteUnit = UnitsMethods_LengthUnit_Millimeter;
+      options.WriteAssembly = DESTEP_Parameters::WriteMode_Assembly_Off;
+      options.WriteTessellated = DESTEP_Parameters::RWMode_Tessellated_Off;
+      options.WritePrecisionMode = DESTEP_Parameters::WriteMode_PrecisionMode_Session;
+      options.WritePrecisionVal = tolerance_.linear;
+      if (writer.Transfer(compound, STEPControl_ManifoldSolidBrep, options) != IFSelect_RetDone)
+        fail("STEP solid translation failed");
+      std::ostringstream stream;
+      stream.imbue(std::locale::classic());
+      if (writer.WriteStream(stream) != IFSelect_RetDone || !stream.good())
+        fail("STEP text encoding failed");
+      return stream.str();
+    });
+  }
   std::expected<std::vector<FaceInfo>, KernelError> faces(const ShapePtr& input) override {
     return guarded([&] {
       const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);

@@ -1,8 +1,8 @@
 # Reference parts
 
 Twenty editable v1 `.nightfall` documents for the Phase 2 reference suite (#95). These are
-complete parametric inputs for the production headless evaluator. Native app opening, the
-`nf build` CLI and Nightfall Script are still pending; use the test runner below for now.
+complete parametric inputs for the production headless evaluator and `nf build` CLI (#94).
+Native app opening and Nightfall Script remain pending.
 
 Each file has a descriptive feature history and a named, bounded parameter in millimetres.
 Edit its `params[0].value` to change the model. All inputs are self-contained and use the
@@ -36,9 +36,19 @@ Build and run all examples (macOS / dynamically linked OCCT 7.9.3):
 ```sh
 third_party/build-occt.sh
 cmake --preset occt
-cmake --build --preset occt --target nf_evaluator_tests
-ctest --preset occt -R '^evaluator.reference'
+cmake --build --preset occt --target nf_cli_tests nf_evaluator_tests
+ctest --preset occt -R '^(evaluator.reference|cli.all twenty reference)'
 ```
+
+Export one part:
+
+```sh
+build/occt/tools/cli/nf build examples/parts/enclosure.nightfall --out /tmp/enclosure.step
+```
+
+The CLI suite reloads all twenty STEP exports, checks
+closed-solid validity, and compares volume/area within 1e-5 and centroid within 1e-6 mm
+against the evaluator results. The independent analytic checks below remain in place.
 
 One part can be checked with, for example:
 

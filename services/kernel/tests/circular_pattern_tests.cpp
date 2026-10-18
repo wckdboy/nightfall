@@ -70,6 +70,10 @@ class FaultKernel final : public kernel::IKernel {
   explicit FaultKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<std::string, kernel::KernelError> export_step(
+      const std::vector<kernel::ShapePtr>& bodies) override {
+    return backend.export_step(bodies);
+  }
   std::expected<double, kernel::KernelError> face_distance(const kernel::EntityPtr& e,
                                                            math::Vec3 point) override {
     return backend.face_distance(e, point);
