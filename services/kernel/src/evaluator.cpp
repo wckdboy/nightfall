@@ -42,6 +42,16 @@ T take(std::expected<T, E> value) {
   return std::move(*value);
 }
 const std::string& string(const Value& value) { return *value.if_string(); }
+void check_plane_frame(const kernel::Plane& p, const std::string& pointer) {
+  for (const double v : {p.origin.x, p.origin.y, p.origin.z, p.x_axis.x, p.x_axis.y, p.x_axis.z,
+                         p.normal.x, p.normal.y, p.normal.z})
+    if (!std::isfinite(v)) fail("kernel", "non-finite selected plane frame", pointer);
+  const auto tolerance = math::Tolerance::standard().angular;
+  if (!math::near(math::length(p.x_axis), 1, tolerance) ||
+      !math::near(math::length(p.normal), 1, tolerance) ||
+      !math::near(math::dot(p.x_axis, p.normal), 0, tolerance))
+    fail("kernel", "selected plane frame must be orthonormal", pointer);
+}
 struct FaceFilter {
   bool planar = false, cylindrical = false;
   std::optional<double> radius;
@@ -239,7 +249,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/24;roles/5;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/25;roles/5;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -329,6 +339,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
       const auto* selection = axis;
       if (feature.type == "sketch" || feature.type == "mirror") selection = inputs.find("plane");
+      if (feature.type == "extrude") selection = inputs.find("to");
       if (selection) {
         const auto& plane = *selection;
         if (!plane.find("datum") && !plane.find("origin") && !plane.find("sketch")) {
@@ -344,6 +355,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               if (!face.entity || face.entity->owner() != shape ||
                   face.entity->kind() != kernel::EntityKind::kFace)
                 fail("kernel", "face query returned an invalid snapshot handle", pointer);
+              if (face.plane) check_plane_frame(*face.plane, pointer);
               if (face.cylinder) {
                 const auto& c = *face.cylinder;
                 for (const double v :
@@ -460,7 +472,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                    pointer);
             return matches;
           };
-          const std::string pointer = !axis                         ? "/inputs/plane"
+          const std::string pointer = feature.type == "extrude"     ? "/inputs/to"
+                                      : !axis                       ? "/inputs/plane"
                                       : feature.type == "transform" ? "/inputs/rotation/axis"
                                                                     : "/inputs/axis";
           const auto matches = select(plane, pointer);
@@ -483,6 +496,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
             selected_plane = *resolved;
           }
+          if (selected_plane) check_plane_frame(*selected_plane, pointer);
         }
       }
       if (feature.type == "mirror")
@@ -517,7 +531,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           auto solid = [&] {
             if (feature.type == "extrude") {
               const auto operation =
-                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources));
+                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources,
+                                         selected_plane ? &*selected_plane : nullptr));
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }

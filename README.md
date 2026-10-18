@@ -133,6 +133,23 @@ Extrusions and revolutions can create a new body or use `result: {"join": "body"
 or `{"intersect": "body"}` to modify an existing body. The intermediate solid stays private;
 the target's geometry and face history are published together after both operations succeed.
 
+Extrusions can replace `distance` with a face selector, for example
+`"to":{"created_by":"stop","role":"cap_end","expect":"one"}`. The selected analytic
+plane must be parallel to the sketch plane and ahead of the chosen `direction` (the sketch
+normal by default). It supplies its infinite supporting plane: the extruded profile may
+extend beyond the selected face's trim, and the face does not clip the result. Termination
+uses the current face after placements and booleans, with the same provenance, recursive
+unions/exclusions, filters and nearest-face rules as sketch planes. References remain
+unchanged unless they are also the authored result target. Source snapshots are retained
+and charged to cache estimates, and plane queries still run on cache hits.
+Separation must exceed 1e-6 mm; direction/normal alignment with both planes must exceed 1e-9
+in magnitude.
+Parallelism uses sine tolerance 1e-9, with a conservative control-hull check keeping the
+complete cap within 1e-6 mm of the target plane. Negative ray travel, curved/tilted targets,
+nonzero draft and `symmetric: true` with `to` are explicit errors. Select `direction: "-z"`
+or another direction to reach a plane behind the default normal. Finite-distance extrusion
+semantics are unchanged; no schema, kernel API or document migration is needed.
+
 Revolutions and rigid rotations accept an explicit axis or a named line in an earlier sketch,
 such as `{"sketch":"centerline","entity":"axis"}`. A standalone line can define the axis;
 its start and start-to-end direction map through the evaluated sketch plane. Axis-sketch edits

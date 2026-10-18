@@ -44,6 +44,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#125](https://github.com/wckdboy/nightfall/issues/125) | CLI parameter-expression overrides for variant exports | cli | Implemented with batch validation, exact STEP variants and immutable source files; local evidence below |
 | [#126](https://github.com/wckdboy/nightfall/issues/126) | Generated side-face selectors qualified by sketch entity | kernel | Implemented with exact curve ancestry, current naming, cache and atomic-failure regressions; local evidence below |
 | [#127](https://github.com/wckdboy/nightfall/issues/127) | Cylindrical face selectors as modeling axes | kernel | Implemented with exact cylinder descriptions, radius filters, three axis consumers and cache/failure regressions; local evidence below |
+| [#128](https://github.com/wckdboy/nightfall/issues/128) | Extrusions terminating on selected parallel supporting planes | kernel | Implemented with supporting-plane resolution, exact displacement, result/cache/failure regressions and local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -836,6 +837,32 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   cylinder descriptions. No virtual operation, persisted schema or dependency changes.
   Backend identity becomes `faces=analytic-v2;cylinder-axis=parameter-z-v1`; evaluator
   identity advances to `evaluator/24;roles/5`. Verification and timing evidence follows;
+  remote CI/review and full Phase 2 sign-off remain pending.
+
+- 2026-10-18 — #128 implements the existing extrusion `to` selector for one current
+  parallel planar face's infinite supporting plane (RFCs 0005/0007). The selected trim is
+  not a clipping mask: profiles may extend beyond it. A finite positive ray-plane distance
+  drives the existing exact extrusion backend, preserving new/join/cut/intersect history.
+  Direction defaults to the sketch normal; opposite target normals work, but targets behind
+  the requested ray, separation within 1e-6 mm and rays with either plane-normal alignment
+  <=1e-9 fail explicitly. Tilted/curved targets, symmetric `to` and nonzero draft remain
+  unsupported. Parallelism uses sine tolerance 1e-9; positive-weight profile control hulls
+  additionally certify the full cap within 1e-6 mm of the target, preventing angular tolerance
+  amplification over large profiles. A final failing regression proves an almost in-plane
+  ray cannot be admitted by a tolerance-level target tilt; both normal alignments are checked.
+  Existing semantic selectors, recursive unions/exclusions, filters, nearest distances and
+  per-node cardinality retain precise pointers rooted at `/inputs/to`. Source snapshots and
+  hashes remain separate from operation targets and are retained/charged to cache estimates.
+  New bodies, result targets that also supply the stop plane, current placements, consumed
+  producer aliases and retained-tool ambiguity are covered. Described and directly queried
+  plane frames are validated as finite/orthonormal before filtering or cache reuse.
+  Tests first: seven of eight initial evaluator cases fail on unsupported `to`; the generic
+  rejection case already passes. The expanded focused suite passes 22 cases / 976 assertions,
+  seed 20261018, including oblique rays, reversed normals, sketch/world frames, curved holes,
+  all result modes, source/output ID rebinding, invalid metadata on cache hits, independent
+  branches, suppression/rollback, bounded retention and finite-distance overflow checks.
+  No persisted schema, kernel API, public value-layout, backend identity or dependency change;
+  evaluator identity advances to `evaluator/25;roles/5`. Verification and timings follow;
   remote CI/review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
@@ -1641,4 +1668,53 @@ startup, file I/O, STEP encoding, IPC and tessellation. These are local observat
 latency guarantees; the prior loaded-run miss and #95 follow-up remain recorded.
 Logs: `/tmp/nightfall-127-check.log`, `/tmp/nightfall-127-asan.log`,
 `/tmp/nightfall-127-bench.log`; per-mode data: `/tmp/nightfall-127-bench.json`.
+Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Selected-plane extrusion rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release, dynamically linked OCCT 7.9.3.
+The final focused run passes 22 cases / 976 assertions, seed 20261018. A 10×20 mm profile
+terminated at 40 mm has volume 8000 mm³ / area 2800 mm², centroid (5,10,20) mm. Its separate
+reference remains volume 160 mm³ / area 328 mm², centroid (101,101,20). The profile lies
+outside the reference face's finite trim, explicitly testing supporting-plane extent.
+An oblique [1,0,1] ray preserves volume 8000 mm³ with area 1200+1600√2 mm², centroid
+(25,10,20). Reversing the ray reaches -20 mm with volume 4000 / area 1600. Annular profile
+termination gives volume 3000π / area 1350π. Result union gives volume 11000 / area 3300;
+cut/intersection each give volume 3000 / area 1700 with independently checked centroids.
+Volume/area tolerance is 1e-6, centroid components 1e-8 mm. Cache/source retention, invalid
+frames before filtering/reuse, exact failure pointers and profile-wide tolerance guards
+have explicit regressions, including the initially failing near-parallel ray boundary case.
+
+Final `tools/check.sh --preset occt` passes 664/664 (46.18 s), with hygiene, format,
+202 schema cases and 20 reference documents, without warnings. The initial pre-boundary-test
+gate also passes 663/663 (46.95 s); final evidence includes the added direction regression.
+ASan/UBSan kernel/cache/evaluator/CLI passes 426/426 (113.41 s), without diagnostics.
+Nightfall is instrumented; the pinned OCCT shared library remains Release. The actual CLI
+exports `/tmp/nightfall-128-extrude-to.nightfall` with `--set 'stop_height=55 mm'` into
+`/tmp/nightfall-128-extrude-to.step`: 29,354 bytes, two exact AP242 manifold solids,
+no tessellation. Source height remains 40 mm. This example checks export/format; existing
+CLI tests independently prove reloaded STEP geometry.
+
+After builds/tests, the catalogue covers 25 parts × 4 modes × 30 samples: 3000 measured
+rebuilds, every analytic geometry and execution-count check passing. The new stopped plate
+has two sketches, two extrusions and 26 transforms. Reference depth D drives the stop plane;
+the target has volume 200D mm³ / area 400+60D mm², centroid z = D/2 and the expected
+translated x. Volume/area tolerance is 1e-5, centroid components 1e-6 mm. One current
+face-frame query executes every evaluation, including complete cache hits.
+
+- Cold: median 2.565 ms / p95 2.664 / max 2.676; 29 kernel calls / 0 cache hits.
+- Depth edit: 2.753 / 2.902 / 2.924 ms; 29 calls / 2 hits.
+- Last transform edit: 0.627 / 0.656 / 0.658 ms; 2 calls / 29 hits.
+- Unused parameter edit: 0.609 / 0.641 / 0.659 ms; 1 call / 30 hits.
+
+The 96-entry/64 MiB estimated cache budget retains 96 entries / 10,650,304 bytes after
+stopped-plate depth edits, including separately charged selector sources (not RSS).
+Every catalogue parameter-edit sample stays below 100 ms in this run; largest is toroidal
+depth editing at median 75.713 / p95 77.755 / max 77.987 ms. Timing includes IR parsing,
+schema/parameter/input evaluation, current references, recursive selectors, frame queries,
+hashing, exact modeling, validation and naming. It excludes authoring serialization, CLI
+startup, file I/O, STEP encoding, IPC and tessellation. These are local observations, not
+latency guarantees; the earlier loaded-run miss and #95 follow-up remain recorded.
+Logs: `/tmp/nightfall-128-check.log`, `/tmp/nightfall-128-asan.log`,
+`/tmp/nightfall-128-bench.log`; per-mode data: `/tmp/nightfall-128-bench.json`.
 Remote CI/review and full Phase 2 sign-off remain pending.

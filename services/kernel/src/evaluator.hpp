@@ -65,6 +65,10 @@ struct Evaluation {
 /// cylinder; directions still imply a plane. Metadata is validated/queried on cache hits too.
 /// Operations modify only authored targets; selector-only source snapshots are retained
 /// and conservatively charged separately from operation inputs/history.
+/// Extrusion to selects one parallel planar supporting plane, extending beyond its finite trim.
+/// The ray must travel forward with separation >1e-6 mm and |direction dot normal| >1e-9.
+/// Cap control hulls must stay within 1e-6 mm of the plane; symmetric to/nonzero draft fail.
+/// All described/selected plane frames are validated as finite and orthonormal before reuse.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.

@@ -603,17 +603,54 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
 
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& inputs,
                                                               const Sketch& sketch,
-                                                              ProfileSources* sources) {
+                                                              ProfileSources* sources,
+                                                              const kernel::Plane* termination) {
   auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
-    if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
     if (const auto* draft = inputs.find("draft"); draft && number(*draft) != 0)
       fail("/draft", "drafted extrusion is not implemented");
     const auto direction = inputs.find("direction") ? unit(field(inputs, "direction"), "/direction")
                                                     : sketch.plane.normal;
-    kernel::Extrusion extrusion{sketch.plane, std::move(*regions),
-                                direction * number(field(inputs, "distance"))};
+    double distance;
+    if (inputs.find("to")) {
+      if (!termination) fail("/to", "termination plane must be resolved by the evaluator");
+      if (const auto* symmetric = inputs.find("symmetric"); symmetric && *symmetric->if_bool())
+        fail("/symmetric", "symmetric extrude-to is not implemented");
+      if (math::length(math::cross(sketch.plane.normal, termination->normal)) > kTolerance.angular)
+        fail("/to", "termination plane must be parallel to the sketch plane");
+      const auto alignment = math::dot(direction, termination->normal);
+      if (!(std::abs(alignment) > kTolerance.angular) ||
+          !(std::abs(math::dot(direction, sketch.plane.normal)) > kTolerance.angular))
+        fail("/direction", "extrusion ray must leave both the sketch and termination planes");
+      const auto separation =
+          math::dot(termination->origin - sketch.plane.origin, termination->normal);
+      if (!(std::abs(separation) > kTolerance.linear))
+        fail("/to", "termination plane is coincident or within the linear tolerance");
+      distance = separation / alignment;
+      if (!std::isfinite(distance) || !(distance > 0))
+        fail("/to", "termination must be finite and ahead of the extrusion ray");
+    } else {
+      distance = number(field(inputs, "distance"));
+    }
+    kernel::Extrusion extrusion{sketch.plane, std::move(*regions), direction * distance};
+    if (inputs.find("to")) {
+      // Positive-weight NURBS remain in their control hulls. Avoid amplifying an accepted
+      // angular tolerance into a cap/target discrepancy above the linear tolerance.
+      const auto y = math::cross(sketch.plane.normal, sketch.plane.x_axis);
+      for (const auto& region : extrusion.regions)
+        for (std::size_t l = 0; l <= region.holes.size(); ++l) {
+          const auto& loop = l == 0 ? region.outer : region.holes[l - 1];
+          for (const auto& curve : loop.curves)
+            for (const auto p : curve.points()) {
+              const auto end = sketch.plane.origin + sketch.plane.x_axis * p.x + y * p.y +
+                               extrusion.displacement;
+              if (!(std::abs(math::dot(end - termination->origin, termination->normal)) <=
+                    kTolerance.linear))
+                fail("/to", "termination plane is not parallel across the full profile");
+            }
+        }
+    }
     if (const auto* symmetric = inputs.find("symmetric"); symmetric && *symmetric->if_bool())
       extrusion.plane.origin = extrusion.plane.origin - extrusion.displacement / 2;
     return extrusion;

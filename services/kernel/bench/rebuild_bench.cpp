@@ -98,6 +98,20 @@ int main() {
     plate.params.push_back({"tail", "3 mm", {}, {}, {}, {}});
     plate.features.back().inputs =
         ir::json::parse(R"({"bodies":["plate"],"translation":["tail",0,0]})").value();
+    auto stopped = plate;
+    stopped.features.insert(
+        stopped.features.begin(),
+        {test::feature("support", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+        {"id":"r","type":"rect","corner":[100,100],"size":[2,2]}],"constraints":[]})"),
+         test::feature("stop", "extrude", R"({"profile":{"sketch":"support"},"distance":"depth",
+        "result":{"new":"stop_body","body_type":"brep"}})")});
+    stopped.features.erase(stopped.features.begin() + 4, stopped.features.begin() + 6);
+    stopped.features[3] = test::feature("base", "extrude", R"({"profile":{"sketch":"outline"},
+      "to":{"created_by":"stop","role":"cap_end","expect":"one"},
+      "result":{"new":"plate","body_type":"brep"}})");
+    Part stopped_part{"extrude to", stopped, 200, 5, 26, 28, 28, 2};
+    stopped_part.queries = 1;
+    stopped_part.surface_area = [](double depth) { return 400 + 60 * depth; };
     auto linear = plate;
     linear.features.erase(linear.features.begin() + 2);  // 27 transforms: 30 features total
     linear.features.insert(
@@ -348,6 +362,7 @@ int main() {
         "IPC/tessellation.");
     for (const auto& part :
          {Part{"plate", plate, 200, 5},
+          stopped_part,
           linear_part,
           circular_part,
           cylinder_part,

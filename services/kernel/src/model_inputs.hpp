@@ -57,9 +57,12 @@ struct BodyPattern {
 /// The evaluator may supply an already resolved, oriented face plane for a selector sketch.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs,
                                                 const kernel::Plane* selected_plane = nullptr);
-std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
-                                                              const Sketch& sketch,
-                                                              ProfileSources* sources = nullptr);
+/// to terminates at an already resolved parallel supporting plane, beyond its finite trim.
+/// Require positive ray travel and separation >1e-6 mm; reject symmetric to and tilted targets.
+/// Direction must leave the sketch plane (|dot| >1e-9); certify cap control hulls within 1e-6 mm.
+std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(
+    const ir::json::Value& inputs, const Sketch& sketch, ProfileSources* sources = nullptr,
+    const kernel::Plane* termination = nullptr);
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(
     const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr,
     ProfileSources* sources = nullptr, const kernel::Axis* selected_axis = nullptr);
