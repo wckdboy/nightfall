@@ -78,6 +78,10 @@ void unchanged(const Sketch& actual, const Sketch& expected) {
       for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
         CHECK(actual.paths[p][c].point(u) == expected.paths[p][c].point(u));
   }
+  REQUIRE(actual.segments.size() == expected.segments.size());
+  for (std::size_t c = 0; c < expected.segments.size(); ++c)
+    for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
+      CHECK(actual.segments[c].point(u) == expected.segments[c].point(u));
 }
 Array fixed_entities() {
   return *ir::json::parse(R"([
@@ -221,7 +225,7 @@ TEST_CASE("angle dimensions are invariant under rigid placements and independent
         size, reverse_a, reverse_b, {coordinate(random), coordinate(random)}, rotation(random)));
     if (!result) UNSCOPED_INFO(result.error().message);
     REQUIRE(result);
-    CHECK(result->paths.size() == 2);
+    CHECK(result->segments.size() == 8);
   }
 }
 
@@ -255,7 +259,9 @@ TEST_CASE("fixed references do not hide invalid geometry references or other con
           {Object{{"id", "c"}, {"type", "circle"}, {"center", Array{0.0, 0.0}}, {"radius", -2.0}}},
           {fixed("c")}),
       "/entities/0/radius", "radius");
-  rejects(sketch({entities[0]}, {fixed("a")}), "/entities", "open");
+  const auto zero =
+      Object{{"id", "a"}, {"type", "line"}, {"start", Array{0.0, 0.0}}, {"end", Array{0.0, 0.0}}};
+  rejects(sketch({zero}, {fixed("a")}), "/entities/0", "zero-length");
 }
 
 TEST_CASE("angle driven fixed geometry rebuilds and recovers from constraint only edits",

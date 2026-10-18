@@ -124,10 +124,10 @@ TEST_CASE("standalone sketch points do not create filled profile curves", "[poin
   REQUIRE(with_points);
   const auto plain = prepare(sketch(box())).value();
   REQUIRE(with_points->paths.size() == plain.paths.size());
-  REQUIRE(with_points->paths[0].size() == plain.paths[0].size());
-  for (std::size_t i = 0; i < plain.paths[0].size(); ++i)
+  REQUIRE(with_points->segments.size() == plain.segments.size());
+  for (std::size_t i = 0; i < plain.segments.size(); ++i)
     for (const double u : {0.0, 0.25, 0.5, 1.0})
-      CHECK(with_points->paths[0][i].point(u) == plain.paths[0][i].point(u));
+      CHECK(with_points->segments[i].point(u) == plain.segments[i].point(u));
 }
 
 TEST_CASE("line endpoint references verify coincidence and distance", "[point-constraints]") {

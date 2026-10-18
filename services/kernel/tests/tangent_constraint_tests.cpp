@@ -132,18 +132,16 @@ TEST_CASE("tangent constraints preserve exact rounded profile curves", "[tangent
     REQUIRE(constrained);
     const auto plain = prepare(capsule(5, 0, {}, reverse, false)).value();
     REQUIRE(constrained->paths.size() == plain.paths.size());
-    for (std::size_t p = 0; p < plain.paths.size(); ++p) {
-      REQUIRE(constrained->paths[p].size() == plain.paths[p].size());
-      for (std::size_t c = 0; c < plain.paths[p].size(); ++c)
-        for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
-          CHECK(constrained->paths[p][c].point(u) == plain.paths[p][c].point(u));
-    }
+    REQUIRE(constrained->segments.size() == plain.segments.size());
+    for (std::size_t c = 0; c < plain.segments.size(); ++c)
+      for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
+        CHECK(constrained->segments[c].point(u) == plain.segments[c].point(u));
   }
   const auto cm = prepare(capsule(), {"cm", "deg", {}});
   REQUIRE(cm);
   const auto mm = prepare(capsule(50)).value();
-  REQUIRE(cm->paths.size() == mm.paths.size());
-  CHECK_THAT(math::length(cm->paths[0][0].point(0) - mm.paths[0][0].point(0)), WithinAbs(0, 1e-10));
+  REQUIRE(cm->segments.size() == mm.segments.size());
+  CHECK_THAT(math::length(cm->segments[0].point(0) - mm.segments[0].point(0)), WithinAbs(0, 1e-10));
 }
 
 TEST_CASE("line circle tangency checks radial gap and finite segment extent",
@@ -284,7 +282,7 @@ TEST_CASE("rounded tangency is invariant under rigid placement scale and reversa
     const auto result = prepare(input);
     if (!result) INFO(result.error().message);
     REQUIRE(result);
-    CHECK(result->paths.size() == 1);
+    CHECK(result->segments.size() == 4);
   }
 }
 

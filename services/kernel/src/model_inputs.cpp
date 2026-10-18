@@ -86,7 +86,8 @@ std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::stri
   }
   return result;
 }
-void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
+void join_curves(std::vector<math::NurbsCurve2> curves,
+                 std::vector<std::vector<math::NurbsCurve2>>& paths) {
   // Check both ends before walking: stopping at the first closed loop could hide a
   // multi-way junction at its starting vertex. Closed single curves are separate paths.
   std::vector<std::pair<Vec2, Vec2>> ends;
@@ -100,8 +101,8 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
         matches += math::near(p, ends[j].first, kTolerance);
         matches += math::near(p, ends[j].second, kTolerance);
       }
-      if (matches == 0) fail("/entities", "curve chain is open");
-      if (matches != 1) fail("/entities", "curve junction is ambiguous");
+      if (matches == 0) fail("/profile", "curve chain is open");
+      if (matches != 1) fail("/profile", "curve junction is ambiguous");
     }
   }
   while (!curves.empty()) {
@@ -116,11 +117,11 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
         const bool a = math::near(it->point(it->domain_start()), end, kTolerance),
                    b = math::near(it->point(it->domain_end()), end, kTolerance);
         if (!a && !b) continue;
-        if (found != curves.end()) fail("/entities", "curve junction is ambiguous");
+        if (found != curves.end()) fail("/profile", "curve junction is ambiguous");
         found = it;
         reverse = b;
       }
-      if (found == curves.end()) fail("/entities", "curve chain is open");
+      if (found == curves.end()) fail("/profile", "curve chain is open");
       auto next = reverse ? math::reverse(*found) : *found;
       const auto next_start = next.point(next.domain_start());
       // Keep the original curves exact and explicitly connect tolerance-matched ends.
@@ -131,7 +132,7 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
       curves.erase(found);
     }
     if (end != start) path.push_back(math::make_line(end, start));
-    sketch.paths.push_back(std::move(path));
+    paths.push_back(std::move(path));
   }
 }
 math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
@@ -399,13 +400,12 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
     } else {
       fail("/plane", "selector-based sketch planes are not implemented");
     }
-    std::vector<math::NurbsCurve2> segments;
     const auto add_curve = [&](math::NurbsCurve2 curve) {
       if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
                      kTolerance))
         sketch.paths.push_back({std::move(curve)});
       else
-        segments.push_back(std::move(curve));
+        sketch.segments.push_back(std::move(curve));
     };
     const auto& entities = *field(inputs, "entities").if_array();
     std::size_t curves = 0, control_points = 0;
@@ -460,13 +460,12 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
       } else if (type == "line") {
         const auto a = point2(field(entity, "start")), b = point2(field(entity, "end"));
         if (math::near(a, b, kTolerance)) fail(pointer, "zero-length line");
-        segments.push_back(math::make_line(a, b));
+        sketch.segments.push_back(math::make_line(a, b));
         sketch.lines.emplace(*field(entity, "id").if_string(), Sketch::Line{a, b});
       } else {
         fail(pointer + "/type", "sketch entity is not implemented: " + type);
       }
     }
-    join_curves(std::move(segments), sketch);
     return sketch;
   });
 }
@@ -482,11 +481,13 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
     auto rule = math::FillRule::kEvenOdd;
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
       rule = math::FillRule::kNonZero;
+    auto closed_paths = sketch.paths;
+    join_curves(sketch.segments, closed_paths);
     // Arrangement probes must lie on a smooth span, not an interior spline corner.
     // Exact Bézier decomposition also exposes intersections between different spans.
     std::vector<std::vector<math::NurbsCurve2>> paths;
     std::size_t spans = 0;
-    for (const auto& path : sketch.paths) {
+    for (const auto& path : closed_paths) {
       paths.emplace_back();
       for (const auto& curve : path) {
         auto pieces = math::decompose(curve);

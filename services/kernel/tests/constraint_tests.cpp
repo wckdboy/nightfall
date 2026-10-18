@@ -100,12 +100,10 @@ TEST_CASE("sketch constraints verify line relationships without changing geometr
   REQUIRE(constrained);
   const auto plain = prepare(rectangle({})).value();
   REQUIRE(constrained->paths.size() == plain.paths.size());
-  for (std::size_t p = 0; p < plain.paths.size(); ++p) {
-    REQUIRE(constrained->paths[p].size() == plain.paths[p].size());
-    for (std::size_t c = 0; c < plain.paths[p].size(); ++c)
-      for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
-        CHECK(constrained->paths[p][c].point(u) == plain.paths[p][c].point(u));
-  }
+  REQUIRE(constrained->segments.size() == plain.segments.size());
+  for (std::size_t c = 0; c < plain.segments.size(); ++c)
+    for (const double u : {0.0, 0.25, 0.5, 0.75, 1.0})
+      CHECK(constrained->segments[c].point(u) == plain.segments[c].point(u));
   for (auto constraint : {relation("horizontal", {"b"}), relation("vertical", {"a"}),
                           relation("parallel", {"a", "b"}), relation("perpendicular", {"a", "c"}),
                           relation("equal", {"a", "b"})}) {

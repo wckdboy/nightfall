@@ -306,7 +306,14 @@ TEST_CASE("axis adapters retain named lines and avoid subtracting placed endpoin
   REQUIRE(sketch.lines.size() == 4);
   CHECK(sketch.lines.at("d").start == math::Vec2{0, 0});
   CHECK(sketch.lines.at("d").end == math::Vec2{0, 20});
-  CHECK(std::ranges::any_of(sketch.paths.front(), [](const auto& curve) {
+  const auto profile =
+      prepare_extrusion(
+          evaluated(feature(
+              "base", "extrude",
+              R"({"profile":{"sketch":"s"},"distance":1,"result":{"new":"b","body_type":"brep"}})")),
+          sketch)
+          .value();
+  CHECK(std::ranges::any_of(profile.regions.front().outer.curves, [](const auto& curve) {
     return curve.point(curve.domain_start()) == math::Vec2{0, 20} &&
            curve.point(curve.domain_end()) == math::Vec2{0, 0};
   }));

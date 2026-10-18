@@ -13,13 +13,16 @@ struct Sketch {
     math::Vec2 start, end;
   };
   kernel::Plane plane;
-  std::vector<std::vector<math::NurbsCurve2>> paths;
+  std::vector<std::vector<math::NurbsCurve2>> paths;  // already-closed primitives
+  std::vector<math::NurbsCurve2> segments;   // unjoined entity curves, valid as open references
   std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
   std::map<std::string, Line> lines;         // authored direction, independent of path traversal
 };
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
-/// Sketches support rect/circle/arc/ellipse/polygon/spline and closed mixed curve chains.
+/// Sketches support rect/circle/arc/ellipse/polygon/spline, including open reference curves.
+/// Profile consumers assemble closed, unambiguous mixed chains; open curves are never
+/// closed or discarded implicitly, including when selecting a region by an interior point.
 /// Verify horizontal/vertical lines, parallel/perpendicular line pairs (1e-9 rad), equal
 /// line lengths or circle/arc radii, and circle/arc radius dimensions (1e-6 mm). Reversed
 /// lines are equivalent for orientation; equal arcs compare radii, not sweep lengths.

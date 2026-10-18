@@ -68,8 +68,13 @@ TEST_CASE("line sketches join unordered reversed edges without silently closing 
   CHECK_THAT(result->shape->measures().centroid.y, WithinAbs(5, 1e-8));
   auto open = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"line","start":[0,0],"end":[10,0]}],"constraints":[]})"));
-  REQUIRE_FALSE(open);
-  CHECK(open.error().code == "kernel");
+  REQUIRE(open);
+  const auto open_profile = prepare_extrusion(inputs("extrude", R"({"profile":{"sketch":"s"},
+    "distance":30,"result":{"new":"b","body_type":"brep"}})"),
+                                              *open);
+  REQUIRE_FALSE(open_profile);
+  CHECK(open_profile.error().code == "kernel");
+  CHECK(open_profile.error().pointer == "/inputs/profile");
 }
 
 TEST_CASE("unsupported sketch semantics are errors with field pointers") {

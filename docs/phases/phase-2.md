@@ -32,6 +32,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#113](https://github.com/wckdboy/nightfall/issues/113) | Verify angle dimensions and fixed sketch references | kernel | Implemented with direction, tolerance, reference and solid/cache regressions; local evidence below |
 | [#114](https://github.com/wckdboy/nightfall/issues/114) | Bound polynomial mass integration for planar solids | kernel | Implemented with unconstrained latency, analytic geometry, placement, cavity and curved-trim regressions; local evidence below |
 | [#115](https://github.com/wckdboy/nightfall/issues/115) | Resolve sketch-line axes for revolutions and rigid transforms | kernel | Implemented with directed-line, frame, dependency, cache and ownership regressions; local evidence below |
+| [#116](https://github.com/wckdboy/nightfall/issues/116) | Open reference sketches with closed solid profiles | kernel | Implemented with standalone-axis, profile-boundary, exact-curve, validation and cache regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -408,6 +409,29 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   183/183 (45.35 s), with no diagnostics. Nightfall is instrumented; OCCT remains the pinned
   Release shared library. Rebuild evidence follows; remote CI/review and full Phase 2 sign-off
   remain pending.
+
+- 2026-10-18 — #116 allows standalone centerlines and open line/arc/spline reference sketches.
+  Entity/constraint validation stays in sketch preparation; exact unjoined curves are retained
+  separately from already-closed primitives. Filled-profile consumers assemble closed,
+  unambiguous chains without mutating the cached sketch. Open/ambiguous chains fail at that
+  consumer's `/inputs/profile`, including mixed closed/open sketches with region picks.
+  The sketch remains available as an axis even when a profile consumer fails. Axis direction,
+  parametric dependencies, suppression/rollback, body invalidation and naming retain their
+  existing behavior. Cache estimates now include raw segments; evaluator identity is version 14.
+  No schema, persisted format, public kernel API or dependency change (RFCs 0005/0007).
+  All eight tests-first regressions failed against the prior sketch-level closure check. The
+  final open-sketch suite passes 8 cases / 296 assertions: independent axis edits and equivalent
+  units, directed rotations, sleeve-to-cylinder revolution, profile failure isolation, branched
+  reference networks, entity/constraint errors, exact arc/rational-spline retention, rollback,
+  failure/suppression recovery, byte-budget eviction and retained solid readers after teardown.
+  Analytic volume/area agree within 1e-7 and centroid components within 1e-8 mm. Existing curve
+  and constraint tests compare the retained unjoined segments; their solid golden checks remain.
+  Full Release `tools/check.sh --preset occt` passes 425/425 (22.47 s), including hygiene,
+  202 schema corpus cases and 20 reference documents. CI's ASan/UBSan kernel/evaluator/cache
+  selection passes 191/191 (47.40 s), with no diagnostics. Nightfall is instrumented; OCCT remains
+  the pinned Release shared library. README documents the reference/profile distinction and
+  sketch-line axes. Selector axes, open-wire solids and construction flags remain unsupported.
+  Rebuild evidence follows; remote CI/review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
 
@@ -791,3 +815,36 @@ observations, not universal bounds or an optimization claim. The run follows all
 and includes parsing, validation, expressions, constraint verification, reference resolution,
 hashing, exact geometry, validity and naming. Serialization, IPC and tessellation remain
 excluded. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Open reference sketch rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has a closed rectangular profile, a separate one-line axis sketch,
+a full revolution and 27 transforms. Both sketches use the zx plane. Each unique depth edit
+changes the profile width and centerline endpoint; the horizontal constraint is verified before
+axis resolution. The result is a sleeve with radii 5/10 mm and height D. Every sample checks
+volume `75πD` mm³ within 1e-5, centroid x (including translations) and z within 1e-6 mm,
+and kernel/cache counts. Run `build/occt/services/kernel/nf_evaluator_bench`. All 30 samples
+of every mode pass.
+
+| Standalone-axis sleeve | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 2.873 | 2.947 | 2.979 | 28 / 0 |
+| Profile + centerline endpoint + depth edit | 3.038 | 3.119 | 3.145 | 28 / 0 |
+| Last transform edit | 0.594 | 0.617 | 0.628 | 1 / 29 |
+| Unused parameter edit | 0.580 | 0.604 | 0.609 | 0 / 30 |
+
+The 96-entry/64 MiB cache budget retains 96 entries / 6,221,388 estimated bytes after depth
+edits (not RSS). Same-run depth-edit median/p95/max: plate 2.069/2.135/2.136 ms,
+bored plate 8.039/9.056/9.150 ms, boolean-cut plate 8.933/18.198/27.872 ms,
+sleeve 3.064/3.156/3.173 ms, closed-sketch-axis cylinder 1.904/1.955/2.026 ms,
+elliptic tube 10.252/12.823/14.994 ms, shared-edge plate 2.644/2.716/2.729 ms,
+shared-arc notch 3.471/3.635/3.665 ms, constrained plate 1.943/2.004/2.038 ms,
+point-reference plate 2.007/2.148/2.162 ms, tangent-constrained rounded part
+3.889/4.069/4.080 ms, angle/fixed slanted part 2.007/2.136/2.143 ms and toroidal seal
+75.407/76.477/78.021 ms. All parameter-edit samples across the fourteen-part catalogue stay
+below 100 ms in this run. These are local observations, not universal bounds or an optimization
+claim. The run follows all builds/tests and includes parsing, validation, expressions,
+constraint verification, reference resolution, hashing, exact geometry, validity and naming.
+Serialization, IPC and tessellation remain excluded. Remote CI/review and full Phase 2
+sign-off remain pending.

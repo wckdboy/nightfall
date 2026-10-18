@@ -113,14 +113,17 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
 }
 std::size_t sketch_bytes(const Sketch& sketch) {
   std::size_t bytes = sizeof(Sketch);
+  const auto curve_bytes = [](const auto& curve) {
+    return sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
+           (curve.weights().size() + curve.knots().size()) * sizeof(double);
+  };
   for (const auto& point : sketch.points) bytes += sizeof(point) + 64 + point.first.size();
   for (const auto& line : sketch.lines) bytes += sizeof(line) + 64 + line.first.size();
   for (const auto& path : sketch.paths) {
     bytes += sizeof(path);
-    for (const auto& curve : path)
-      bytes += sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
-               (curve.weights().size() + curve.knots().size()) * sizeof(double);
+    for (const auto& curve : path) bytes += curve_bytes(curve);
   }
+  for (const auto& curve : sketch.segments) bytes += curve_bytes(curve);
   return bytes;
 }
 }  // namespace
@@ -152,7 +155,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/13;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/14;roles/3;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;

@@ -119,6 +119,16 @@ int main() {
     sketch_axis.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
       "axis":{"sketch":"outline","entity":"a"},"angle":360,
       "result":{"new":"plate","body_type":"brep"}})");
+    auto open_axis = sleeve;
+    open_axis.features.erase(open_axis.features.begin() + 2);  // 27 transforms: 30 features total
+    open_axis.features.insert(
+        open_axis.features.begin() + 1,
+        test::feature("axis_sketch", "sketch", R"({"plane":{"datum":"zx"},"entities":[
+          {"id":"axis","type":"line","start":[0,0],"end":["depth",0]}],
+          "constraints":[{"type":"horizontal","entities":["axis"]}]})"));
+    open_axis.features[2] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
+      "axis":{"sketch":"axis_sketch","entity":"axis"},"angle":360,
+      "result":{"new":"plate","body_type":"brep"}})");
     auto torus = sleeve;
     torus.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
       {"id":"section","type":"circle","center":[0,20],"radius":"depth / 10"}],
@@ -220,6 +230,7 @@ int main() {
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"sketch axis", sketch_axis, 25 * std::numbers::pi, 5, 28, 29, 29, 0},
+          Part{"open axis", open_axis, 75 * std::numbers::pi, 0, 27, 28, 28, 0},
           Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
           Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},

@@ -74,9 +74,13 @@ path; native app integration and the remaining v1 operations are still in progre
 Arc entities use `center`, `radius`, `start_angle` and a signed `sweep_angle` up to one full turn;
 ellipses use `center`, `radii` and optional `rotation`. Splines retain their clamped knot vector,
 degree (1–9), `control_points` and optional positive `weights`. Coordinates and angles accept
-unit-aware expressions. Unordered line/arc/spline segments join at unambiguous endpoints within
-the modeling tolerance, with explicit bridges preserving the original curves; open chains report
-errors. Bridges below OCCT's vertex precision are handled by vertex welding. Exact knot-span
+unit-aware expressions. Open lines, arcs and splines are valid reference geometry; their
+entities and constraints are still validated. When an operation requests filled profile regions,
+unordered segments join at unambiguous endpoints within the modeling tolerance, with explicit
+bridges preserving the original curves. Open or ambiguous chains report an error at the
+consuming operation's profile, including when selecting a region from a mixed closed/open
+sketch. A failed profile consumer leaves the sketch available for axis references.
+Bridges below OCCT's vertex precision are handled by vertex welding. Exact knot-span
 decomposition handles spline corners before region
 detection. Initial work limits are 4,096 sketch curves, 4,096 spline control points per sketch
 and 4,096 profile spans; oversized inputs report errors before arrangement work.
@@ -96,11 +100,15 @@ Extrusions and revolutions can create a new body or use `result: {"join": "body"
 or `{"intersect": "body"}` to modify an existing body. The intermediate solid stays private;
 the target's geometry and face history are published together after both operations succeed.
 
-Revolutions accept an explicit axis in the sketch plane and a signed angle up to one full turn.
+Revolutions and rigid rotations accept an explicit axis or a named line in an earlier sketch,
+such as `{"sketch":"centerline","entity":"axis"}`. A standalone line can define the axis;
+its start and start-to-end direction map through the evaluated sketch plane. Axis-sketch edits
+rebuild dependent operations. Revolutions require the axis to lie in the profile plane and
+accept a signed angle up to one full turn.
 They preserve exact profile curves, holes and selected regions. Full turns have no cap faces;
 partial turns retain start/end cap provenance. Profile control hulls must stay on the same side
-of the axis, touching it if needed; potentially overlapping sweeps are rejected. Sketch-line
-and selector axes remain unimplemented.
+of the axis, touching it if needed; potentially overlapping sweeps are rejected. Selector axes
+remain unimplemented.
 
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):
