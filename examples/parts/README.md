@@ -50,6 +50,11 @@ The CLI suite reloads all twenty STEP exports, checks
 closed-solid validity, and compares volume/area within 1e-5 and centroid within 1e-6 mm
 against the evaluator results. The independent analytic checks below remain in place.
 
+Add `--set "height=12 mm"` to the enclosure command to export a variant while preserving
+the source. The CLI suite also exports an edited parameter value for every reference part,
+compares each reloaded STEP solid to its independently tested evaluator variant, and checks
+that every source file remains byte-identical.
+
 One part can be checked with, for example:
 
 ```sh

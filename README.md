@@ -90,6 +90,20 @@ The backend encodes in memory and preserves source snapshots. Backend implemente
 `IKernel::export_step(const std::vector<ShapePtr>&)` and rebuild for the new virtual interface;
 no document migration is needed. STEP carries geometry, without Nightfall history or selectors.
 
+Build a parameter variant with repeatable `--set name=expression` options:
+
+```sh
+build/occt/tools/cli/nf build examples/parts/washer.nightfall --set "thickness=6 mm" --out /tmp/washer-6mm.step
+```
+
+Overrides require a valid source and existing, unique parameter names. They apply together
+to an in-memory copy; source bytes remain unchanged. `--set` and `--out` may appear in either
+flag order. Expressions see the final parameter graph, so self-references are cycles. Bare
+values are dimensionless; lengths and angles require units. Existing unit/bounds/dependency
+validation and field diagnostics apply. Malformed/repeated flags return usage errors (2);
+unknown parameters or invalid expressions/values return build errors (1). Failed variants
+preserve an existing output.
+
 Arc entities use `center`, `radius`, `start_angle` and a signed `sweep_angle` up to one full turn;
 ellipses use `center`, `radii` and optional `rotation`. Splines retain their clamped knot vector,
 degree (1–9), `control_points` and optional positive `weights`. Coordinates and angles accept

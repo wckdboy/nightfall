@@ -11,11 +11,13 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 
 namespace {
 namespace fs = std::filesystem;
 using namespace nf;
-constexpr std::string_view kUsage = "nf build part.nightfall --out part.step";
+constexpr std::string_view kUsage =
+    "nf build part.nightfall --out part.step [--set name=expression ...]";
 [[noreturn]] void fail(std::string code, std::string message) {
   throw ir::Errors{{std::move(code), std::move(message), "", {}}};
 }
@@ -29,6 +31,60 @@ int report(const ir::Errors& errors, int status = 1) {
   }
   std::cerr << ir::json::canonical(ir::json::Object{{"errors", std::move(entries)}}) << '\n';
   return status;
+}
+struct Arguments {
+  std::string input, output;
+  std::map<std::string, std::string> overrides;
+};
+Arguments parse_arguments(int argc, char** argv) {
+  auto usage = [](std::string message) {
+    fail("usage", std::move(message) + "; usage: " + std::string(kUsage));
+  };
+  if (argc < 3 || std::string_view(argv[1]) != "build") usage("expected a build input");
+  Arguments result{argv[2], {}, {}};
+  const auto letter = [](char c) { return (c >= 'a' && c <= 'z') || c == '_'; };
+  for (int i = 3; i < argc; i += 2) {
+    const std::string_view option(argv[i]);
+    if (i + 1 == argc) usage("missing option value");
+    const std::string_view value(argv[i + 1]);
+    if (option == "--out") {
+      if (!result.output.empty()) usage("--out must be specified once");
+      if (value.empty()) usage("output path must not be empty");
+      result.output = value;
+    } else if (option == "--set") {
+      const auto equal = value.find('=');
+      if (equal == std::string_view::npos || equal == 0 || equal + 1 == value.size())
+        usage("--set requires name=expression");
+      const auto name = value.substr(0, equal);
+      if (name.size() > 64 || !letter(name.front())) usage("invalid parameter name");
+      for (const char c : name)
+        if (!letter(c) && !(c >= '0' && c <= '9')) usage("invalid parameter name");
+      if (!result.overrides.emplace(name, value.substr(equal + 1)).second)
+        usage("repeated parameter override: " + std::string(name));
+    } else {
+      usage("unknown option: " + std::string(option));
+    }
+  }
+  if (result.output.empty()) usage("--out is required");
+  return result;
+}
+std::string apply_overrides(std::string source, std::map<std::string, std::string> values) {
+  if (values.empty()) return source;
+  auto document = ir::read_document(source);
+  if (!document) throw document.error();
+  for (auto& parameter : document->params) {
+    const auto found = values.find(parameter.name);
+    if (found == values.end()) continue;
+    parameter.value = found->second;
+    values.erase(found);
+  }
+  if (!values.empty())
+    throw ir::Errors{
+        {"unknown_id", "unknown parameter override: " + values.begin()->first, "/params", {}}};
+  // Validate the final graph and bounds once all definitions have been replaced.
+  auto encoded = ir::write_document(*document);
+  if (!encoded) throw encoded.error();
+  return std::move(*encoded);
 }
 std::string load(const fs::path& path) {
   if (!fs::is_regular_file(path)) fail("io", "input must be a regular file");
@@ -76,14 +132,13 @@ int main(int argc, char** argv) {
     std::cout << kUsage << '\n';
     return 0;
   }
-  if (argc != 5 || std::string_view(argv[1]) != "build" || std::string_view(argv[3]) != "--out")
-    return report({{"usage", std::string(kUsage), "", {}}}, 2);
   try {
-    const fs::path input(argv[2]), output = fs::absolute(argv[4]);
+    auto arguments = parse_arguments(argc, argv);
+    const fs::path input(arguments.input), output = fs::absolute(arguments.output);
     if (fs::weakly_canonical(input) == fs::weakly_canonical(output) ||
         (fs::exists(output) && fs::equivalent(input, output)))
       fail("io", "output must not alias the input document");
-    const auto source = load(input);
+    const auto source = apply_overrides(load(input), std::move(arguments.overrides));
     auto kernel = kernel::make_occt_kernel();
     if (!kernel) fail(kernel.error().code, kernel.error().message);
     kernel_service::Evaluator evaluator(**kernel, {96, 64 * 1024 * 1024});
@@ -105,12 +160,12 @@ int main(int argc, char** argv) {
     auto encoded = (*kernel)->export_step(shapes);
     if (!encoded) fail(encoded.error().code, encoded.error().message);
     publish(output, *encoded);
-    std::cout << ir::json::canonical(ir::json::Object{{"output", std::string(argv[4])},
-                                                      {"bodies", std::move(bodies)}})
+    std::cout << ir::json::canonical(
+                     ir::json::Object{{"output", arguments.output}, {"bodies", std::move(bodies)}})
               << '\n';
     return 0;
   } catch (const ir::Errors& errors) {
-    return report(errors);
+    return report(errors, !errors.empty() && errors.front().code == "usage" ? 2 : 1);
   } catch (const fs::filesystem_error& error) {
     return report({{"io", error.what(), "", {}}});
   } catch (const std::exception& error) {

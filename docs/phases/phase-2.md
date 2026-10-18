@@ -41,6 +41,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#122](https://github.com/wckdboy/nightfall/issues/122) | Nearest attachment faces by trimmed B-rep distance | kernel | Implemented with exact-geometry distance queries, global candidates, tolerance ties and cache/failure regressions; local evidence below |
 | [#123](https://github.com/wckdboy/nightfall/issues/123) | Recursive face-selector unions and exclusions | kernel | Implemented with per-node cardinality, precise nested errors, complete dependencies and shared query descriptions; local evidence below |
 | [#124](https://github.com/wckdboy/nightfall/issues/124) | Mirror bodies across selected current planar faces | kernel | Implemented with shared face resolution, separate source/target bindings, current dependencies and cache ownership regressions; local evidence below |
+| [#125](https://github.com/wckdboy/nightfall/issues/125) | CLI parameter-expression overrides for variant exports | cli | Implemented with batch validation, exact STEP variants and immutable source files; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -745,6 +746,39 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   the pinned Release shared library. Rebuild measurements follow; remote CI/review and
   full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #125 adds repeatable `--set name=expression` options to `nf build` under
+  RFCs 0005/0007. `--out` and overrides may appear in either flag order after the input.
+  Overrides replace existing parameter definitions in an in-memory copy of a valid source;
+  the complete batch is applied before revalidating the final dependency graph and bounds.
+  Expressions use existing IR semantics: bare values are dimensionless, dimensional values
+  need units, references see the final batch, and self-references are cycles. Unknown names
+  fail at `/params`; expression/unit/bounds/cycle failures retain their field pointers and
+  expression offsets. Malformed names/assignments, duplicate overrides/outputs and unknown
+  flags return usage status 2 before file access; invalid parameter values return status 1.
+  Builds without overrides retain the original source-loading path. Source bytes, exact
+  STEP body semantics, alias protection and failure-safe output replacement remain intact.
+  No IR schema, persisted-format, backend/evaluator API, identity or dependency change.
+  Tests first: nine of ten new cases fail before implementation; malformed/duplicate usage
+  rejection already passes. The final targeted CLI run passes 20 cases / 2308 assertions,
+  seed 20261018, including ten new cases. A two-override batch that would create a cycle
+  after only the first edit builds correctly in either flag order once both definitions
+  are replaced. Coverage also includes equivalent units, dimensionless pattern counts,
+  inclusive bounds, domain/unit/parse/unknown/cycle errors, original-value recovery,
+  source/output preservation, valid identifier limits, valid-source requirements and aliases.
+  A 10×20 mm plate at 45 mm depth exports 9000 mm³ / 3100 mm² with centroid (8,10,22.5) mm.
+  The dependent batch exports 8000 mm³ / 2800 mm² with centroid (9,10,20) mm. A three-copy
+  scalar-count variant retains three solids, 18000 mm³ / 6600 mm². STEP comparisons use
+  volume/area tolerance 1e-5 and centroid components 1e-6 mm. Every reference part also
+  exports a parameter edit with matching reloaded geometry and byte-identical source;
+  edited values have independent analytic coverage in the existing reference suite.
+  The `NF_BUILD_TESTS=OFF` CLI rebuilds and exports a 6 mm washer variant successfully.
+  Release `tools/check.sh --preset occt` passes 597/597 (48.50 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents, with no warnings.
+  The CI-equivalent ASan/UBSan kernel/cache/evaluator/CLI selection passes 363/363
+  (99.07 s), with no diagnostics. Nightfall is instrumented; OCCT remains the pinned
+  Release shared library. Command/rebuild measurements follow; remote CI/review and full
+  Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1430,3 +1464,30 @@ contemporaneous system load/thermal data on a quiet-host run and profile toroida
 integration if the overrun reproduces. No modeling algorithm was changed for this CLI issue.
 The baseline local criterion retains its measured pass; load sensitivity, remote CI/review
 and full Phase 2 sign-off remain pending.
+
+### CLI parameter-variant command and rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3. After builds/tests,
+30 fresh CLI processes export washer thicknesses from 1 to 30 mm through `--set`. Complete
+command time is median 71.104 ms / p95 73.259 / max 133.638, including process startup,
+file reading, batch validation, evaluator/modeling, STEP encoding, fsync/rename, JSON result
+and process exit. OS caches are not reset. Every sample checks successful exit, clean stderr,
+the JSON body/output record, STEP signature/AP242/B-rep markers, absence of tessellation,
+and byte-identical source. Geometry round-trip comparisons are covered separately by the
+20-case CLI suite, including edits to all twenty analytically tested reference parts.
+Command timing is not the evaluator's <100 ms rebuild measurement. The standalone helper
+and per-sample data are `/tmp/nightfall-125-cli-bench.py` and
+`/tmp/nightfall-125-cli-bench.json`; the 6 mm sample is
+`/tmp/nightfall-125-washer-6mm.step` (36,179 bytes).
+
+The unchanged production rebuild catalogue also completes 22 parts × 4 modes × 30 samples
+(2640 measured rebuilds), passing every analytic geometry and execution-count assertion.
+All parameter-edit samples stay below 100 ms in this run; the largest is toroidal depth
+editing at median 75.210 ms / p95 75.991 / max 76.227. Its cold build measures
+74.050 / 76.480 / 76.637 ms. The 96-entry/64 MiB estimated cache budget remains unchanged
+(not RSS); toroidal depth edits retain 96 entries / 7,221,912 estimated bytes.
+This benchmark includes IR decoding, validation/evaluation, selectors, hashing, geometry
+and naming, and excludes CLI startup, file I/O, STEP encoding, serialization, IPC and
+tessellation. These are local observations, not latency guarantees; the prior loaded-run
+miss and #95 load-sensitivity follow-up remain recorded. Remote CI/review and full
+Phase 2 sign-off remain pending.

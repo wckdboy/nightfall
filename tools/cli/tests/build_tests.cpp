@@ -329,3 +329,270 @@ TEST_CASE("all twenty reference parts build through the CLI and reload as valid 
   CHECK(count == 20);
   temp.no_temporary_outputs();
 }
+
+TEST_CASE("parameter overrides export variants and never persist into their source",
+          "[cli-overrides]") {
+  Temp temp;
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  const auto text = source(part());
+  write(input, text);
+  for (const auto* expression : {"45 mm", "4.5 cm"}) {
+    const auto result = run(temp, {"build", input.string(), "--out", output.string(), "--set",
+                                   "depth=" + std::string(expression)});
+    INFO(result.error);
+    REQUIRE(result.status == 0);
+    CHECK(result.error.empty());
+    const auto value = json(result.output);
+    CHECK(*value.find("output")->if_string() == output.string());
+    CHECK(*value.find("bodies")->if_array() == ir::json::Array{"plate"});
+    measures(reload(output), 9000, 3100, {8, 10, 22.5});
+    CHECK(read(input) == text);
+  }
+  const auto original = run(temp, {"build", input.string(), "--out", output.string()});
+  REQUIRE(original.status == 0);
+  measures(reload(output), 6000, 2200, {8, 10, 15});
+  CHECK(read(input) == text);
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("override batches validate the final dependency graph regardless of flag order",
+          "[cli-overrides]") {
+  Temp temp;
+  auto d = part();
+  d.params[1].value = "depth / 10";
+  const auto text = source(d);
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  write(input, text);
+  // Updating depth alone would create a cycle with the source's step expression.
+  for (const bool reverse : {false, true}) {
+    const auto first = reverse ? "step=4 mm" : "depth=step * 10";
+    const auto second = reverse ? "depth=step * 10" : "step=4 mm";
+    const auto result = run(
+        temp, {"build", input.string(), "--set", first, "--out", output.string(), "--set", second});
+    INFO(result.error);
+    REQUIRE(result.status == 0);
+    measures(reload(output), 8000, 2800, {9, 10, 20});
+    CHECK(read(input) == text);
+  }
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("scalar parameter overrides remain dimensionless for body pattern counts",
+          "[cli-overrides]") {
+  Temp temp;
+  auto d = part(2);
+  d.params.push_back({"instances", 2.0, 1.0, 4.0, {}, {}});
+  d.features.push_back(
+      feature("repeat", "pattern_linear",
+              R"({"bodies":["plate"],"count":"instances","spacing":15,"direction":"x"})"));
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  const auto text = source(d);
+  write(input, text);
+  const auto result =
+      run(temp, {"build", input.string(), "--set", "instances=3", "--out", output.string()});
+  INFO(result.error);
+  REQUIRE(result.status == 0);
+  measures(reload(output), 18000, 6600, {20, 10, 15}, 3);
+  CHECK(read(input) == text);
+}
+
+TEST_CASE("parameter override bounds are inclusive and do not clamp invalid variants",
+          "[cli-overrides]") {
+  Temp temp;
+  auto d = part();
+  d.params[0].min = "20 mm";
+  d.params[0].max = "40 mm";
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  const auto text = source(d);
+  write(input, text);
+  for (const int depth : {20, 40}) {
+    const auto result = run(temp, {"build", input.string(), "--out", output.string(), "--set",
+                                   "depth=" + std::to_string(depth) + " mm"});
+    REQUIRE(result.status == 0);
+    measures(reload(output), 200.0 * depth, 400 + 60.0 * depth, {8, 10, depth / 2.0});
+  }
+  const auto previous = read(output);
+  error(run(temp, {"build", input.string(), "--out", output.string(), "--set", "depth=50 mm"}),
+        "bounds", "/params/0/value");
+  CHECK(read(output) == previous);
+  CHECK(read(input) == text);
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("invalid override expressions preserve parameter diagnostics and old artifacts",
+          "[cli-overrides]") {
+  Temp temp;
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  const auto text = source(part());
+  write(input, text);
+  write(output, "previous artifact");
+  struct Invalid {
+    const char* expression;
+    const char* code;
+    const char* pointer;
+  };
+  for (const auto& [expression, code, pointer] :
+       {Invalid{"1 mm + 2 deg", "unit", "/params/0/value"},
+        Invalid{"missing + 1 mm", "unknown_id", "/params/0/value"},
+        Invalid{"depth", "cycle", "/params/0/value"},
+        Invalid{"sqrt(-1) * 1 mm", "bounds", "/params/0/value"},
+        Invalid{"1 / 0 * 1 mm", "bounds", "/params/0/value"},
+        Invalid{"2 mm +", "parse", "/params/0/value"}, Invalid{" ", "parse", "/params/0/value"},
+        Invalid{"30", "unit", "/features/1/inputs/distance"}}) {
+    INFO(expression);
+    const auto result = run(temp, {"build", input.string(), "--out", output.string(), "--set",
+                                   "depth=" + std::string(expression)});
+    error(result, code, pointer);
+    CHECK(result.status == 1);
+    if (std::string_view(expression) == "2 mm +") {
+      const auto value = json(result.error);
+      const auto& first = value.find("errors")->if_array()->front();
+      REQUIRE(first.find("offset"));
+      CHECK(*first.find("offset")->if_number() >= 0);
+      CHECK(*first.find("offset")->if_number() <= 6);
+    }
+    CHECK(read(output) == "previous artifact");
+    CHECK(read(input) == text);
+    temp.no_temporary_outputs();
+  }
+}
+
+TEST_CASE("parameter overrides reject unknown names without adding source parameters",
+          "[cli-overrides]") {
+  Temp temp;
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  const auto text = source(part());
+  write(input, text);
+  write(output, "previous artifact");
+  const auto result = run(temp, {"build", input.string(), "--set", "new_parameter=10 mm", "--set",
+                                 "depth=40 mm", "--out", output.string()});
+  error(result, "unknown_id", "/params");
+  CHECK(result.status == 1);
+  CHECK(result.error.find("new_parameter") != std::string::npos);
+  CHECK(read(input) == text);
+  CHECK(read(output) == "previous artifact");
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("override syntax and duplicate flags fail as usage errors before opening input",
+          "[cli-overrides]") {
+  Temp temp;
+  const auto input = temp.path("missing.nightfall"), output = temp.path("variant.step");
+  const std::vector<std::vector<std::string>> invalid{
+      {"--set"},
+      {"--set", "depth"},
+      {"--set", "=3 mm"},
+      {"--set", "depth="},
+      {"--set", "Depth=3 mm"},
+      {"--set", "1depth=3 mm"},
+      {"--set", "bad/name=3 mm"},
+      {"--set", "depth =3 mm"},
+      {"--set", std::string(65, 'a') + "=3 mm"},
+      {"--set", "depth=3 mm", "--set", "depth=4 mm"},
+      {"--out", output.string()},
+      {"--set=depth=3 mm"},
+      {"--unknown", "3 mm"}};
+  for (const auto& flags : invalid) {
+    std::vector<std::string> args{"build", input.string(), "--out", output.string()};
+    args.insert(args.end(), flags.begin(), flags.end());
+    const auto result = run(temp, args);
+    error(result, "usage");
+    CHECK(result.status == 2);
+  }
+  CHECK_FALSE(fs::exists(output));
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("override parameter IDs accept the schema length boundary and underscore prefix",
+          "[cli-overrides]") {
+  Temp temp;
+  for (const auto& name : {std::string("_"), std::string(63, 'a') + "0"}) {
+    auto d = part();
+    d.params[2].name = name;  // unused scalar
+    const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+    const auto text = source(d);
+    write(input, text);
+    const auto result =
+        run(temp, {"build", input.string(), "--set", name + "=2", "--out", output.string()});
+    INFO(result.error);
+    REQUIRE(result.status == 0);
+    measures(reload(output), 6000, 2200, {8, 10, 15});
+    CHECK(read(input) == text);
+  }
+}
+
+TEST_CASE("parameter overrides require a valid source and cannot bypass input alias protection",
+          "[cli-overrides]") {
+  Temp temp;
+  const auto input = temp.path("input.nightfall"), output = temp.path("variant.step");
+  SECTION("invalid source bounds") {
+    auto d = part();
+    d.params[0].max = "40 mm";
+    auto text = source(d);
+    const auto at = text.find("30 mm");
+    REQUIRE(at != std::string::npos);
+    text.replace(at, 5, "50 mm");
+    write(input, text);
+    error(run(temp, {"build", input.string(), "--set", "depth=30 mm", "--out", output.string()}),
+          "bounds", "/params/0/value");
+    CHECK(read(input) == text);
+    CHECK_FALSE(fs::exists(output));
+  }
+  SECTION("input alias") {
+    const auto text = source(part());
+    write(input, text);
+    fs::create_hard_link(input, output);
+    error(run(temp, {"build", input.string(), "--set", "depth=40 mm", "--out", output.string()}),
+          "io");
+    CHECK(read(input) == text);
+    CHECK(read(output) == text);
+  }
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("all twenty reference parts export parameter variants without source edits",
+          "[cli-overrides][cli-reference]") {
+  Temp temp;
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  // The first edited values also have independent analytic checks in reference_part_tests.cpp.
+  for (const auto& [name, expression] : {std::pair{"mounting_plate", "2 mm"},
+                                         {"washer", "1 mm"},
+                                         {"hex_spacer", "6 mm"},
+                                         {"angle_bracket", "20 mm"},
+                                         {"channel", "25 mm"},
+                                         {"enclosure", "12 mm"},
+                                         {"stepped_shaft", "20 mm"},
+                                         {"flanged_bushing", "10 mm"},
+                                         {"conical_nozzle", "12 mm"},
+                                         {"spherical_knob", "7 mm"},
+                                         {"toroidal_seal", "2 mm"},
+                                         {"semicircular_saddle", "4 mm"},
+                                         {"slotted_link", "3 mm"},
+                                         {"elliptic_duct", "10 mm"},
+                                         {"spline_wedge", "2 mm"},
+                                         {"gusset", "2 mm"},
+                                         {"offset_foot", "3 mm"},
+                                         {"twin_boss_plate", "5 mm"},
+                                         {"drilled_block", "8 mm"},
+                                         {"intersected_rail", "6 mm"}}) {
+    CAPTURE(name);
+    const auto input = fs::path(NF_REFERENCE_PARTS_DIR) / (std::string(name) + ".nightfall");
+    const auto original = read(input);
+    auto document = ir::read_document(original).value();
+    document.params.front().value = expression;
+    const auto output = temp.path("variant.step");
+    const auto result =
+        run(temp, {"build", input.string(), "--set",
+                   document.params.front().name + "=" + expression, "--out", output.string()});
+    INFO(result.error);
+    REQUIRE(result.status == 0);
+    CHECK(result.error.empty());
+    const auto expected = evaluator.evaluate(source(document)).value();
+    REQUIRE(expected.ok());
+    const auto& m = expected.bodies.at("part").shape->measures();
+    measures(reload(output), m.volume, m.area, m.centroid);
+    CHECK(read(input) == original);
+  }
+  temp.no_temporary_outputs();
+}
