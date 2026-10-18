@@ -17,6 +17,7 @@
 #include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
+#include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 
 #include <algorithm>
@@ -74,6 +75,60 @@ OperationResult generated_result(TopoDS_Shape geometry, const std::vector<LocalR
   return result;
 }
 
+struct CircularArc {
+  gp_Circ circle;
+  double angle;
+};
+std::optional<CircularArc> circular_arc(const math::NurbsCurve2& curve, const Plane& plane) {
+  if (curve.degree() != 2 || curve.points().size() != 3 || !curve.rational()) return {};
+  const double rounding = 64 * std::numeric_limits<double>::epsilon();
+  // Plane validation allows modeling tolerance. Arc conversion needs an isometry to
+  // roundoff so it cannot erase a small authored scale or shear in an accepted plane.
+  if (std::abs(math::dot(plane.x_axis, plane.x_axis) - 1) > rounding ||
+      std::abs(math::dot(plane.normal, plane.normal) - 1) > rounding ||
+      std::abs(math::dot(plane.x_axis, plane.normal)) > rounding)
+    return {};
+  // Work relative to the first pole and at unit scale. Intersect endpoint normals to
+  // obtain a candidate center; nearly parallel tangents stay in the NURBS representation.
+  const auto start = curve.points()[0], delta = curve.points()[1] - start,
+             chord = curve.points()[2] - start;
+  const auto scale = std::max(math::length(delta), math::length(chord));
+  if (!(scale > 0) || !std::isfinite(scale)) return {};
+  const auto u = delta / scale, end = chord / scale, v = end - u;
+  const double turn = math::cross(u, v);
+  if (std::abs(turn) <= 1e-6) return {};
+  const auto center = math::Vec2{-u.y, u.x} * (math::dot(end, v) / turn);
+  const auto a = center * -1, b = u - center, c = end - center;
+  const double radius2 = math::dot(a, a), pole2 = math::dot(b, b), end2 = math::dot(c, c);
+  const double epsilon = rounding * std::max({radius2, pole2, end2});
+  // All five degree-4 Bernstein coefficients of |N - center*W|² - radius²*W²
+  // must vanish. The first is zero by construction; the middle includes the weights.
+  // This checks the entire rational quadratic, not sampled points or modeling tolerance.
+  if (std::abs(math::dot(a, b) - radius2) > epsilon ||
+      std::abs(math::dot(b, c) - radius2) > epsilon || std::abs(end2 - radius2) > epsilon)
+    return {};
+  const auto weights = curve.weights();
+  const double first = weights[0] * weights[2] * (math::dot(a, c) - radius2),
+               second = 2 * weights[1] * weights[1] * (pole2 - radius2);
+  if (!(first < 0 && second > 0) ||
+      std::abs(first + second) > rounding * (std::abs(first) + second))
+    return {};
+  const double sign = turn > 0 ? 1 : -1;
+  const double angle = std::atan2(sign * math::cross(a, c), math::dot(a, c));
+  const double radius = std::sqrt(radius2) * scale;
+  if (!(angle > 0 && angle < std::numbers::pi && radius > Precision::Confusion()) ||
+      !std::isfinite(radius))
+    return {};
+  const auto y = math::cross(plane.normal, plane.x_axis);
+  const auto local_center = start + center * scale;
+  const auto origin = plane.origin + plane.x_axis * local_center.x + y * local_center.y;
+  if (!finite(origin)) return {};
+  return CircularArc{gp_Circ(gp_Ax2(point(origin), direction(plane.normal * sign),
+                                    direction(plane.x_axis * a.x + y * a.y)),
+                             radius),
+                     angle};
+}
+
 class OcctKernel final : public IKernel {
  public:
   explicit OcctKernel(math::Tolerance tolerance) : tolerance_(tolerance) {
@@ -81,7 +136,7 @@ class OcctKernel final : public IKernel {
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;revolve=1;"
-                "profile=exact-lines-v2;names=2;mass="
+                "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
@@ -328,6 +383,10 @@ class OcctKernel final : public IKernel {
           // Only the edge parameterization changes; profile-curve provenance is unchanged.
           if (span.degree() == 1 && !span.rational())
             return BRepBuilderAPI_MakeEdge(point(points.front()), point(points.back()));
+          // Certified circles give analytic cylinders/spheres/tori instead of general
+          // swept NURBS. As for lines, only parameterization changes; provenance stays.
+          if (const auto arc = circular_arc(span, p))
+            return BRepBuilderAPI_MakeEdge(arc->circle, 0, arc->angle);
           auto lifted = math::NurbsCurve3::make(span.knots(), std::move(points),
                                                 {span.weights().begin(), span.weights().end()});
           if (!lifted) fail(lifted.error());

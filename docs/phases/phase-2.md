@@ -24,6 +24,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#92](https://github.com/wckdboy/nightfall/issues/92) | 2.3 Evaluator: feature hashing, incremental rebuild, cache | kernel | Done: evaluator/cache and local benchmark merged in #103; further operation/selector coverage remains open |
 | [#104](https://github.com/wckdboy/nightfall/issues/104) | Exact curved sketch profiles: arcs, ellipses and NURBS splines | kernel | Implemented with regression tests and local benchmark evidence |
 | [#106](https://github.com/wckdboy/nightfall/issues/106) | Shared straight boundaries in sketch profiles | math | Implemented with arrangement, region and evaluator regressions; local benchmark evidence |
+| [#108](https://github.com/wckdboy/nightfall/issues/108) | Analytic circular profiles and fast exact mass integration | kernel | Implemented with analytic-surface regressions; local verification and rebuild evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -221,6 +222,23 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Nightfall code is instrumented; OCCT remains the pinned Release shared-library build.
   Remote CI confirmation, maintainer review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #108 preserves circular rational-quadratic spans as analytic OCCT arcs.
+  Recognition checks every homogeneous circle-polynomial coefficient at roundoff scale;
+  uncertain curves and nearly orthonormal sketch placements retain their authored NURBS.
+  Extrusions/revolutions now produce analytic cylinders, spheres and tori while retaining
+  source-curve provenance. Mass integration keeps the same exact surfaces and 1e-9 requested
+  relative accuracy, with a local bounding-box corner reference for each shell. First moments
+  accumulate without intermediate normalization so cancellation of signed face volumes cannot
+  erase a centroid contribution. The backend identity covers both changes. Ten new regressions
+  cover scales/angles, reversed and split arcs, unequal weights, perturbed curves, partial
+  revolutions, placed geometry, distant unequal solids and internal cavities. The existing
+  triangular gusset caught and verifies the signed-moment cancellation case.
+  Full Release `tools/check.sh --preset occt` passes 350/350 (20.69 s), including hygiene
+  and both schema corpora (202 cases plus 20 documents). The exact CI ASan/UBSan geometry,
+  evaluator and cache selection passes 124/124 (66.78 s), with no diagnostics or retries.
+  Nightfall is instrumented; OCCT remains the pinned Release shared-library build.
+  Remote CI, maintainer review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -355,3 +373,35 @@ The shared-edge maximum and boolean/sleeve tails exceed 100 ms in this run. Thes
 measurements with visible timing variation; no universal latency bound or performance
 improvement is claimed. Includes parsing, validation, geometry and naming; excludes
 serialization, IPC and tessellation. Full Phase 2 sign-off remains open.
+
+### Analytic circular-profile rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3. The new 30-feature
+toroidal seal has one circular sketch, one revolution and 28 transforms. Its major radius
+is 20 mm; each unique `depth` edit changes the section radius to `depth/10` mm (3.1–6 mm).
+Every sample checks volume `0.4π² × depth²` mm³ within 1e-5, centroid within 1e-6 mm and
+the expected kernel/cache counts. Run `build/occt/services/kernel/nf_evaluator_bench`.
+
+| Toroidal seal, 30 samples | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 88.984 | 120.664 | 126.083 | 29 / 0 |
+| Section radius edit | 80.776 | 92.599 | 95.948 | 29 / 0 |
+| Last transform edit | 0.626 | 0.724 | 0.726 | 1 / 29 |
+| Unused parameter edit | 0.610 | 0.992 | 1.150 | 0 / 30 |
+
+The cache retains 96 entries / 7,212,480 estimated bytes after radius edits (not RSS).
+All radius-edit samples are below 100 ms; the cold-build tail exceeds it. This run follows
+the builds and sanitizer checks. It includes parsing, validation, expressions, hashing,
+exact geometry and naming; serialization, IPC and tessellation remain excluded.
+
+Same-run depth-edit median/p95/max: plate 2.343/5.005/5.409 ms,
+bored plate 7.960/8.267/8.944 ms, boolean-cut plate 9.633/12.385/14.630 ms,
+sleeve 3.315/4.220/5.490 ms, elliptic tube 10.908/16.012/16.828 ms,
+shared-edge plate 2.870/4.907/5.574 ms. These are local observations, not universal bounds.
+
+The focused full-torus regression (R=20 mm, r=3 mm) took 8.423 s on the original NURBS
+backend and 0.076 s after analytic arcs plus conditioned mass integration. Both checked
+volume 360π² mm³ and area 240π² mm² within 1e-5, and centroid within 1e-7 mm; the original
+backend failed the new analytic-surface-type assertion. These are single correctness-run
+timings, separate from the 30-sample rebuild benchmark. The complete reference selection
+passes 21/21 in 2.47 s; all original analytic and cache assertions remain intact.

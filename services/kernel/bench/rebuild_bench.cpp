@@ -21,6 +21,7 @@ struct Part {
   double area, center_x;
   std::size_t transforms = 28, cold_calls = 29, depth_calls = 29, depth_hits = 1;
   bool scale_profile_with_depth = false;
+  double center_z_per_depth = 0.5;
 };
 void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
@@ -34,7 +35,7 @@ void verify(const Evaluation& result, const Part& part, double depth, double tai
   const auto profile_scale = part.scale_profile_with_depth ? depth / 30 : 1;
   if (std::abs(m.volume - part.area * profile_scale * depth) > 1e-5 ||
       std::abs(m.centroid.x - (part.center_x + translation)) > 1e-6 ||
-      std::abs(m.centroid.z - depth / 2) > 1e-6)
+      std::abs(m.centroid.z - depth * part.center_z_per_depth) > 1e-6)
     throw std::runtime_error("analytic geometry verification failed");
 }
 void measure(kernel::IKernel& backend, const Part& part, const std::string& mode) {
@@ -104,6 +105,11 @@ int main() {
     sleeve.features[1] = test::feature("base", "revolve", R"({"profile":{"sketch":"outline"},
       "axis":{"origin":[0,0,0],"direction":"z"},"angle":360,
       "result":{"new":"plate","body_type":"brep"}})");
+    auto torus = sleeve;
+    torus.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
+      {"id":"section","type":"circle","center":[0,20],"radius":"depth / 10"}],
+      "constraints":[]})")
+                                   .value();
     auto elliptical = plate;
     elliptical.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"outer","type":"ellipse","center":[0,0],"radii":["depth / 3",5],"rotation":35},
@@ -137,7 +143,9 @@ int main() {
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
-          Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true}})
+          Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
+          Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
+               true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})
         measure(*backend, part, mode);
   } catch (const std::exception& error) {

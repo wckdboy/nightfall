@@ -5,6 +5,9 @@
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include <BRepGProp_Domain.hxx>
+#include <BRepGProp_Face.hxx>
+#include <BRepGProp_VinertGK.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
@@ -35,6 +38,45 @@ bool solid_tree(const TopoDS_Shape& shape) {
   }
   return has_child;
 }
+bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
+  // A corner keeps each coordinate's first moment away from a symmetry-axis zero.
+  // Use each shell's bounds so distant components and cavities integrate locally.
+  // The signed face integrals still use exact surfaces and the same GK tolerance.
+  math::Vec3 moment;
+  for (TopExp_Explorer shells(shape, TopAbs_SHELL); shells.More(); shells.Next()) {
+    Bnd_Box bounds;
+    BRepBndLib::AddOptimal(shells.Current(), bounds, false, false);
+    if (bounds.IsVoid() || bounds.IsOpen()) return false;
+    const auto reference = bounds.CornerMax();
+    if (!finite(point(reference))) return false;
+    BRepGProp_VinertGK integral;
+    integral.SetLocation(reference);
+    double shell_volume = 0;
+    math::Vec3 shell_moment;
+    BRepGProp_Face surface(true);
+    for (TopExp_Explorer faces(shells.Current(), TopAbs_FACE); faces.More(); faces.Next()) {
+      const auto face = TopoDS::Face(faces.Current());
+      if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED) continue;
+      surface.Load(face);
+      BRepGProp_Domain domain(face);
+      const auto error =
+          face.NbChildren() == 0
+              ? integral.Perform(surface, kMassRelativeAccuracy, true, false)
+              : integral.Perform(surface, domain, kMassRelativeAccuracy, true, false);
+      if (error < 0 || !std::isfinite(error)) return false;
+      // GProps::Add normalizes after each face and drops first moments whenever a
+      // partial signed sum is zero. Keep unnormalized moments until the shell is complete.
+      shell_volume += integral.Mass();
+      shell_moment =
+          shell_moment + point(integral.CentreOfMass().XYZ() - reference.XYZ()) * integral.Mass();
+    }
+    measured.volume += shell_volume;
+    moment = moment + shell_moment + (point(reference) - measured.maximum) * shell_volume;
+  }
+  if (!(measured.volume > 0)) return false;
+  measured.centroid = measured.maximum + moment / measured.volume;
+  return true;
+}
 }  // namespace
 
 std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry) {
@@ -44,20 +86,16 @@ std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry) {
     auto result = std::make_shared<Snapshot>();
     result->geometry = std::move(geometry);
     auto& m = result->measured;
-    GProp_GProps volume, area;
-    const auto error = BRepGProp::VolumePropertiesGK(result->geometry, volume,
-                                                     kMassRelativeAccuracy, true, true, true);
-    if (error < 0 || !std::isfinite(error))
-      return std::unexpected(KernelError{"kernel", "volume integration failed"});
-    BRepGProp::SurfaceProperties(result->geometry, area, kMassRelativeAccuracy);
-    m.volume = volume.Mass();
-    m.area = area.Mass();
-    m.centroid = point(volume.CentreOfMass());
     Bnd_Box bounds;
     BRepBndLib::AddOptimal(result->geometry, bounds, false, false);
     if (bounds.IsVoid() || bounds.IsOpen())
       return std::unexpected(KernelError{"kernel", "output has no finite bounds"});
     bounds.Get(m.minimum.x, m.minimum.y, m.minimum.z, m.maximum.x, m.maximum.y, m.maximum.z);
+    if (!volume_properties(result->geometry, m))
+      return std::unexpected(KernelError{"kernel", "volume integration failed"});
+    GProp_GProps area;
+    BRepGProp::SurfaceProperties(result->geometry, area, kMassRelativeAccuracy);
+    m.area = area.Mass();
     if (!(m.volume > 0) || !(m.area > 0) || !std::isfinite(m.volume) || !std::isfinite(m.area) ||
         !finite(m.centroid) || !finite(m.minimum) || !finite(m.maximum))
       return std::unexpected(KernelError{"kernel", "output has invalid measurements"});

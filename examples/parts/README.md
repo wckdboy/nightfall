@@ -70,6 +70,7 @@ instrumentation, including when only an example changes. OCCT itself remains the
 Release shared-library build. These correctness checks do not set a timing threshold; the
 separate 30-feature rebuild benchmark and remaining Phase 2 work are tracked in
 [the phase tracker](../../docs/phases/phase-2.md).
-The toroidal seal is currently much slower than the other examples: a local stack sample
-places the work in OCCT's volume/centroid integration over NURBS surfaces of revolution.
-It remains in the suite so future performance work retains an analytic correctness check.
+Circular profiles retain analytic OCCT arcs when the full rational quadratic passes a
+roundoff-level circle check. Shell-local mass integration avoids expensive near-zero centroid
+integrals. The toroidal seal keeps its analytic correctness checks; measured rebuild timings
+are recorded in [the phase tracker](../../docs/phases/phase-2.md#analytic-circular-profile-rebuild-evidence).
