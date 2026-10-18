@@ -137,7 +137,7 @@ class OcctKernel final : public IKernel {
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
-                "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;"
+                "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=planar-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
              << detail::kMassRelativeAccuracy
@@ -147,6 +147,21 @@ class OcctKernel final : public IKernel {
   }
   std::string_view identity() const noexcept override { return identity_; }
   Capabilities capabilities() const noexcept override { return {true, true, true, true, true}; }
+  std::expected<std::vector<FaceInfo>, KernelError> faces(const ShapePtr& input) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || source->geometry.IsNull())
+        fail("face query requires a snapshot from this backend");
+      TopTools_IndexedMapOfShape all;
+      TopExp::MapShapes(source->geometry, TopAbs_FACE, all);
+      if (all.IsEmpty()) fail("snapshot contains no faces");
+      std::vector<FaceInfo> result;
+      result.reserve(static_cast<std::size_t>(all.Extent()));
+      for (int i = 1; i <= all.Extent(); ++i)
+        result.push_back({detail::entity(source, all(i)), planar_frame(TopoDS::Face(all(i)))});
+      return result;
+    });
+  }
   std::expected<Plane, KernelError> face_plane(const EntityPtr& input) override {
     return guarded([&] {
       const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(input);
@@ -157,18 +172,9 @@ class OcctKernel final : public IKernel {
       TopExp::MapShapes(entity->snapshot->geometry, TopAbs_FACE, faces);
       const auto index = faces.FindIndex(entity->geometry);
       if (!index) fail("face is absent from its owning snapshot");
-      const auto face = TopoDS::Face(faces(index));
-      const BRepAdaptor_Surface surface(face);
-      if (surface.GetType() != GeomAbs_Plane) fail("selected face is not planar");
-      const auto position = surface.Plane().Position();
-      const auto vec = [](const auto& p) { return math::Vec3{p.X(), p.Y(), p.Z()}; };
-      Plane plane{vec(position.Location()), vec(position.XDirection()),
-                  math::cross(vec(position.XDirection()), vec(position.YDirection()))};
-      if (face.Orientation() == TopAbs_REVERSED) plane.normal = plane.normal * -1;
-      if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED)
-        fail("face has no outward orientation");
-      validate_plane(plane);
-      return plane;
+      const auto plane = planar_frame(TopoDS::Face(faces(index)));
+      if (!plane) fail("selected face is not planar");
+      return *plane;
     });
   }
 
@@ -402,6 +408,19 @@ class OcctKernel final : public IKernel {
   }
 
  private:
+  std::optional<Plane> planar_frame(const TopoDS_Face& face) const {
+    const BRepAdaptor_Surface surface(face);
+    if (surface.GetType() != GeomAbs_Plane) return {};
+    const auto position = surface.Plane().Position();
+    const auto vec = [](const auto& p) { return math::Vec3{p.X(), p.Y(), p.Z()}; };
+    Plane plane{vec(position.Location()), vec(position.XDirection()),
+                math::cross(vec(position.XDirection()), vec(position.YDirection()))};
+    if (face.Orientation() == TopAbs_REVERSED) plane.normal = plane.normal * -1;
+    if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED)
+      fail("face has no outward orientation");
+    validate_plane(plane);
+    return plane;
+  }
   void validate_plane(const Plane& p) const {
     if (!finite(p.origin) || !finite(p.normal) || !finite(p.x_axis) ||
         !math::near(math::length(p.normal), 1, tolerance_.angular) ||

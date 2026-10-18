@@ -70,6 +70,10 @@ class FaultKernel final : public kernel::IKernel {
   explicit FaultKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<std::vector<kernel::FaceInfo>, kernel::KernelError> faces(
+      const kernel::ShapePtr& s) override {
+    return backend.faces(s);
+  }
   std::expected<kernel::Plane, kernel::KernelError> face_plane(
       const kernel::EntityPtr& e) override {
     return backend.face_plane(e);

@@ -53,6 +53,10 @@ using EntityPtr = std::shared_ptr<const Entity>;
 struct Plane {
   math::Vec3 origin, x_axis{1, 0, 0}, normal{0, 0, 1};
 };
+struct FaceInfo {
+  EntityPtr entity;
+  std::optional<Plane> plane;  // located outward frame for analytic planes; empty for curved faces
+};
 struct Extrusion {
   Plane plane;
   std::vector<math::Region> regions;
@@ -104,6 +108,11 @@ class IKernel {
     bool extrude, rigid_transform, booleans, revolve, mirror;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
+  /// Enumerate every unique face of a validated snapshot, including curved faces and all solids.
+  /// Handles retain their owner; planar frames follow face_plane's convention. Order is unspecified
+  /// and must never be used as persistent identity. Reject null/foreign snapshots; do not mutate.
+  [[nodiscard]] virtual std::expected<std::vector<FaceInfo>, KernelError> faces(
+      const ShapePtr&) = 0;
   /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
   /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
   /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.

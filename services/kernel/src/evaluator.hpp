@@ -17,8 +17,9 @@ struct FeatureState {
   ir::Errors errors;
 };
 /// Operation-local roles rebound to this evaluation's IDs and current immutable snapshot.
-/// Sketch planes select generated faces by producer and optional role. Sketch-entity
-/// qualifiers, geometric filters and selector sets remain unsupported.
+/// Sketch planes select generated faces by producer/role or all current faces via faces_of.
+/// Both accept planar type and normal/parallel_to/perpendicular_to direction filters.
+/// Sketch-entity qualifiers, other filters and selector sets remain unsupported.
 struct NamedEntity {
   std::string feature, role;
   kernel::EntityPtr entity;
@@ -32,7 +33,7 @@ struct BodyState {
 struct Evaluation {
   std::vector<FeatureState> features;
   std::map<std::string, BodyState> bodies;
-  std::size_t kernel_calls = 0, cache_hits = 0, binding_misses = 0;  // includes plane queries
+  std::size_t kernel_calls = 0, cache_hits = 0, binding_misses = 0;  // includes face queries
   [[nodiscard]] bool ok() const;
 };
 
@@ -46,6 +47,9 @@ struct Evaluation {
 /// Face-attached sketches require exactly one analytic planar face, bind all current
 /// candidate bodies and query their oriented frame on cache hits too. Booleans transfer
 /// producer candidates to their surviving body, retaining tools as candidates when requested.
+/// Planar filters use signed normals; parallel/perpendicular describe the plane relative to
+/// a direction (sine tolerance 1e-9). Nonzero directions are normalized; curved faces do not
+/// match. All filter conditions must hold. A plane always requires exactly one match.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.

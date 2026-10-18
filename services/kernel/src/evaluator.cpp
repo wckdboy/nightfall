@@ -39,6 +39,50 @@ T take(std::expected<T, E> value) {
   return std::move(*value);
 }
 const std::string& string(const Value& value) { return *value.if_string(); }
+struct PlaneFilter {
+  bool planar = false;
+  std::optional<math::Vec3> normal, parallel, perpendicular;
+  bool matches(const kernel::FaceInfo& face) const {
+    if (!planar) return true;
+    if (!face.plane) return false;
+    const auto n = face.plane->normal;
+    constexpr auto angular = math::Tolerance::standard().angular;
+    const auto aligned = [&](math::Vec3 v) { return math::length(math::cross(n, v)) <= angular; };
+    return (!normal || (math::dot(n, *normal) > 0 && aligned(*normal))) &&
+           (!parallel || std::abs(math::dot(n, *parallel)) <= angular) &&
+           (!perpendicular || aligned(*perpendicular));
+  }
+};
+PlaneFilter plane_filter(const Value& where, const std::string& pointer) {
+  PlaneFilter result;
+  for (const auto* key : {"near", "radius", "convex", "concave"})
+    if (where.find(key)) fail("kernel", "face filter is not implemented", pointer + "/" + key);
+  if (const auto* type = where.find("type")) {
+    if (string(*type) != "plane")
+      fail("kernel", "only planar surface filters are implemented", pointer + "/type");
+    result.planar = true;
+  }
+  for (const auto& [key, output] : {std::pair{"normal", &result.normal},
+                                    {"parallel_to", &result.parallel},
+                                    {"perpendicular_to", &result.perpendicular}}) {
+    const auto* value = where.find(key);
+    if (!value) continue;
+    math::Vec3 direction;
+    if (const auto* word = value->if_string()) {
+      const double sign = word->front() == '-' ? -1 : 1;
+      if (word->back() == 'x') direction.x = sign;
+      if (word->back() == 'y') direction.y = sign;
+      if (word->back() == 'z') direction.z = sign;
+    } else {
+      const auto& v = *value->if_array();
+      direction = {*v[0].if_number(), *v[1].if_number(), *v[2].if_number()};
+    }
+    *output = math::normalized(direction);
+    if (!*output) fail("kernel", "direction must be nonzero and finite", pointer + "/" + key);
+    result.planar = true;
+  }
+  return result;
+}
 kernel::BooleanOp boolean_kind(std::string_view mode) {
   if (mode == "union" || mode == "join") return kernel::BooleanOp::kUnion;
   if (mode == "subtract" || mode == "cut") return kernel::BooleanOp::kSubtract;
@@ -156,7 +200,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/18;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/19;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -241,41 +285,81 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         const auto& plane = *inputs.find("plane");
         const std::string pointer = "/inputs/plane";
         if (!plane.find("datum") && !plane.find("origin")) {
-          for (const auto* key : {"where", "from", "except", "any", "edges_of", "faces_of"})
+          for (const auto* key : {"from", "except", "any", "edges_of"})
             if (plane.find(key))
               fail("kernel", "selector field is not implemented", pointer + "/" + key);
-          const auto& id = string(*plane.find("created_by"));
-          const auto& producer = result.features[features.at(id)];
-          if (!producer.hash)
-            fail(
-                producer.status == FeatureStatus::kSuppressed ? "input_suppressed" : "input_failed",
-                "selected producer is unavailable: " + id, pointer + "/created_by");
-          dependencies.emplace(pointer + "/created_by/feature/" + id, *producer.hash);
-          std::vector<kernel::EntityPtr> matches;
-          for (const auto& body_id : previous.at(id)) {
-            bind(body_id, pointer + "/created_by");
+          const bool body_selector = plane.find("faces_of");
+          const std::string reference = body_selector ? "faces_of" : "created_by";
+          const auto& id = string(*plane.find(reference));
+          const auto* where = plane.find("where");
+          const auto filter = where ? plane_filter(*where, pointer + "/where") : PlaneFilter{};
+          if (!body_selector) {
+            const auto& producer = result.features[features.at(id)];
+            if (!producer.hash)
+              fail(producer.status == FeatureStatus::kSuppressed ? "input_suppressed"
+                                                                 : "input_failed",
+                   "selected producer is unavailable: " + id, pointer + "/created_by");
+            dependencies.emplace(pointer + "/created_by/feature/" + id, *producer.hash);
+          }
+          std::vector<kernel::FaceInfo> matches;
+          auto append = [&](kernel::FaceInfo face) {
+            if (std::ranges::none_of(
+                    matches, [&](const auto& m) { return m.entity->same_as(*face.entity); }))
+              matches.push_back(std::move(face));
+          };
+          const auto body_ids = body_selector ? std::vector{id} : previous.at(id);
+          for (const auto& body_id : body_ids) {
+            bind(body_id, pointer + "/" + reference);
             const auto& body = result.bodies.at(body_id);
-            for (const auto& name : body.names) {
-              if (name.feature != id) continue;
-              if (const auto* role = plane.find("role"); role && name.role != string(*role))
-                continue;
-              if (!name.entity || name.entity->owner() != body.shape)
-                fail("kernel", "selected name belongs to a different snapshot", pointer);
-              if (name.entity->kind() != kernel::EntityKind::kFace) continue;
-              if (std::ranges::none_of(
-                      matches, [&](const auto& entity) { return entity->same_as(*name.entity); }))
-                matches.push_back(name.entity);
+            std::vector<kernel::EntityPtr> candidates;
+            if (!body_selector)
+              for (const auto& name : body.names) {
+                if (name.feature != id) continue;
+                if (const auto* role = plane.find("role"); role && name.role != string(*role))
+                  continue;
+                if (!name.entity || name.entity->owner() != body.shape)
+                  fail("kernel", "selected name belongs to a different snapshot", pointer);
+                if (name.entity->kind() == kernel::EntityKind::kFace)
+                  candidates.push_back(name.entity);
+              }
+            if (!body_selector && !where) {
+              for (const auto& entity : candidates) append({entity, {}});
+              continue;
             }
+            if (!body_selector && candidates.empty()) continue;
+            ++result.kernel_calls;
+            auto queried = state_->kernel.faces(body.shape);
+            if (!queried) fail(queried.error().code, queried.error().message, pointer);
+            for (const auto& face : *queried) {
+              if (!face.entity || face.entity->owner() != body.shape ||
+                  face.entity->kind() != kernel::EntityKind::kFace)
+                fail("kernel", "face query returned an invalid snapshot handle", pointer);
+              if ((body_selector || std::ranges::any_of(candidates,
+                                                        [&](const auto& entity) {
+                                                          return entity->same_as(*face.entity);
+                                                        })) &&
+                  filter.matches(face))
+                append(face);
+            }
+            for (const auto& entity : candidates)
+              if (std::ranges::none_of(
+                      *queried, [&](const auto& face) { return face.entity->same_as(*entity); }))
+                fail("kernel", "selected face is absent from its owning snapshot", pointer);
           }
           if (matches.size() != 1)
             fail("selector_count",
                  "sketch plane requires one face; selector matched " +
                      std::to_string(matches.size()),
                  pointer);
-          ++result.kernel_calls;
-          auto resolved = state_->kernel.face_plane(matches.front());
-          if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
-          selected_plane = *resolved;
+          if (body_selector || where) {
+            if (!matches.front().plane) fail("kernel", "selected face is not planar", pointer);
+            selected_plane = matches.front().plane;
+          } else {
+            ++result.kernel_calls;
+            auto resolved = state_->kernel.face_plane(matches.front().entity);
+            if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
+            selected_plane = *resolved;
+          }
         }
       }
       const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")

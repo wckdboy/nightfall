@@ -135,6 +135,13 @@ int main() {
     attached_part.center_z_per_depth = 1.5;
     attached_part.surface_area = [](double depth) { return 400 + 60 * depth; };
     attached_part.queries = 1;
+    auto filtered_part = attached_part;
+    filtered_part.name = "filtered face";
+    filtered_part.document.features[2] =
+        test::feature("face_profile", "sketch",
+                      R"({"plane":{"faces_of":"support","where":{"type":"plane","normal":"z",
+        "parallel_to":"x","perpendicular_to":"z"},"expect":"one"},"entities":[
+        {"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]})");
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -266,7 +273,7 @@ int main() {
         "IPC/tessellation.");
     for (const auto& part :
          {Part{"plate", plate, 200, 5}, linear_part, circular_part, mirror_part, attached_part,
-          Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
+          filtered_part, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"sketch axis", sketch_axis, 25 * std::numbers::pi, 5, 28, 29, 29, 0},

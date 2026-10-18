@@ -73,10 +73,23 @@ class QueryKernel final : public kernel::IKernel {
  public:
   kernel::IKernel& backend;
   bool fail_query = false;
+  bool null_face = false, omit_faces = false;
+  kernel::EntityPtr wrong_owner;
   std::size_t queries = 0;
   explicit QueryKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<std::vector<kernel::FaceInfo>, kernel::KernelError> faces(
+      const kernel::ShapePtr& s) override {
+    ++queries;
+    if (fail_query)
+      return std::unexpected(kernel::KernelError{"kernel", "injected face enumeration failure"});
+    auto result = backend.faces(s);
+    if (result && null_face) result->front().entity.reset();
+    if (result && wrong_owner) result->front().entity = wrong_owner;
+    if (result && omit_faces) result->clear();
+    return result;
+  }
   std::expected<kernel::Plane, kernel::KernelError> face_plane(
       const kernel::EntityPtr& e) override {
     ++queries;
@@ -286,7 +299,7 @@ TEST_CASE("generative face provenance follows successive boolean retirements", "
 }
 
 TEST_CASE("consumed cutting tool cap planes keep current reversed face orientation",
-          "[face-attached]") {
+          "[face-attached][face-filters]") {
   auto d = attached();
   d.features.insert(
       d.features.begin() + 2,
@@ -297,6 +310,10 @@ TEST_CASE("consumed cutting tool cap planes keep current reversed face orientati
       "result":{"new":"tool_body","body_type":"brep"}})"),
        feature("cut", "boolean", R"({"target":"plate","tools":["tool_body"],"op":"subtract"})")});
   selector(d, R"({"created_by":"drill","role":"cap_end"})", 5);
+  SECTION("generated cap") {}
+  SECTION("normal-filtered cap") {
+    selector(d, R"({"created_by":"drill","role":"cap_end","where":{"normal":"-z"}})", 5);
+  }
   d.features[5].inputs =
       set(d.features[5].inputs, "entities",
           ir::json::parse(R"([{"id":"r","type":"circle","center":[5,-5],"radius":2}])").value());
@@ -310,20 +327,17 @@ TEST_CASE("consumed cutting tool cap planes keep current reversed face orientati
         "plate");
 }
 
-TEST_CASE("unsupported face selector sets qualifiers and filters fail at their fields",
-          "[face-attached]") {
+TEST_CASE("unsupported face selector sets and qualifiers fail at their fields", "[face-attached]") {
   struct Invalid {
     const char* selector;
     const char* field;
   };
   auto kernel = kernel::make_occt_kernel().value();
   for (const auto& [text, field] :
-       {Invalid{R"({"created_by":"base","where":{"type":"plane"}})", "where"},
-        Invalid{R"({"created_by":"base","from":"outline/r"})", "from"},
+       {Invalid{R"({"created_by":"base","from":"outline/r"})", "from"},
         Invalid{R"({"created_by":"base","except":{"created_by":"base","role":"side"}})", "except"},
         Invalid{R"({"any":[{"created_by":"base"}]})", "any"},
-        Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"},
-        Invalid{R"({"faces_of":"plate"})", "faces_of"}}) {
+        Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"}}) {
     auto d = attached();
     selector(d, text);
     Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
@@ -426,7 +440,7 @@ TEST_CASE("face sketch cache bindings reject recreated snapshots and rebind prod
 }
 
 TEST_CASE("face selectors invalidate cached planes when producer IDs swap on identical snapshots",
-          "[face-attached]") {
+          "[face-attached][face-filters]") {
   auto d = attached();
   d.features.insert(
       d.features.begin() + 2,
@@ -435,6 +449,10 @@ TEST_CASE("face selectors invalidate cached planes when producer IDs swap on ide
       "constraints":[]})"),
        feature("extension", "extrude", R"({"profile":{"sketch":"second_profile"},"distance":40,
       "result":{"join":"plate"}})")});
+  SECTION("generated cap") {}
+  SECTION("normal-filtered cap") {
+    selector(d, R"({"created_by":"base","role":"cap_end","where":{"normal":"z"}})", 4);
+  }
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
   const auto first = evaluator.evaluate(source(d)).value();
@@ -483,6 +501,368 @@ TEST_CASE("face attached snapshots survive cache eviction and kernel facade tear
     CHECK(rebuilt.cache_hits == 0);
     evaluator.clear_cache();
     CHECK(evaluator.cache_usage().estimated_bytes == 0);
+  }
+  boss(retained);
+  solid(retained, 6000, 2200, {5, 10, 15}, "plate");
+}
+
+TEST_CASE("body face selectors follow depth edits and query through complete cache hits",
+          "[face-filters]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"type":"plane","normal":"z"},"expect":"one"})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  CHECK(first.kernel_calls == 3);
+  CHECK(kernel.queries == 1);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(cached.kernel_calls == 1);
+  CHECK(cached.cache_hits == 4);
+  CHECK(kernel.queries == 2);
+  d.params[0].value = "40 mm";
+  const auto edited = evaluator.evaluate(source(d)).value();
+  boss(edited, {5, 10, 41});
+  CHECK(edited.features[2].hash != first.features[2].hash);
+  CHECK(edited.kernel_calls == 3);
+  CHECK(edited.cache_hits == 1);
+  d.params[0].value = "4 cm";
+  const auto equivalent = evaluator.evaluate(source(d)).value();
+  boss(equivalent, {5, 10, 41});
+  CHECK(equivalent.kernel_calls == 1);
+  CHECK(equivalent.cache_hits == 4);
+  Evaluator cold(kernel, {128, 64 * 1024 * 1024});
+  boss(cold.evaluate(source(d)).value(), {5, 10, 41});
+  boss(first);
+}
+
+TEST_CASE("generated face filters use signed normals and preserve side parameter frames",
+          "[face-filters]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  auto d = attached();
+  selector(d, R"({"created_by":"base","where":{"type":"plane","normal":[0,0,12]}})");
+  boss(evaluator.evaluate(source(d)).value());
+  selector(d, R"({"created_by":"base","where":{"normal":"-z"}})");
+  boss(evaluator.evaluate(source(d)).value(), {5, -10, -1});
+  selector(d, R"({"created_by":"base","role":"side","where":{"normal":"x"}})");
+  boss(evaluator.evaluate(source(d)).value(), {11, 5, 10});
+  selector(d, R"({"created_by":"base","role":"cap_end","where":{}})");
+  boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("planar filters exclude curved faces without excluding their planar caps",
+          "[face-filters]") {
+  auto d = attached();
+  d.features[0].inputs =
+      set(d.features[0].inputs, "entities",
+          ir::json::parse(R"([{"id":"r","type":"circle","center":[0,0],"radius":4}])").value());
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  selector(d, R"({"faces_of":"plate","where":{"type":"plane","normal":"z"}})");
+  const auto top = evaluator.evaluate(source(d)).value();
+  boss(top);
+  solid(top, 480 * kPi, 272 * kPi, {0, 0, 15}, "plate");
+  selector(d, R"({"faces_of":"plate","where":{"type":"plane"}})");
+  const auto caps = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(caps.ok());
+  CHECK(caps.features[2].errors.front().code == "selector_count");
+  CHECK(caps.features[2].errors.front().message.find("2") != std::string::npos);
+  selector(d, R"({"created_by":"base","role":"side","where":{"normal":"z"}})");
+  const auto sides = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(sides.ok());
+  CHECK(sides.features[2].errors.front().code == "selector_count");
+  CHECK(sides.features[2].errors.front().message.find("0") != std::string::npos);
+}
+
+TEST_CASE("parallel and perpendicular filters describe the plane relative to a direction",
+          "[face-filters]") {
+  auto d = attached();
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","parallel_to":"x",
+    "perpendicular_to":"-z"}})");
+  boss(evaluator.evaluate(source(d)).value());
+  selector(d, R"({"created_by":"base","role":"side","where":{"normal":"x",
+    "parallel_to":"z","perpendicular_to":"x"}})");
+  boss(evaluator.evaluate(source(d)).value(), {11, 5, 10});
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","parallel_to":"z"}})");
+  const auto none = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(none.ok());
+  CHECK(none.features[2].errors.front().code == "selector_count");
+  CHECK(none.features[2].errors.front().message.find("0") != std::string::npos);
+  selector(d, R"({"faces_of":"plate","where":{"perpendicular_to":"z"}})");
+  const auto two = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(two.ok());
+  CHECK(two.features[2].errors.front().code == "selector_count");
+  CHECK(two.features[2].errors.front().message.find("2") != std::string::npos);
+}
+
+TEST_CASE("planar direction filters honor explicit angular tolerance", "[face-filters]") {
+  struct Case {
+    const char* where;
+    bool matches;
+  };
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto& [where, matches] : {Case{R"({"normal":[0.0000000005,0,1]})", true},
+                                       Case{R"({"normal":[0.000000002,0,1]})", false},
+                                       Case{R"({"parallel_to":[1,0,0.0000000005]})", true},
+                                       Case{R"({"parallel_to":[1,0,0.000000002]})", false},
+                                       Case{R"({"perpendicular_to":[0.0000000005,0,-1]})", true},
+                                       Case{R"({"perpendicular_to":[0.000000002,0,-1]})", false}}) {
+    auto d = attached();
+    selector(d, R"({"created_by":"base","role":"cap_end","where":{}})");
+    const auto plane =
+        set(*d.features[2].inputs.find("plane"), "where", ir::json::parse(where).value());
+    d.features[2].inputs = set(d.features[2].inputs, "plane", plane);
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    INFO(where);
+    CHECK(result.ok() == matches);
+    if (matches)
+      boss(result);
+    else {
+      CHECK(result.features[2].errors.front().code == "selector_count");
+      CHECK_FALSE(result.bodies.at("boss_body").shape);
+    }
+  }
+}
+
+TEST_CASE("direction filters evaluate scalar expressions before selecting current frames",
+          "[face-filters]") {
+  auto d = attached();
+  d.params.push_back({"sign", 2.0, {}, {}, {}, {}});
+  selector(d, R"({"faces_of":"plate","where":{"normal":[0,0,"sign"]}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value());
+  d.params.back().value = -3.0;
+  const auto bottom = evaluator.evaluate(source(d)).value();
+  boss(bottom, {5, -10, -1});
+  CHECK(bottom.kernel_calls == 2);
+  CHECK(bottom.cache_hits == 2);
+  selector(d, R"({"faces_of":"plate","where":{"normal":[0,0,1e308]}})");
+  boss(evaluator.evaluate(source(d)).value());
+  selector(d, R"({"faces_of":"plate","where":{"normal":[1e308,1e308,1e308]}})");
+  const auto diagonal = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(diagonal.ok());
+  CHECK(diagonal.features[2].errors.front().code == "selector_count");
+}
+
+TEST_CASE("filtered attachments follow tilted and mirrored world normals", "[face-filters]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("tilt", "transform", R"({"bodies":["plate"],"rotation":{
+        "axis":{"origin":[0,0,0],"direction":"y"},"angle":"45 deg"}})"));
+  selector(d, R"({"faces_of":"plate","where":{"normal":[1,0,1]}})", 3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value(), {36 / std::sqrt(2.0), 10, 26 / std::sqrt(2.0)});
+  d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{"datum":"xy"}})"));
+  selector(d, R"({"created_by":"base","role":"cap_end","where":{"normal":"-z"}})", 3);
+  const auto reflected = evaluator.evaluate(source(d)).value();
+  boss(reflected, {5, -10, -31});
+  CHECK(reflected.bodies.at("plate").shape->measures().solids == 1);
+}
+
+TEST_CASE("filtered body faces use current boolean geometry and reject retired body IDs",
+          "[face-filters]") {
+  auto d = transferred();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})", 4);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value(), {5, 10, 41});
+  selector(d, R"({"faces_of":"other","where":{"normal":"z"}})", 4);
+  const auto retired = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(retired.ok());
+  CHECK(retired.features[4].errors.front().code == "input_failed");
+  CHECK(retired.features[4].errors.front().pointer == "/features/4/inputs/plane/faces_of");
+  CHECK_FALSE(retired.bodies.at("boss_body").shape);
+  solid(retired, 8000, 2800, {5, 10, 20}, "plate", false);
+}
+
+TEST_CASE("filtered provenance binds candidates even when no named face survives on one body",
+          "[face-filters]") {
+  auto d = transferred(true, true);
+  selector(d, R"({"created_by":"tool","role":"cap_end","where":{"normal":"z"}})", 4);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first, {5, 10, 41});
+  d.params[0].value = "20 mm";
+  const auto edit = evaluator.evaluate(source(d)).value();
+  boss(edit, {5, 10, 41});
+  CHECK(edit.features[4].hash != first.features[4].hash);
+  CHECK(edit.features[5].hash != first.features[5].hash);
+  CHECK(edit.bodies.at("other").shape == first.bodies.at("other").shape);
+}
+
+TEST_CASE("body face selectors require exactly one face with all expectation modes",
+          "[face-filters]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto* text : {R"({"faces_of":"plate","expect":"any"})",
+                           R"({"faces_of":"plate","where":{},"expect":"some"})",
+                           R"({"faces_of":"plate","where":{"normal":[1,1,1]},"expect":"any"})",
+                           R"({"created_by":"base","role":"side","where":{"type":"plane"}})"}) {
+    auto d = attached();
+    selector(d, text);
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.features[2].errors.front().code == "selector_count");
+    CHECK(result.features[2].errors.front().pointer == "/features/2/inputs/plane");
+    CHECK(result.kernel_calls == 2);
+    CHECK_FALSE(result.bodies.at("boss_body").shape);
+  }
+}
+
+TEST_CASE("unsupported face filters and invalid directions identify their exact fields",
+          "[face-filters]") {
+  struct Invalid {
+    const char* where;
+    const char* field;
+  };
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto& [where, field] :
+       {Invalid{R"({"type":"cylinder"})", "type"}, Invalid{R"({"near":[0,0,0]})", "near"},
+        Invalid{R"({"radius":2})", "radius"}, Invalid{R"({"convex":true})", "convex"},
+        Invalid{R"({"concave":false})", "concave"}, Invalid{R"({"normal":[0,0,0]})", "normal"},
+        Invalid{R"({"parallel_to":[0,0,0]})", "parallel_to"},
+        Invalid{R"({"perpendicular_to":[0,0,0]})", "perpendicular_to"}}) {
+    auto d = attached();
+    selector(d, R"({"faces_of":"plate","where":{}})");
+    d.features[2].inputs =
+        set(d.features[2].inputs, "plane",
+            set(*d.features[2].inputs.find("plane"), "where", ir::json::parse(where).value()));
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.features[2].errors.front().code == "kernel");
+    CHECK(result.features[2].errors.front().pointer ==
+          "/features/2/inputs/plane/where/" + std::string(field));
+    CHECK(result.kernel_calls == 1);
+  }
+}
+
+TEST_CASE("body face queries respect suppression rollback and failed current modifiers",
+          "[face-filters]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  d.features[1].suppressed = true;
+  const auto suppressed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(suppressed.ok());
+  CHECK(suppressed.features[2].errors.front().code == "input_suppressed");
+  CHECK(suppressed.features[2].errors.front().pointer == "/features/2/inputs/plane/faces_of");
+  d.features[1].suppressed = false;
+  d.history_end = "base";
+  const auto rolled = evaluator.evaluate(source(d)).value();
+  REQUIRE(rolled.ok());
+  CHECK(rolled.kernel_calls == 1);
+  CHECK(rolled.features[2].status == FeatureStatus::kRolledBack);
+  d.history_end.reset();
+  d.features.insert(d.features.begin() + 2,
+                    feature("bad", "transform", R"({"bodies":["plate"],"rotation":{
+    "axis":{"origin":[0,0,0],"direction":[0,0,0]},"angle":20}})"));
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[3].errors.front().code == "input_failed");
+  CHECK(failed.features[3].errors.front().pointer == "/features/3/inputs/plane/faces_of");
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+}
+
+TEST_CASE("face enumeration failures prevent stale downstream reuse and preserve the host",
+          "[face-filters]") {
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+  boss(evaluator.evaluate(source(d)).value());
+  kernel.fail_query = true;
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[2].errors.front().pointer == "/features/2/inputs/plane");
+  CHECK(failed.features[2].errors.front().message.find("injected") != std::string::npos);
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  solid(failed, 6000, 2200, {5, 10, 15}, "plate", false);
+  kernel.fail_query = false;
+  const auto retry = evaluator.evaluate(source(d)).value();
+  boss(retry);
+  CHECK(retry.kernel_calls == 1);
+  CHECK(retry.cache_hits == 4);
+}
+
+TEST_CASE("filtered selectors reject malformed handles and missing provenance in face queries",
+          "[face-filters]") {
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  auto d = attached();
+  selector(d, R"({"created_by":"base","role":"cap_end","where":{"normal":"z"}})");
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  SECTION("null handle") { kernel.null_face = true; }
+  SECTION("different snapshot") {
+    kernel.wrong_owner = first.bodies.at("boss_body").names.front().entity;
+  }
+  SECTION("missing named face") { kernel.omit_faces = true; }
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[2].errors.front().code == "kernel");
+  CHECK(failed.features[2].errors.front().pointer == "/features/2/inputs/plane");
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  solid(failed, 6000, 2200, {5, 10, 15}, "plate", false);
+  kernel.null_face = kernel.omit_faces = false;
+  kernel.wrong_owner.reset();
+  boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account for retained bytes",
+          "[face-filters]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  d.history_end = "outline";
+  REQUIRE(evaluator.evaluate(source(d))->ok());
+  evaluator.set_cache_limits({3, 64 * 1024 * 1024});
+  evaluator.set_cache_limits({128, 64 * 1024 * 1024});
+  d.history_end.reset();
+  const auto rebuilt = evaluator.evaluate(source(d)).value();
+  boss(rebuilt);
+  CHECK(rebuilt.binding_misses == 1);
+  CHECK(rebuilt.cache_hits == 2);
+  CHECK(rebuilt.kernel_calls == 2);
+  Evaluator limited(*kernel, {128, first.bodies.at("plate").shape->estimated_bytes()});
+  d.history_end = "face_sketch";
+  REQUIRE(limited.evaluate(source(d))->ok());
+  CHECK(limited.cache_usage().entries == 1);
+  CHECK(limited.evaluate(source(d))->kernel_calls == 2);
+  boss(first);
+}
+
+TEST_CASE("filtered snapshots survive cache eviction and producing facade teardown",
+          "[face-filters]") {
+  Evaluation retained;
+  {
+    auto kernel = kernel::make_occt_kernel().value();
+    Evaluator evaluator(*kernel, {1, 64 * 1024 * 1024});
+    auto d = attached();
+    selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+    retained = evaluator.evaluate(source(d)).value();
+    const auto rebuilt = evaluator.evaluate(source(d)).value();
+    boss(rebuilt);
+    CHECK(rebuilt.kernel_calls == 3);
+    CHECK(rebuilt.cache_hits == 0);
+    evaluator.clear_cache();
   }
   boss(retained);
   solid(retained, 6000, 2200, {5, 10, 15}, "plate");
