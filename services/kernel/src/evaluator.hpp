@@ -18,7 +18,7 @@ struct FeatureState {
 };
 /// Operation-local roles rebound to this evaluation's IDs and current immutable snapshot.
 /// Sketch planes select generated faces by producer/role or all current faces via faces_of.
-/// Both accept planar type and normal/parallel_to/perpendicular_to direction filters.
+/// Both accept planar type, normal/parallel_to/perpendicular_to and nearest-point filters.
 /// Sketch-entity qualifiers, other filters and selector sets remain unsupported.
 struct NamedEntity {
   std::string feature, role;
@@ -50,6 +50,9 @@ struct Evaluation {
 /// Planar filters use signed normals; parallel/perpendicular describe the plane relative to
 /// a direction (sine tolerance 1e-9). Nonzero directions are normalized; curved faces do not
 /// match. All filter conditions must hold. A plane always requires exactly one match.
+/// near compares trimmed-face distances after other filters, across all candidate bodies.
+/// Faces within 1e-6 mm of the minimum all survive; ties remain selector_count. near alone
+/// does not imply a planar filter. Each distance is queried/counted before cache reuse.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.

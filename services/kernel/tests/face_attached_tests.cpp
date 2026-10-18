@@ -4,6 +4,7 @@
 #include "part_fixture.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
@@ -74,11 +75,22 @@ class QueryKernel final : public kernel::IKernel {
   kernel::IKernel& backend;
   bool fail_query = false;
   bool null_face = false, omit_faces = false;
+  bool fail_distance = false;
+  std::optional<double> distance_result;
   kernel::EntityPtr wrong_owner;
   std::size_t queries = 0;
+  std::size_t distances = 0;
   explicit QueryKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<double, kernel::KernelError> face_distance(const kernel::EntityPtr& e,
+                                                           math::Vec3 point) override {
+    ++distances;
+    if (fail_distance)
+      return std::unexpected(kernel::KernelError{"kernel", "injected face distance failure"});
+    if (distance_result) return *distance_result;
+    return backend.face_distance(e, point);
+  }
   std::expected<std::vector<kernel::FaceInfo>, kernel::KernelError> faces(
       const kernel::ShapePtr& s) override {
     ++queries;
@@ -440,7 +452,7 @@ TEST_CASE("face sketch cache bindings reject recreated snapshots and rebind prod
 }
 
 TEST_CASE("face selectors invalidate cached planes when producer IDs swap on identical snapshots",
-          "[face-attached][face-filters]") {
+          "[face-attached][face-filters][nearest-face]") {
   auto d = attached();
   d.features.insert(
       d.features.begin() + 2,
@@ -449,9 +461,14 @@ TEST_CASE("face selectors invalidate cached planes when producer IDs swap on ide
       "constraints":[]})"),
        feature("extension", "extrude", R"({"profile":{"sketch":"second_profile"},"distance":40,
       "result":{"join":"plate"}})")});
+  std::size_t extra_queries = 0;
   SECTION("generated cap") {}
   SECTION("normal-filtered cap") {
     selector(d, R"({"created_by":"base","role":"cap_end","where":{"normal":"z"}})", 4);
+  }
+  SECTION("nearest cap") {
+    selector(d, R"({"created_by":"base","role":"cap_end","where":{"near":[5,10,35]}})", 4);
+    extra_queries = 1;
   }
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
@@ -463,7 +480,7 @@ TEST_CASE("face selectors invalidate cached planes when producer IDs swap on ide
   boss(swapped, {25, 10, 41});
   CHECK(swapped.bodies.at("plate").shape == first.bodies.at("plate").shape);
   CHECK(swapped.features[4].hash != first.features[4].hash);
-  CHECK(swapped.kernel_calls == 2);
+  CHECK(swapped.kernel_calls == 2 + extra_queries);
   CHECK(swapped.cache_hits == 4);
   boss(first);
 }
@@ -728,9 +745,9 @@ TEST_CASE("unsupported face filters and invalid directions identify their exact 
   };
   auto kernel = kernel::make_occt_kernel().value();
   for (const auto& [where, field] :
-       {Invalid{R"({"type":"cylinder"})", "type"}, Invalid{R"({"near":[0,0,0]})", "near"},
-        Invalid{R"({"radius":2})", "radius"}, Invalid{R"({"convex":true})", "convex"},
-        Invalid{R"({"concave":false})", "concave"}, Invalid{R"({"normal":[0,0,0]})", "normal"},
+       {Invalid{R"({"type":"cylinder"})", "type"}, Invalid{R"({"radius":2})", "radius"},
+        Invalid{R"({"convex":true})", "convex"}, Invalid{R"({"concave":false})", "concave"},
+        Invalid{R"({"normal":[0,0,0]})", "normal"},
         Invalid{R"({"parallel_to":[0,0,0]})", "parallel_to"},
         Invalid{R"({"perpendicular_to":[0,0,0]})", "perpendicular_to"}}) {
     auto d = attached();
@@ -824,11 +841,17 @@ TEST_CASE("filtered selectors reject malformed handles and missing provenance in
 }
 
 TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account for retained bytes",
-          "[face-filters]") {
+          "[face-filters][nearest-face]") {
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
   auto d = attached();
   selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+  std::size_t extra_queries = 0;
+  SECTION("direction filter") {}
+  SECTION("nearest face") {
+    selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[5,10,31]}})");
+    extra_queries = 1;
+  }
   const auto first = evaluator.evaluate(source(d)).value();
   boss(first);
   d.history_end = "outline";
@@ -840,30 +863,330 @@ TEST_CASE("filtered sketch bindings revalidate recreated snapshots and account f
   boss(rebuilt);
   CHECK(rebuilt.binding_misses == 1);
   CHECK(rebuilt.cache_hits == 2);
-  CHECK(rebuilt.kernel_calls == 2);
+  CHECK(rebuilt.kernel_calls == 2 + extra_queries);
   Evaluator limited(*kernel, {128, first.bodies.at("plate").shape->estimated_bytes()});
   d.history_end = "face_sketch";
   REQUIRE(limited.evaluate(source(d))->ok());
   CHECK(limited.cache_usage().entries == 1);
-  CHECK(limited.evaluate(source(d))->kernel_calls == 2);
+  CHECK(limited.evaluate(source(d))->kernel_calls == 2 + extra_queries);
   boss(first);
 }
 
 TEST_CASE("filtered snapshots survive cache eviction and producing facade teardown",
-          "[face-filters]") {
+          "[face-filters][nearest-face]") {
   Evaluation retained;
+  std::size_t extra_queries = 0;
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
+  SECTION("direction filter") {}
+  SECTION("nearest face") {
+    selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[5,10,31]}})");
+    extra_queries = 1;
+  }
   {
     auto kernel = kernel::make_occt_kernel().value();
     Evaluator evaluator(*kernel, {1, 64 * 1024 * 1024});
-    auto d = attached();
-    selector(d, R"({"faces_of":"plate","where":{"normal":"z"}})");
     retained = evaluator.evaluate(source(d)).value();
     const auto rebuilt = evaluator.evaluate(source(d)).value();
     boss(rebuilt);
-    CHECK(rebuilt.kernel_calls == 3);
+    CHECK(rebuilt.kernel_calls == 3 + extra_queries);
     CHECK(rebuilt.cache_hits == 0);
     evaluator.clear_cache();
   }
   boss(retained);
   solid(retained, 6000, 2200, {5, 10, 15}, "plate");
+}
+
+TEST_CASE("nearest body faces query trimmed distance even on complete cache hits",
+          "[nearest-face]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"near":[5,10,"depth + 1 mm"]},"expect":"one"})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  CHECK(first.kernel_calls == 9);  // two extrusions, one enumeration, six distances
+  CHECK(kernel.queries == 1);
+  CHECK(kernel.distances == 6);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  boss(cached);
+  CHECK(cached.kernel_calls == 7);
+  CHECK(cached.cache_hits == 4);
+  CHECK(kernel.distances == 12);
+  d.params[0].value = "40 mm";
+  const auto deeper = evaluator.evaluate(source(d)).value();
+  boss(deeper, {5, 10, 41});
+  CHECK(deeper.features[2].hash != first.features[2].hash);
+  CHECK(deeper.kernel_calls == 9);
+  CHECK(deeper.cache_hits == 1);
+  d.params[0].value = "4 cm";
+  const auto equivalent = evaluator.evaluate(source(d)).value();
+  boss(equivalent, {5, 10, 41});
+  CHECK(equivalent.kernel_calls == 7);
+  CHECK(equivalent.cache_hits == 4);
+  Evaluator cold(kernel, {128, 64 * 1024 * 1024});
+  boss(cold.evaluate(source(d)).value(), {5, 10, 41});
+  boss(first);
+}
+
+TEST_CASE("nearest selectors distinguish repeated coplanar caps by their trimmed extent",
+          "[nearest-face]") {
+  auto d = attached();
+  d.params[1].value = "20 mm";
+  d.features.insert(d.features.begin() + 2,
+                    feature("repeat", "pattern_linear", R"({"bodies":["plate"],"count":3,
+    "spacing":"step","direction":"x"})"));
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[45,10,35]}})", 3);
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first, {45, 10, 31});
+  CHECK(kernel.distances == 3);  // planar/direction filtering precedes distance
+  CHECK(first.bodies.at("plate").shape->measures().solids == 3);
+  CHECK_THAT(first.bodies.at("plate").shape->measures().volume, WithinAbs(18000, 1e-7));
+  CHECK_THAT(first.bodies.at("plate").shape->measures().area, WithinAbs(6600, 1e-7));
+  d.params[1].value = "30 mm";
+  const auto spaced = evaluator.evaluate(source(d)).value();
+  boss(spaced, {35, 10, 31});
+  selector(d, R"({"created_by":"base","role":"cap_end","where":{"near":[45,10,35]}})", 3);
+  const auto named = evaluator.evaluate(source(d)).value();
+  boss(named, {35, 10, 31});
+  CHECK(named.kernel_calls == 5);
+  CHECK(named.cache_hits == 3);
+  boss(first, {45, 10, 31});
+}
+
+TEST_CASE("nearest selection compares all provenance candidate bodies globally", "[nearest-face]") {
+  auto d = transferred(true);
+  d.features.insert(
+      d.features.begin() + 4,
+      feature("shift", "transform", R"({"bodies":["plate"],"translation":[100,0,0]})"));
+  selector(d, R"({"created_by":"tool","role":"cap_end","where":{"near":[105,10,41]}})", 5);
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto moved = evaluator.evaluate(source(d)).value();
+  boss(moved, {105, 10, 41});
+  CHECK(kernel.queries == 2);
+  CHECK(kernel.distances == 2);
+  selector(d, R"({"created_by":"tool","role":"cap_end","where":{"near":[5,10,41]}})", 5);
+  const auto original = evaluator.evaluate(source(d)).value();
+  boss(original, {5, 10, 41});
+  d.params[0].value = "20 mm";  // far target changes even though the tool remains nearest
+  const auto edit = evaluator.evaluate(source(d)).value();
+  boss(edit, {5, 10, 41});
+  CHECK(edit.features[5].hash != original.features[5].hash);
+  CHECK(edit.features[6].hash != original.features[6].hash);
+  CHECK(edit.bodies.at("other").shape == original.bodies.at("other").shape);
+  CHECK(edit.bodies.at("other").hash == original.bodies.at("other").hash);
+}
+
+TEST_CASE("nearest face ties remain ambiguous within explicit linear tolerance", "[nearest-face]") {
+  struct Case {
+    double z;
+    int side;  // +1 top, -1 bottom, 0 tie
+  };
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto& [z, side] :
+       {Case{15, 0}, {15.00000025, 0}, {14.99999975, 0}, {15.000001, 1}, {14.999999, -1}}) {
+    auto d = attached();
+    selector(d, R"({"faces_of":"plate","where":{"perpendicular_to":"z","near":[5,10,15]},
+      "expect":"any"})");
+    d.features[2].inputs = set(d.features[2].inputs, "plane",
+                               set(*d.features[2].inputs.find("plane"), "where",
+                                   set(*d.features[2].inputs.find("plane")->find("where"), "near",
+                                       ir::json::Array{5.0, 10.0, z})));
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    INFO(z);
+    if (side)
+      boss(result, side > 0 ? math::Vec3{5, 10, 31} : math::Vec3{5, -10, -1});
+    else {
+      REQUIRE_FALSE(result.ok());
+      CHECK(result.features[2].errors.front().code == "selector_count");
+      CHECK(result.features[2].errors.front().pointer == "/features/2/inputs/plane");
+      CHECK(result.features[2].errors.front().message.find("2") != std::string::npos);
+      CHECK_FALSE(result.bodies.at("boss_body").shape);
+    }
+  }
+}
+
+TEST_CASE("equally near repeated caps never fall back to topology order", "[nearest-face]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("repeat", "pattern_linear", R"({"bodies":["plate"],"count":2,
+      "spacing":20,"direction":"x"})"));
+  selector(d, R"({"created_by":"base","role":"cap_end","where":{"near":[15,10,35]},
+    "expect":"one"})",
+           3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto tied = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(tied.ok());
+  CHECK(tied.features[3].errors.front().code == "selector_count");
+  CHECK(tied.features[3].errors.front().message.find("2") != std::string::npos);
+  CHECK_FALSE(tied.bodies.at("boss_body").shape);
+}
+
+TEST_CASE("nearest cap selection measures holes instead of infinite supporting planes",
+          "[nearest-face]") {
+  auto d = attached();
+  d.features[0].inputs = set(d.features[0].inputs, "entities",
+                             ir::json::parse(R"([
+    {"id":"outer","type":"circle","center":[0,0],"radius":4},
+    {"id":"inner","type":"circle","center":[0,0],"radius":2}])")
+                                 .value());
+  d.features.insert(
+      d.features.begin() + 2,
+      {feature("plug_profile", "sketch",
+               R"({"plane":{"origin":[0,0,24],"normal":"z","x_direction":"x"},
+        "entities":[{"id":"r","type":"circle","center":[0,0],"radius":1}],"constraints":[]})"),
+       feature("plug", "extrude", R"({"profile":{"sketch":"plug_profile"},"distance":3,
+        "result":{"join":"plate"}})")});
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[0,0,29]}})", 4);
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto result = evaluator.evaluate(source(d)).value();
+  boss(result, {5, 10, 28});  // plug: 2 mm away; ring: sqrt(5) mm away through the hole
+  CHECK(kernel.distances == 2);
+  const auto& m = result.bodies.at("plate").shape->measures();
+  CHECK(m.solids == 2);
+  CHECK_THAT(m.volume, WithinAbs(363 * kPi, 1e-7));
+  CHECK_THAT(m.area, WithinAbs(392 * kPi, 1e-7));
+  CHECK_THAT(m.centroid.z, WithinAbs((360 * 15.0 + 3 * 25.5) / 363, 1e-8));
+}
+
+TEST_CASE("nearest attachment queries use current rotated and reflected world geometry",
+          "[nearest-face]") {
+  auto d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("rotate", "transform", R"({"bodies":["plate"],"rotation":{
+      "axis":{"origin":[0,0,0],"direction":"y"},"angle":"90 deg"}})"));
+  selector(d, R"({"faces_of":"plate","where":{"perpendicular_to":"x","near":[32,10,-5]}})", 3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value(), {31, 10, -5});
+  d = attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{
+      "origin":[-5,0,0],"normal":"x","x_direction":"y"}})"));
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[-15,10,31]}})", 3);
+  boss(evaluator.evaluate(source(d)).value(), {-15, -10, 31});
+}
+
+TEST_CASE("near alone can select a curved face and then fail the planar consumer",
+          "[nearest-face]") {
+  auto d = attached();
+  d.features[0].inputs =
+      set(d.features[0].inputs, "entities",
+          ir::json::parse(R"([{"id":"r","type":"circle","center":[0,0],"radius":4}])").value());
+  selector(d, R"({"faces_of":"plate","where":{"near":[6,1,15]}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto curved = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(curved.ok());
+  CHECK(curved.features[2].errors.front().code == "kernel");
+  CHECK(curved.features[2].errors.front().message.find("not planar") != std::string::npos);
+  CHECK_FALSE(curved.bodies.at("boss_body").shape);
+  selector(d, R"({"faces_of":"plate","where":{"type":"plane","near":[6,1,29]}})");
+  boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("nearest point expressions and equivalent units control cache reuse", "[nearest-face]") {
+  auto d = attached();
+  d.params.push_back({"pick", "31 mm", {}, {}, {}, {}});
+  selector(d, R"({"faces_of":"plate","where":{"perpendicular_to":"z",
+    "near":["5 mm","10 mm","pick"]}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  boss(first);
+  d.params.back().value = "3.1 cm";
+  const auto equivalent = evaluator.evaluate(source(d)).value();
+  boss(equivalent);
+  CHECK(equivalent.features[2].hash == first.features[2].hash);
+  CHECK(equivalent.kernel_calls == 3);
+  CHECK(equivalent.cache_hits == 4);
+  d.params.back().value = "5 mm";
+  const auto bottom = evaluator.evaluate(source(d)).value();
+  boss(bottom, {5, -10, -1});
+  CHECK(bottom.kernel_calls == 4);
+  CHECK(bottom.cache_hits == 2);
+  d.params.back().value = "1 rad";
+  const auto invalid = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(invalid.ok());
+  CHECK(invalid.features[2].errors.front().code == "unit");
+  CHECK(invalid.features[2].errors.front().pointer == "/features/2/inputs/plane/where/near/2");
+}
+
+TEST_CASE("empty filtered candidates do not execute distance queries", "[nearest-face]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":[1,1,1],"near":[0,0,0]}})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  kernel.fail_distance = true;
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto empty = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(empty.ok());
+  CHECK(empty.features[2].errors.front().code == "selector_count");
+  CHECK(empty.features[2].errors.front().message.find("0") != std::string::npos);
+  CHECK(empty.kernel_calls == 2);
+  CHECK(kernel.distances == 0);
+}
+
+TEST_CASE("failed or malformed distances block stale cached downstream geometry",
+          "[nearest-face]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"near":[5,10,31]}})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  boss(evaluator.evaluate(source(d)).value());
+  SECTION("backend error") { kernel.fail_distance = true; }
+  SECTION("negative") { kernel.distance_result = -1; }
+  SECTION("infinite") { kernel.distance_result = std::numeric_limits<double>::infinity(); }
+  SECTION("NaN") { kernel.distance_result = std::numeric_limits<double>::quiet_NaN(); }
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[2].errors.front().code == "kernel");
+  CHECK(failed.features[2].errors.front().pointer == "/features/2/inputs/plane/where/near");
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  solid(failed, 6000, 2200, {5, 10, 15}, "plate", false);
+  kernel.fail_distance = false;
+  kernel.distance_result.reset();
+  const auto retry = evaluator.evaluate(source(d)).value();
+  boss(retry);
+  CHECK(retry.kernel_calls == 7);
+  CHECK(retry.cache_hits == 4);
+}
+
+TEST_CASE("nearest queries respect rollback suppression and failed current sources",
+          "[nearest-face]") {
+  auto d = attached();
+  selector(d, R"({"faces_of":"plate","where":{"normal":"z","near":[5,10,31]}})");
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  d.history_end = "base";
+  const auto rolled = evaluator.evaluate(source(d)).value();
+  REQUIRE(rolled.ok());
+  CHECK(kernel.distances == 0);
+  d.history_end.reset();
+  d.features[1].suppressed = true;
+  const auto suppressed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(suppressed.ok());
+  CHECK(suppressed.features[2].errors.front().code == "input_suppressed");
+  CHECK(suppressed.features[2].errors.front().pointer == "/features/2/inputs/plane/faces_of");
+  CHECK(kernel.distances == 0);
+  d.features[1].suppressed = false;
+  d.features.insert(d.features.begin() + 2,
+                    feature("bad", "transform", R"({"bodies":["plate"],"rotation":{
+      "axis":{"origin":[0,0,0],"direction":[0,0,0]},"angle":20}})"));
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK(failed.features[3].errors.front().code == "input_failed");
+  CHECK(kernel.distances == 0);
 }

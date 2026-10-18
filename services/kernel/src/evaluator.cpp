@@ -3,6 +3,7 @@
 #include "evaluator.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <set>
 
 #include "geometry_cache.hpp"
@@ -42,6 +43,7 @@ const std::string& string(const Value& value) { return *value.if_string(); }
 struct PlaneFilter {
   bool planar = false;
   std::optional<math::Vec3> normal, parallel, perpendicular;
+  std::optional<math::Vec3> near;  // evaluated world point in mm; does not imply planar type
   bool matches(const kernel::FaceInfo& face) const {
     if (!planar) return true;
     if (!face.plane) return false;
@@ -55,12 +57,16 @@ struct PlaneFilter {
 };
 PlaneFilter plane_filter(const Value& where, const std::string& pointer) {
   PlaneFilter result;
-  for (const auto* key : {"near", "radius", "convex", "concave"})
+  for (const auto* key : {"radius", "convex", "concave"})
     if (where.find(key)) fail("kernel", "face filter is not implemented", pointer + "/" + key);
   if (const auto* type = where.find("type")) {
     if (string(*type) != "plane")
       fail("kernel", "only planar surface filters are implemented", pointer + "/type");
     result.planar = true;
+  }
+  if (const auto* near = where.find("near")) {
+    const auto& v = *near->if_array();
+    result.near = math::Vec3{*v[0].if_number(), *v[1].if_number(), *v[2].if_number()};
   }
   for (const auto& [key, output] : {std::pair{"normal", &result.normal},
                                     {"parallel_to", &result.parallel},
@@ -200,7 +206,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/19;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/20;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -345,6 +351,25 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               if (std::ranges::none_of(
                       *queried, [&](const auto& face) { return face.entity->same_as(*entity); }))
                 fail("kernel", "selected face is absent from its owning snapshot", pointer);
+          }
+          if (filter.near) {
+            std::vector<double> distances;
+            double minimum = std::numeric_limits<double>::infinity();
+            const auto near_pointer = pointer + "/where/near";
+            for (const auto& face : matches) {
+              ++result.kernel_calls;
+              const auto distance = state_->kernel.face_distance(face.entity, *filter.near);
+              if (!distance) fail(distance.error().code, distance.error().message, near_pointer);
+              if (!std::isfinite(*distance) || *distance < 0)
+                fail("kernel", "face distance must be finite and nonnegative", near_pointer);
+              distances.push_back(*distance);
+              minimum = std::min(minimum, *distance);
+            }
+            std::vector<kernel::FaceInfo> nearest;
+            for (std::size_t i = 0; i < matches.size(); ++i)
+              if (distances[i] - minimum <= math::Tolerance::standard().linear)
+                nearest.push_back(matches[i]);
+            matches = std::move(nearest);
           }
           if (matches.size() != 1)
             fail("selector_count",

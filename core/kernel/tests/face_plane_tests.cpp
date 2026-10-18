@@ -7,6 +7,7 @@
 #include <BRepTools.hxx>
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 #include <sstream>
 
@@ -254,5 +255,151 @@ TEST_CASE("enumerated face handles retain geometry after query and facade teardo
   auto reader = make_occt_kernel().value();
   frame(reader->face_plane(retained).value(), {0, 0, 30}, {0, 0, 1});
   CHECK(reader->faces(retained->owner())->size() == 6);
+  CHECK_THAT(retained->owner()->measures().volume, WithinAbs(6000, 1e-7));
+}
+
+TEST_CASE("face distances respect trimmed interiors edges and corners without mutating geometry",
+          "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto solid = kernel->extrude(box_profile()).value();
+  const auto top = cap(solid, "cap_end");
+  const auto saved = serialized(solid.shape);
+  struct Sample {
+    Vec3 point;
+    double distance;
+  };
+  for (const auto& sample : {Sample{{5, 10, 35}, 5},
+                             {{5, 10, 30}, 0},
+                             {{5, 10, 15}, 15},
+                             {{13, 10, 34}, 5},
+                             {{13, 24, 30}, 5},
+                             {{-3, -4, 42}, 13}}) {
+    const auto distance = kernel->face_distance(top, sample.point);
+    REQUIRE(distance);
+    CHECK_THAT(*distance, WithinAbs(sample.distance, 1e-7));
+  }
+  CHECK(serialized(solid.shape) == saved);
+}
+
+TEST_CASE("face distances include inner trimming wires of annular faces",
+          "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  auto input = box_profile();
+  const std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 4)},
+                                                    {make_circle(Vec2{}, 2)}};
+  input.regions = regions(paths, FillRule::kEvenOdd).value();
+  const auto ring = kernel->extrude(input).value();
+  const auto top = cap(ring, "cap_end");
+  const auto saved = serialized(ring.shape);
+  CHECK_THAT(kernel->face_distance(top, {0, 0, 30}).value(), WithinAbs(2, 1e-7));
+  CHECK_THAT(kernel->face_distance(top, {0, 0, 33}).value(), WithinAbs(std::sqrt(13.0), 1e-7));
+  CHECK_THAT(kernel->face_distance(top, {3, 0, 33}).value(), WithinAbs(3, 1e-7));
+  CHECK_THAT(kernel->face_distance(top, {6, 0, 33}).value(), WithinAbs(std::sqrt(13.0), 1e-7));
+  CHECK(serialized(ring.shape) == saved);
+}
+
+TEST_CASE("face distances use curved surfaces with angular and axial trimming",
+          "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  auto input = box_profile();
+  const std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 2)}};
+  input.regions = regions(paths, FillRule::kEvenOdd).value();
+  const auto cylinder = kernel->extrude(input).value();
+  const auto saved = serialized(cylinder.shape);
+  std::vector<double> radial, beyond_end;
+  for (const auto& face : cylinder.generated) {
+    if (face.role != "side") continue;
+    radial.push_back(
+        kernel->face_distance(face.entity, {5 / std::sqrt(2.0), 5 / std::sqrt(2.0), 15}).value());
+    beyond_end.push_back(
+        kernel->face_distance(face.entity, {5 / std::sqrt(2.0), 5 / std::sqrt(2.0), 33}).value());
+  }
+  REQUIRE(radial.size() == 4);
+  CHECK_THAT(*std::ranges::min_element(radial), WithinAbs(3, 1e-7));
+  CHECK_THAT(*std::ranges::max_element(radial),
+             WithinAbs(std::sqrt(29 + 10 * std::sqrt(2.0)), 1e-7));
+  CHECK_THAT(*std::ranges::min_element(beyond_end), WithinAbs(std::sqrt(18.0), 1e-7));
+  CHECK(serialized(cylinder.shape) == saved);
+}
+
+TEST_CASE("face distances honor rigid and reflected world placement", "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = kernel->extrude(box_profile()).value();
+  const auto saved = serialized(source.shape);
+  const auto moved =
+      kernel->transform(source.shape, {{7, -2, 11}, {}, {0, 1, 0}, std::numbers::pi / 2}).value();
+  const auto top = modified(moved, cap(source, "cap_end"));
+  CHECK_THAT(kernel->face_distance(top, {42, 8, 6}).value(), WithinAbs(5, 1e-7));
+  const auto mirrored = kernel->mirror(moved.shape, {{}, {0, 1, 0}, {1, 0, 0}}).value();
+  const auto mirror_top = modified(mirrored, top);
+  CHECK_THAT(kernel->face_distance(mirror_top, {-42, 8, 6}).value(), WithinAbs(5, 1e-7));
+  CHECK(serialized(source.shape) == saved);
+}
+
+TEST_CASE("face distances preserve reversed cutting face geometry", "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = kernel->extrude(box_profile()).value();
+  auto input = box_profile();
+  input.plane.origin = {2, 2, 2};
+  input.displacement = {0, 0, 3};
+  const auto tool = kernel->extrude(input).value();
+  const auto cut =
+      kernel->boolean_operation(source.shape, {tool.shape}, BooleanOp::kSubtract).value();
+  const auto bottom = modified(cut, cap(tool, "cap_end"));
+  const auto saved = serialized(cut.shape);
+  CHECK_THAT(kernel->face_distance(bottom, {5, 5, 7}).value(), WithinAbs(2, 1e-7));
+  CHECK_THAT(kernel->face_distance(bottom, {5, 5, 4}).value(), WithinAbs(1, 1e-7));
+  CHECK(serialized(cut.shape) == saved);
+}
+
+TEST_CASE("face distances reject null foreign non-face and nonmember handles",
+          "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto solid = kernel->extrude(box_profile()).value();
+  CHECK_FALSE(kernel->face_distance({}, {}));
+  struct ForeignEntity final : Entity {
+    ShapePtr owner() const noexcept override { return {}; }
+    EntityKind kind() const noexcept override { return EntityKind::kFace; }
+    bool same_as(const Entity& other) const noexcept override { return this == &other; }
+  };
+  CHECK_FALSE(kernel->face_distance(std::make_shared<ForeignEntity>(), {}));
+  const auto snapshot = std::dynamic_pointer_cast<const detail::Snapshot>(solid.shape);
+  const auto all = detail::entities(snapshot);
+  const auto edge =
+      std::ranges::find_if(all, [](const auto& e) { return e->kind() == EntityKind::kEdge; });
+  REQUIRE(edge != all.end());
+  CHECK_FALSE(kernel->face_distance(*edge, {}));
+  const auto other = kernel->extrude(box_profile()).value();
+  const auto other_face = std::dynamic_pointer_cast<const detail::Subshape>(cap(other, "cap_end"));
+  CHECK_FALSE(kernel->face_distance(detail::entity(snapshot, other_face->geometry), {}));
+}
+
+TEST_CASE("face distances reject nonfinite points and unrepresentable results",
+          "[face-distance-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto solid = kernel->extrude(box_profile()).value();
+  const auto top = cap(solid, "cap_end");
+  const auto saved = serialized(solid.shape);
+  const auto infinity = std::numeric_limits<double>::infinity();
+  const auto nan = std::numeric_limits<double>::quiet_NaN();
+  const auto maximum = std::numeric_limits<double>::max();
+  for (const auto point :
+       {Vec3{infinity, 0, 0}, {0, nan, 0}, {0, 0, -infinity}, {maximum, maximum, maximum}}) {
+    const auto distance = kernel->face_distance(top, point);
+    REQUIRE_FALSE(distance);
+    CHECK(distance.error().code == "kernel");
+  }
+  CHECK(serialized(solid.shape) == saved);
+}
+
+TEST_CASE("distance queries retain face geometry after producing facade teardown",
+          "[face-distance-kernel]") {
+  EntityPtr retained;
+  {
+    auto kernel = make_occt_kernel().value();
+    retained = cap(kernel->extrude(box_profile()).value(), "cap_end");
+  }
+  auto reader = make_occt_kernel().value();
+  CHECK_THAT(reader->face_distance(retained, {5, 10, 34}).value(), WithinAbs(4, 1e-7));
   CHECK_THAT(retained->owner()->measures().volume, WithinAbs(6000, 1e-7));
 }

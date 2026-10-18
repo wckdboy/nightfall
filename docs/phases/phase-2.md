@@ -38,6 +38,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#119](https://github.com/wckdboy/nightfall/issues/119) | Exact body mirrors with complete reflection history | kernel | Implemented with typed reflection, oriented history, immutable inputs, plane edits and atomic-publication regressions; local evidence below |
 | [#120](https://github.com/wckdboy/nightfall/issues/120) | Sketches attached to generated planar faces | kernel | Implemented with oriented face queries, current provenance, boolean transfers, exact cardinality and cache-binding regressions; local evidence below |
 | [#121](https://github.com/wckdboy/nightfall/issues/121) | Body-face selectors and planar direction filters | kernel | Implemented with immutable face enumeration, signed world directions, exact cardinality and cache/failure regressions; local evidence below |
+| [#122](https://github.com/wckdboy/nightfall/issues/122) | Nearest attachment faces by trimmed B-rep distance | kernel | Implemented with exact-geometry distance queries, global candidates, tolerance ties and cache/failure regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -601,6 +602,42 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   evaluator/cache selection passes 289/289 (100.24 s), with no diagnostics. Nightfall is
   instrumented; OCCT remains the pinned Release shared library. Public headers and README
   document supported selectors, direction semantics, limits and backend API migration.
+  Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
+
+- 2026-10-18 — #122 implements sketch-plane `where.near` under RFCs 0005/0007. The world
+  point accepts evaluated length expressions. After other supported filters, it queries
+  every remaining trimmed face, including boundaries/holes, across all current candidate
+  bodies. Faces within 1e-6 mm of the global minimum all survive; ambiguity remains
+  `selector_count`, including with `expect: any`. Near alone does not imply planar type:
+  a uniquely nearest curved face fails the sketch-plane consumer explicitly.
+  Typed `IKernel::face_distance` computes finite nonnegative point-to-face distance from
+  exact B-rep geometry. OCCT uses serial extrema with Precision::Confusion() (1e-7 mm);
+  snapshot membership checks preserve owner placement and source geometry. Invalid handles,
+  nonfinite points and unrepresentable results fail. The service rejects failed/nonfinite/
+  negative distances at `/inputs/plane/where/near` before any cached sketch/downstream reuse.
+  Enumeration and each distance execute/count before cache lookup. All candidate bodies
+  and producer features remain dependencies even when not nearest; source bindings and
+  retained-byte accounting remain conservative. Evaluator identity advances to 20, naming
+  stays 4; backend identity records trimmed-face distance. Backend implementers must add
+  `face_distance(const EntityPtr&, math::Vec3)`; commit/PR mark this source/ABI change
+  with `!`. No schema, persisted-format or dependency change.
+  Tests first: kernel tests fail compilation before the API, six of eight fail against
+  the temporary unsupported query (invalid-input cases already reject it), and all twelve
+  initial evaluator cases fail on unsupported `near`. Final targeted runs pass 19 kernel
+  cases / 234 assertions and 44 evaluator cases / 2346 assertions, seed 20261018.
+  Coverage includes interior/edge/corner/hole/curved-trim distances, source serialization
+  equality, current rigid/reflected/reversed faces, global retained-tool candidates, source/
+  point/unit edits, repeat spacing, exact/near ties, unavailable sources, query errors and
+  malformed results, cache hits/rebinding/budgets/eviction, producer-ID swaps and teardown.
+  A three-copy 10×20×30 mm array measures 18000 mm³ / 6600 mm² and selects the expected
+  separated cap. A ring with a plug measures 363π mm³ / 392π mm²: the plug cap 2 mm away
+  wins over a ring cap sqrt(5) mm away through its hole. Radius-2 mm, height-2 mm bosses
+  retain 8π mm³ / 16π mm². Volume/area and distance tolerances are 1e-7; centroid 1e-8 mm.
+  Full Release `tools/check.sh --preset occt` passes 543/543 (32.76 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan kernel/
+  evaluator/cache selection passes 309/309 (70.33 s), with no diagnostics. Nightfall is
+  instrumented; OCCT remains the pinned Release shared library. Public headers and README
+  document nearest-point semantics, tolerance ties, limits and backend API migration.
   Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
@@ -1170,3 +1207,32 @@ universal bounds or an optimization claim. Timing includes parsing, schema/param
 evaluation, current references/provenance, face enumeration/filtering, hashing, exact
 geometry, validity and naming; serialization, IPC and tessellation remain excluded.
 Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Nearest-face attachment rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has two sketches, two extrusions, a two-instance linear pattern and
+25 transforms. The support contains two separated 10×20 mm caps, spaced 20 mm along x;
+the attached sketch filters +z normals and chooses the cap nearest (25,10,D+1) mm.
+Its measured 10×20 mm plate spans z = D to 2D. Every sample checks volume `200D` mm³ /
+area `400 + 60D` mm² within 1e-5, centroid x (including translations) and z = 1.5D
+within 1e-6 mm, plus exact kernel/cache counts. D is depth in mm. Run
+`build/occt/services/kernel/nf_evaluator_bench` after builds/tests. All 30 samples of
+every mode on all twenty benchmark parts pass (2400 measured rebuilds).
+
+- Cold: median 4.882 ms / p95 4.992 / max 5.038; 32 kernel calls / 0 cache hits.
+- Host depth + attached depth edit: 5.028 / 5.164 / 5.167 ms; 32 calls / 1 hit.
+- Last transform edit: 0.677 / 0.711 / 0.721 ms; 4 calls / 29 hits.
+- Unused parameter edit: 0.652 / 0.683 / 0.696 ms; 3 calls / 30 hits.
+
+Every evaluation performs one actual enumeration and two trimmed-face distance queries,
+including complete cache hits. Cold/depth samples also perform 29 modeling calls;
+last-transform edits perform one modeling call, and unused edits none. The 96-entry/
+64 MiB budget retains 96 entries / 11,251,936 estimated bytes after depth edits, including
+source snapshots retained by attached sketches, not RSS. All catalogue parameter-edit
+samples stay below 100 ms in this local run; largest is the toroidal seal at 87.868 ms
+(median 76.356 / p95 87.277). These are observations, not universal bounds or an optimization
+claim. Timing includes parsing, schema/parameter/input evaluation, current references/
+provenance, enumeration/filtering/distance queries, hashing, exact geometry, validity and
+naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
+Phase 2 sign-off remain pending.

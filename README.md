@@ -154,10 +154,17 @@ Directions accept axes or scalar expression vectors, normalized above length 1e-
 matching uses sine tolerance 1e-9. Conditions combine; curved faces do not match planar filters.
 Body selectors read current geometry and fail for retired tools. All candidate dependencies
 remain bound, including bodies removed by filters. Face enumeration also runs on cache hits.
-Other surface types, nearest/radius/convexity filters, `from` qualifiers, selector sets and
+`where.near` accepts a world point in length units, for example
+`{"faces_of":"plate","where":{"normal":"z","near":[25,10,"depth + 1 mm"]}}`.
+After other filters, it compares distance to every remaining trimmed face, including edges
+and holes, across all candidate bodies. Every face within 1e-6 mm of the minimum survives;
+ties remain ambiguous. Distance queries also run on cache hits and count as kernel calls.
+`near` alone includes curved faces; the sketch-plane consumer still requires a planar face.
+Other surface types, radius/convexity filters, `from` qualifiers, selector sets and
 selector planes outside sketches remain unimplemented. Backend implementers must add
-`IKernel::faces`, returning all unique snapshot-owned faces and optional outward planar frames;
-this is a source/ABI change with no document migration.
+`IKernel::faces` for snapshot-owned face handles/optional outward frames, and
+`IKernel::face_distance` for finite nonnegative point-to-trimmed-face distances.
+These are source/ABI changes with no document migration.
 
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):

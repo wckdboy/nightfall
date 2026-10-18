@@ -142,6 +142,23 @@ int main() {
                       R"({"plane":{"faces_of":"support","where":{"type":"plane","normal":"z",
         "parallel_to":"x","perpendicular_to":"z"},"expect":"one"},"entities":[
         {"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]})");
+    auto nearest_part = filtered_part;
+    nearest_part.name = "nearest face";
+    auto& nearest = nearest_part.document.features;
+    nearest.insert(
+        nearest.begin() + 2,
+        test::feature("repeat", "pattern_linear",
+                      R"({"bodies":["support"],"count":2,"spacing":20,"direction":"x"})"));
+    nearest.erase(nearest.begin() + 5);  // 30 features, including 25 transforms
+    nearest[3] = test::feature(
+        "face_profile", "sketch",
+        R"({"plane":{"faces_of":"support","where":{"normal":"z","near":[25,10,"depth + 1 mm"]},
+        "expect":"one"},"entities":[{"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],
+        "constraints":[]})");
+    nearest_part.center_x = 25;
+    nearest_part.transforms = 25;
+    nearest_part.cold_calls = nearest_part.depth_calls = 29;
+    nearest_part.queries = 3;  // enumeration plus distances to both separated top caps
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -272,8 +289,14 @@ int main() {
         "Unique edits; analytic volume/centroid and execution counts checked for every sample. No "
         "IPC/tessellation.");
     for (const auto& part :
-         {Part{"plate", plate, 200, 5}, linear_part, circular_part, mirror_part, attached_part,
-          filtered_part, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
+         {Part{"plate", plate, 200, 5},
+          linear_part,
+          circular_part,
+          mirror_part,
+          attached_part,
+          filtered_part,
+          nearest_part,
+          Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"sketch axis", sketch_axis, 25 * std::numbers::pi, 5, 28, 29, 29, 0},
@@ -283,7 +306,8 @@ int main() {
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
           Part{"constrained", constrained, 200, 0, 28, 29, 29, 0, true},
           Part{"point refs", point_constrained, 200, 0, 28, 29, 29, 0, true},
-          Part{"tangent", rounded, 25 * (8 + std::numbers::pi), 0, 28, 29, 29, 0, true}, angle_part,
+          Part{"tangent", rounded, 25 * (8 + std::numbers::pi), 0, 28, 29, 29, 0, true},
+          angle_part,
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

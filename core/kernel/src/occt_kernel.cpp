@@ -6,8 +6,10 @@
 #include <BRepAlgoAPI_BooleanOperation.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
@@ -51,6 +53,17 @@ detail::SnapshotPtr checked(TopoDS_Shape shape) {
   auto result = detail::snapshot(std::move(shape));
   if (!result) throw result.error();
   return *result;
+}
+TopoDS_Face checked_face(const EntityPtr& input) {
+  const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(input);
+  if (!entity || !entity->snapshot || entity->snapshot->geometry.IsNull() ||
+      entity->geometry.IsNull() || entity->geometry.ShapeType() != TopAbs_FACE)
+    fail("face query requires a face from this backend");
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(entity->snapshot->geometry, TopAbs_FACE, faces);
+  const auto index = faces.FindIndex(entity->geometry);
+  if (!index) fail("face is absent from its owning snapshot");
+  return TopoDS::Face(faces(index));
 }
 struct EdgeSource {
   TopoDS_Edge edge;
@@ -138,6 +151,7 @@ class OcctKernel final : public IKernel {
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=planar-v1;"
+                "face-distance=trimmed-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
              << detail::kMassRelativeAccuracy
@@ -164,20 +178,25 @@ class OcctKernel final : public IKernel {
   }
   std::expected<Plane, KernelError> face_plane(const EntityPtr& input) override {
     return guarded([&] {
-      const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(input);
-      if (!entity || !entity->snapshot || entity->geometry.IsNull() ||
-          entity->geometry.ShapeType() != TopAbs_FACE)
-        fail("plane query requires a face from this backend");
-      TopTools_IndexedMapOfShape faces;
-      TopExp::MapShapes(entity->snapshot->geometry, TopAbs_FACE, faces);
-      const auto index = faces.FindIndex(entity->geometry);
-      if (!index) fail("face is absent from its owning snapshot");
-      const auto plane = planar_frame(TopoDS::Face(faces(index)));
+      const auto plane = planar_frame(checked_face(input));
       if (!plane) fail("selected face is not planar");
       return *plane;
     });
   }
 
+  std::expected<double, KernelError> face_distance(const EntityPtr& input,
+                                                   math::Vec3 position) override {
+    return guarded([&] {
+      if (!finite(position)) fail("distance query requires a finite world point");
+      const auto face = checked_face(input);
+      BRepBuilderAPI_MakeVertex vertex(point(position));
+      const BRepExtrema_DistShapeShape distance(vertex.Shape(), face, Precision::Confusion());
+      if (!distance.IsDone() || distance.NbSolution() == 0) fail("face distance query failed");
+      const auto value = distance.Value();
+      if (!std::isfinite(value) || value < 0) fail("face distance is not finite and nonnegative");
+      return value;
+    });
+  }
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
     return guarded([&] {
       const auto& p = input.plane;

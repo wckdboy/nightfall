@@ -117,6 +117,12 @@ class IKernel {
   /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
   /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.
   [[nodiscard]] virtual std::expected<Plane, KernelError> face_plane(const EntityPtr&) = 0;
+  /// Minimum Euclidean distance in mm from a finite world point to the trimmed face, including
+  /// boundaries and holes. Accept curved faces; honor the owning snapshot's current placement.
+  /// Return a finite nonnegative value or an error; reject foreign/invalid/non-face handles.
+  /// Preserve all inputs; handles remain usable after their producing facade ends.
+  [[nodiscard]] virtual std::expected<double, KernelError> face_distance(const EntityPtr&,
+                                                                         math::Vec3) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
