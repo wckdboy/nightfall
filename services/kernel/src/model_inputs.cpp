@@ -87,7 +87,9 @@ kernel::Plane prepare_plane(const Value& plane) {
   return result;
 }
 std::pair<Vec3, Vec3> prepare_axis(const Value& axis, const Sketch* sketch,
-                                   const std::string& pointer) {
+                                   const std::string& pointer,
+                                   const kernel::Axis* selected = nullptr) {
+  if (selected) return {selected->origin, selected->direction};
   if (axis.find("origin"))
     return {vector3(field(axis, "origin")), unit(field(axis, "direction"), pointer + "/direction")};
   if (!axis.find("sketch")) fail(pointer, "selector axes are not implemented");
@@ -621,18 +623,20 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inputs,
                                                                 const Sketch& sketch,
                                                                 const Sketch* axis_sketch,
-                                                                ProfileSources* sources) {
+                                                                ProfileSources* sources,
+                                                                const kernel::Axis* selected_axis) {
   auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
-    const auto [origin, direction] = prepare_axis(field(inputs, "axis"), axis_sketch, "/axis");
+    const auto [origin, direction] =
+        prepare_axis(field(inputs, "axis"), axis_sketch, "/axis", selected_axis);
     return kernel::Revolution{sketch.plane, std::move(*regions), origin, direction,
                               number(field(inputs, "angle"))};
   });
 }
 
-std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& inputs,
-                                                                   const Sketch* axis_sketch) {
+std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
+    const Value& inputs, const Sketch* axis_sketch, const kernel::Axis* selected_axis) {
   return guarded([&] {
     std::set<std::string> bodies;
     for (const auto& body : *field(inputs, "bodies").if_array())
@@ -642,7 +646,7 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& 
       result.translation = vector3(*translation);
     if (const auto* rotation = inputs.find("rotation")) {
       const auto [origin, direction] =
-          prepare_axis(field(*rotation, "axis"), axis_sketch, "/rotation/axis");
+          prepare_axis(field(*rotation, "axis"), axis_sketch, "/rotation/axis", selected_axis);
       result.axis_origin = origin;
       result.axis_direction = direction;
       result.angle = number(field(*rotation, "angle"));
@@ -668,7 +672,8 @@ std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const Value& inputs
 }
 
 std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inputs,
-                                                               const Sketch* axis_sketch) {
+                                                               const Sketch* axis_sketch,
+                                                               const kernel::Axis* selected_axis) {
   return guarded([&] {
     const auto count = pattern_count(inputs);
     const double sweep = number(field(inputs, "angle")), turn = 2 * std::numbers::pi;
@@ -679,7 +684,8 @@ std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inpu
                              : sweep / static_cast<double>(std::max(std::size_t{1}, count - 1));
     if (count > 1 && !(std::abs(step) > kTolerance.angular))
       fail("/angle", "pattern angular step must exceed the angular tolerance in magnitude");
-    const auto [origin, direction] = prepare_axis(field(inputs, "axis"), axis_sketch, "/axis");
+    const auto [origin, direction] =
+        prepare_axis(field(inputs, "axis"), axis_sketch, "/axis", selected_axis);
     kernel::RigidTransform placement;
     placement.axis_origin = origin;
     placement.axis_direction = direction;

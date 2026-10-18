@@ -27,6 +27,7 @@
 #include <TopoDS_Compound.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Cylinder.hxx>
 #include <gp_Pln.hxx>
 
 #include <algorithm>
@@ -156,7 +157,8 @@ class OcctKernel final : public IKernel {
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
-                "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=planar-v1;"
+                "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
+                "cylinder-axis=parameter-z-v1;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
@@ -214,7 +216,8 @@ class OcctKernel final : public IKernel {
       std::vector<FaceInfo> result;
       result.reserve(static_cast<std::size_t>(all.Extent()));
       for (int i = 1; i <= all.Extent(); ++i)
-        result.push_back({detail::entity(source, all(i)), planar_frame(TopoDS::Face(all(i)))});
+        result.push_back({detail::entity(source, all(i)), planar_frame(TopoDS::Face(all(i))),
+                          cylinder_frame(TopoDS::Face(all(i)))});
       return result;
     });
   }
@@ -469,6 +472,20 @@ class OcctKernel final : public IKernel {
   }
 
  private:
+  std::optional<Cylinder> cylinder_frame(const TopoDS_Face& face) const {
+    const BRepAdaptor_Surface surface(face);
+    if (surface.GetType() != GeomAbs_Cylinder) return {};
+    const auto cylinder = surface.Cylinder();
+    const auto origin = cylinder.Axis().Location();
+    const auto z = cylinder.Axis().Direction();
+    Cylinder result{{{origin.X(), origin.Y(), origin.Z()}, {z.X(), z.Y(), z.Z()}},
+                    cylinder.Radius()};
+    if (!finite(result.axis.origin) || !finite(result.axis.direction) ||
+        !std::isfinite(result.radius) || !(result.radius > 0) ||
+        !math::near(math::length(result.axis.direction), 1, tolerance_.angular))
+      fail("cylinder description must have a finite unit axis and positive radius");
+    return result;
+  }
   std::optional<Plane> planar_frame(const TopoDS_Face& face) const {
     const BRepAdaptor_Surface surface(face);
     if (surface.GetType() != GeomAbs_Plane) return {};

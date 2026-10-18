@@ -653,7 +653,7 @@ TEST_CASE("mirror selectors reject empty ambiguous tied and nested unsupported p
         Invalid{R"({"faces_of":"reference","where":{"perpendicular_to":"z","near":[10,0,20]},
                     "expect":"any"})",
                 "", "selector_count"},
-        Invalid{R"({"any":[{"faces_of":"reference","where":{"radius":1}}]})", "/any/0/where/radius",
+        Invalid{R"({"any":[{"faces_of":"reference","where":{"radius":0}}]})", "/any/0/where/radius",
                 "kernel"},
         Invalid{R"({"any":[{"created_by":"plane_base","role":"missing","expect":"one"}]})",
                 "/any/0", "selector_count"}}) {

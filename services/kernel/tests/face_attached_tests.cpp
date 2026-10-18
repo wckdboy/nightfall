@@ -1101,7 +1101,7 @@ TEST_CASE("unsupported face filters and invalid directions identify their exact 
   };
   auto kernel = kernel::make_occt_kernel().value();
   for (const auto& [where, field] :
-       {Invalid{R"({"type":"cylinder"})", "type"}, Invalid{R"({"radius":2})", "radius"},
+       {Invalid{R"({"type":"cone"})", "type"}, Invalid{R"({"radius":0})", "radius"},
         Invalid{R"({"convex":true})", "convex"}, Invalid{R"({"concave":false})", "concave"},
         Invalid{R"({"normal":[0,0,0]})", "normal"},
         Invalid{R"({"parallel_to":[0,0,0]})", "parallel_to"},
@@ -1741,7 +1741,7 @@ TEST_CASE("unsupported fields and directions retain full selector tree pointers"
   for (const auto& [text, pointer] :
        {Invalid{R"({"faces_of":"plate","except":{"edges_of":{"created_by":"base"}}})",
                 "/except/edges_of"},
-        Invalid{R"({"any":[{"any":[{"faces_of":"plate","where":{"type":"cylinder"}}]}]})",
+        Invalid{R"({"any":[{"any":[{"faces_of":"plate","where":{"type":"cone"}}]}]})",
                 "/any/0/any/0/where/type"},
         Invalid{R"({"any":[{"faces_of":"plate","where":{"normal":[0,0,0]}}]})",
                 "/any/0/where/normal"}}) {

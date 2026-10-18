@@ -18,10 +18,10 @@ struct FeatureState {
 };
 /// Operation-local roles rebound to this evaluation's IDs and current immutable snapshot.
 /// Sketch planes select generated faces by producer/role or all current faces via faces_of.
-/// Both accept planar type, normal/parallel_to/perpendicular_to and nearest-point filters.
-/// Face sets compose with recursive any/except; every node enforces its own expect.
-/// from qualifies generated sides by the exact authored sketch/entity; caps have no source.
-/// Qualifiers survive splitting/merging, transforms, booleans and pattern history.
+/// Face selectors accept plane/cylinder type, cylinder radius, planar directions and nearest
+/// points. Face sets compose with recursive any/except; every node enforces its own expect. from
+/// qualifies generated sides by the exact authored sketch/entity; caps have no source. Qualifiers
+/// survive splitting/merging, transforms, booleans and pattern history.
 struct NamedEntity {
   std::string feature, role;
   kernel::EntityPtr entity;
@@ -59,7 +59,11 @@ struct Evaluation {
 /// any unions by snapshot/entity identity; except subtracts before this node's filters.
 /// Every branch binds dependencies, including excluded/empty branches. Each node checks
 /// one/some(default)/any after filtering; face descriptions are shared within a feature only.
-/// Mirrors modify only authored body targets; selector-only source snapshots are retained
+/// Transform/circular-pattern/revolution axes require one analytic cylindrical face. Its located
+/// parameter Z supplies the unit direction, independent of face orientation; coaxial patches
+/// remain distinct matches. Positive finite radius filters match within 1e-6 mm and imply a
+/// cylinder; directions still imply a plane. Metadata is validated/queried on cache hits too.
+/// Operations modify only authored targets; selector-only source snapshots are retained
 /// and conservatively charged separately from operation inputs/history.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius

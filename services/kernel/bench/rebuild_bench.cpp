@@ -114,6 +114,23 @@ int main() {
       "count":4,"angle":360,"axis":{"origin":[0,0,0],"direction":"z"}})");
     Part circular_part{"circular pattern", circular, 16, 0, 27, 32, 32, 1};
     circular_part.surface_area = [](double depth) { return 32 + 32 * depth; };
+    auto cylinder_part = circular_part;
+    cylinder_part.name = "cylinder axis";
+    cylinder_part.transforms = 25;
+    cylinder_part.cold_calls = 31;
+    cylinder_part.depth_calls = 30;
+    cylinder_part.depth_hits = 3;
+    cylinder_part.queries = 5;  // one enumeration plus four patch distances, even on cache hits
+    auto& cylinder = cylinder_part.document.features;
+    cylinder.insert(cylinder.begin(),
+                    {test::feature("axis_profile", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+        {"id":"c","type":"circle","center":[0,0],"radius":2}],"constraints":[]})"),
+                     test::feature("axis_base", "extrude", R"({"profile":{"sketch":"axis_profile"},
+        "distance":40,"result":{"new":"axis_body","body_type":"brep"}})")});
+    cylinder.erase(cylinder.begin() + 5, cylinder.begin() + 7);  // 30 features total
+    cylinder[4] = test::feature("repeat", "pattern_circular", R"({"bodies":["plate"],
+      "count":4,"angle":360,"axis":{"created_by":"axis_base","from":"axis_profile/c",
+        "where":{"type":"cylinder","radius":2,"near":[1.5,1.5,20]},"expect":"one"}})");
     auto mirrored = circular;
     mirrored.features[2] =
         test::feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{"datum":"yz"}})");
@@ -333,6 +350,7 @@ int main() {
          {Part{"plate", plate, 200, 5},
           linear_part,
           circular_part,
+          cylinder_part,
           mirror_part,
           face_mirror_part,
           attached_part,

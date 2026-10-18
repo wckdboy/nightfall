@@ -43,6 +43,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#124](https://github.com/wckdboy/nightfall/issues/124) | Mirror bodies across selected current planar faces | kernel | Implemented with shared face resolution, separate source/target bindings, current dependencies and cache ownership regressions; local evidence below |
 | [#125](https://github.com/wckdboy/nightfall/issues/125) | CLI parameter-expression overrides for variant exports | cli | Implemented with batch validation, exact STEP variants and immutable source files; local evidence below |
 | [#126](https://github.com/wckdboy/nightfall/issues/126) | Generated side-face selectors qualified by sketch entity | kernel | Implemented with exact curve ancestry, current naming, cache and atomic-failure regressions; local evidence below |
+| [#127](https://github.com/wckdboy/nightfall/issues/127) | Cylindrical face selectors as modeling axes | kernel | Implemented with exact cylinder descriptions, radius filters, three axis consumers and cache/failure regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -809,6 +810,34 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   advances to `evaluator/23;roles/5`. Local verification and timings follow; remote CI,
   maintainer review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #127 resolves existing selector axes from one current analytic cylindrical
+  face for rigid transforms, circular patterns and revolutions (RFCs 0005/0007). Immutable
+  face descriptions gain exact radius and a located, directed parameter-Z axis; planar
+  descriptions retain their outward-frame convention. Face orientation reversals for bores
+  do not reverse parameter axes. Fixtures explicitly cover stored -Z prism axes, rigidly
+  placed/reflected axes, reversed bore orientation, unchanged source B-reps and handle life.
+  Cylindrical `type` and positive `radius` filters compose with provenance, recursive
+  unions/exclusions and trimmed nearest distances; radius matches within 1e-6 mm and alone
+  implies a cylinder. Direction filters still imply a plane; contradictory filters match
+  nothing. Coaxial patches remain distinct faces and cannot bypass exact cardinality.
+  The existing resolver binds every source dependency and validates cylinder metadata before
+  cache reuse. Selector-only snapshots are retained/charged separately; transforms iterate
+  only authored targets, and new revolutions publish their new body without treating a source
+  binding as an operation target. All bodies still publish atomically. Consumed tools follow
+  current survivor history; source-only edits and producer-ID rebinding invalidate/rebind
+  correctly. Invalid/missing metadata, unavailable producers and query failures prevent reuse.
+  Tests first: all seven initial evaluator cases fail on unsupported selector axes; three
+  kernel cases initially cannot compile without cylinder metadata. Final focused runs pass
+  18 evaluator cases / 898 assertions and 3 kernel cases / 112 assertions, seed 20261018.
+  Coverage includes signed/partial sweeps, result joins with a shared axis source/target,
+  single-instance validation, coplanarity, multiple-target failure/retry, units/tolerances,
+  malformed metadata on cache hits, suppression, independent branches and cache budgets.
+  C++ clients rebuild for the `FaceInfo` layout extension; backends populate exact analytic
+  cylinder descriptions. No virtual operation, persisted schema or dependency changes.
+  Backend identity becomes `faces=analytic-v2;cylinder-axis=parameter-z-v1`; evaluator
+  identity advances to `evaluator/24;roles/5`. Verification and timing evidence follows;
+  remote CI/review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1566,3 +1595,50 @@ These are local observations, not latency guarantees. The earlier loaded-run mis
 follow-up remain recorded. Logs: `/tmp/nightfall-126-check.log`,
 `/tmp/nightfall-126-asan.log`, `/tmp/nightfall-126-bench.log`; per-mode numbers are in
 `/tmp/nightfall-126-bench.json`. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Selected cylindrical-axis rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release, dynamically linked OCCT 7.9.3.
+Focused runs pass 18 evaluator cases / 898 assertions and 3 kernel cases / 112 assertions
+(seed 20261018). A 2×2×30 mm seed rotates about the selected fixture's stored -Z axis to
+centroid (3,-10,15) mm, preserving volume 120 mm³ / area 248 mm². The reference remains
+volume 160π mm³ / area 168π mm² with centroid (0,0,20). Four circular copies yield four
+solids, volume 480 mm³ / area 992 mm², centroid (0,0,15). A full annular revolution has
+volume 2250π mm³ / area 1050π mm². Signed quarter sweeps have volume 562.5π mm³ /
+area 300+262.5π mm² and centroid (140/(9π), ±140/(9π),15) mm. Volume/area tolerance is
+1e-6, centroid components 1e-8 mm. Kernel cylinder radius/direction use 1e-10, axis-line
+distance 1e-8 mm; source B-reps are byte-identical after queries/placements. Bore-face
+orientation reverses relative to the cutting tool while the parameter axis stays -Z.
+
+`tools/check.sh --preset occt` passes 642/642 (56.32 s), all hygiene/format checks,
+202 schema cases and 20 reference documents, without warnings. The ASan/UBSan
+kernel/cache/evaluator/CLI selection passes 404/404 (106.13 s), without diagnostics.
+Nightfall is instrumented; the pinned OCCT shared library remains Release. The actual CLI
+exports `/tmp/nightfall-127-cylinder-pattern.nightfall` with `--set 'depth=45 mm'` into
+`/tmp/nightfall-127-cylinder-pattern.step`: 75,042 bytes, five exact AP242 manifold solids
+(four patterned blocks and the reference), no tessellation. Source depth remains 30 mm.
+This example checks export/format; existing CLI tests independently verify reloaded geometry.
+
+After builds/tests, the benchmark covers 24 parts × 4 modes × 30 samples: 2880 measured
+rebuilds, all analytic geometry and execution-count checks passing. The new cylindrical-axis
+part has two sketches, two extrusions, one four-copy pattern and 25 transforms. Its target
+has volume 16D mm³ / area 32+32D mm² and centroid z = D/2, with the expected translated x
+(D is depth in mm). Volume/area tolerance is 1e-5, centroid components 1e-6 mm. One face
+enumeration and four trimmed patch-distance queries execute every evaluation, including hits.
+
+- Cold: median 20.069 ms / p95 28.219 / max 54.035; 36 kernel calls / 0 cache hits.
+- Depth edit: 13.632 / 20.336 / 21.110 ms; 35 calls / 3 hits.
+- Last transform edit: 1.592 / 4.666 / 6.943 ms; 6 calls / 29 hits.
+- Unused parameter edit: 1.096 / 1.179 / 1.271 ms; 5 calls / 30 hits.
+
+The 96-entry/64 MiB estimated cache budget retains 96 entries / 40,632,645 bytes after
+cylindrical-axis depth edits, including separately charged selector-source snapshots (not RSS).
+Every catalogue parameter-edit sample stays below 100 ms in this run; largest is toroidal
+depth editing at median 79.770 / p95 82.928 / max 83.113 ms. Timing includes IR parsing,
+schema/parameter/input evaluation, current references, recursive selectors, face queries,
+hashing, exact modeling, validation and naming. It excludes authoring serialization, CLI
+startup, file I/O, STEP encoding, IPC and tessellation. These are local observations, not
+latency guarantees; the prior loaded-run miss and #95 follow-up remain recorded.
+Logs: `/tmp/nightfall-127-check.log`, `/tmp/nightfall-127-asan.log`,
+`/tmp/nightfall-127-bench.log`; per-mode data: `/tmp/nightfall-127-bench.json`.
+Remote CI/review and full Phase 2 sign-off remain pending.

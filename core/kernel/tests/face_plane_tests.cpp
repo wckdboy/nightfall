@@ -67,6 +67,82 @@ TEST_CASE("planar face queries return outward cap frames without changing snapsh
   }
 }
 
+namespace {
+Extrusion cylinder_profile() {
+  const std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 2)}};
+  return {{}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 30}};
+}
+void cylinder_axis(const FaceInfo& face, const ShapePtr& owner, Vec3 origin, Vec3 direction) {
+  REQUIRE(face.cylinder);
+  CHECK_FALSE(face.plane);
+  CHECK(face.entity->owner() == owner);
+  CHECK_THAT(face.cylinder->radius, WithinAbs(2, 1e-10));
+  CHECK_THAT(length(face.cylinder->axis.direction - direction), WithinAbs(0, 1e-10));
+  CHECK_THAT(length(cross(face.cylinder->axis.origin - origin, direction)), WithinAbs(0, 1e-8));
+}
+}  // namespace
+
+TEST_CASE("face descriptions expose exact cylinder radii and directed parameter axes",
+          "[cylinder-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto solid = kernel->extrude(cylinder_profile()).value();
+  const auto saved = serialized(solid.shape);
+  const auto faces = kernel->faces(solid.shape).value();
+  std::size_t cylinders = 0;
+  for (const auto& face : faces)
+    if (face.cylinder) {
+      ++cylinders;
+      cylinder_axis(face, solid.shape, {}, {0, 0, -1});
+    } else
+      REQUIRE(face.plane);
+  CHECK(cylinders == 4);
+  CHECK(serialized(solid.shape) == saved);
+}
+
+TEST_CASE("cylinder axes follow rigid placements reflections and retained snapshot lifetimes",
+          "[cylinder-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto solid = kernel->extrude(cylinder_profile()).value();
+  const auto saved = serialized(solid.shape);
+  const auto moved =
+      kernel->transform(solid.shape, {{7, -2, 11}, {}, {0, 1, 0}, std::numbers::pi / 2}).value();
+  for (const auto& face : kernel->faces(moved.shape).value())
+    if (face.cylinder) cylinder_axis(face, moved.shape, {7, -2, 11}, {-1, 0, 0});
+  const auto reflected = kernel->mirror(moved.shape, {{}, {0, 1, 0}, {1, 0, 0}}).value();
+  for (const auto& face : kernel->faces(reflected.shape).value())
+    if (face.cylinder) cylinder_axis(face, reflected.shape, {-7, -2, 11}, {1, 0, 0});
+  CHECK(serialized(solid.shape) == saved);
+  const auto retained = reflected.shape;
+  kernel.reset();
+  const auto reader = make_occt_kernel().value();
+  const auto faces = reader->faces(retained).value();
+  REQUIRE(std::ranges::count_if(faces, [](const auto& f) { return f.cylinder.has_value(); }) == 4);
+  for (const auto& face : faces)
+    if (face.cylinder) cylinder_axis(face, retained, {-7, -2, 11}, {1, 0, 0});
+}
+
+TEST_CASE("cylindrical bore orientation does not reverse the parameter axis", "[cylinder-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto box = kernel->extrude(box_profile()).value();
+  auto input = cylinder_profile();
+  input.plane.origin = {5, 10, 0};
+  const auto tool = kernel->extrude(input).value();
+  const auto saved = serialized(tool.shape);
+  CHECK(std::dynamic_pointer_cast<const detail::Subshape>(cap(tool, "side"))
+            ->geometry.Orientation() == TopAbs_REVERSED);
+  const auto cut = kernel->boolean_operation(box.shape, {tool.shape}, BooleanOp::kSubtract).value();
+  const auto faces = kernel->faces(cut.shape).value();
+  REQUIRE(std::ranges::count_if(faces, [](const auto& f) { return f.cylinder.has_value(); }) > 0);
+  for (const auto& face : faces)
+    if (face.cylinder) {
+      cylinder_axis(face, cut.shape, {5, 10, 0}, {0, 0, -1});
+      CHECK(
+          std::dynamic_pointer_cast<const detail::Subshape>(face.entity)->geometry.Orientation() ==
+          TopAbs_FORWARD);
+    }
+  CHECK(serialized(tool.shape) == saved);
+}
+
 TEST_CASE("face plane queries honor rigid locations and reflected handedness",
           "[face-plane-kernel]") {
   auto kernel = make_occt_kernel().value();

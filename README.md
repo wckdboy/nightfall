@@ -152,15 +152,14 @@ publish together after geometry and naming succeed. The initial work limit is 64
 instances across all targets, including seeds; count 1 preserves seed geometry. Larger counts
 require spacing magnitude above 1e-6 mm and finite offsets.
 
-Circular body patterns use `bodies`, `count`, signed `angle` and an explicit or sketch-line
+Circular body patterns use `bodies`, `count`, signed `angle` and an explicit, sketch-line or selected
 `axis`. Partial sweeps include the seed at zero and the last copy at the specified angle;
 full turns distribute unique instances without repeating the seed endpoint. Angles within
 1e-9 rad of a full turn use that full-turn placement. Sweeps are limited to one turn (plus
 that tolerance), and count >1 requires an angular step above 1e-9 rad in magnitude. Count 1
 allows zero sweep. Circular patterns share linear patterns' union, naming, atomic publication
 and 64-total-instance behavior. Each rotation starts from the original current seed, and
-axis-sketch edits rebuild dependent arrays. Feature-target patterns and selector axes remain
-unimplemented.
+axis-source edits rebuild dependent arrays. Feature-target patterns remain unimplemented.
 
 Body mirrors accept a datum, explicit frame or face selector as `plane`. Each body in
 `bodies` unions its seed with one exact reflection, fusing material or retaining separate solid
@@ -220,7 +219,23 @@ Local cached sources bind to the current producer/sketch IDs when names are publ
 Rebuild all C++ clients: `math::Arrangement::HalfEdge` and `math::Loop` gained transient
 source metadata, also changing the layout of region values passed to `IKernel`.
 Directly constructed loops may leave sources empty; no document migration is needed.
-Other surface types, radius/convexity filters and edge selectors remain
+Transforms, circular patterns and revolutions also accept a cylindrical face selector as
+their `axis`, for example `{"created_by":"bore","role":"side","where":{"type":"cylinder",
+"radius":"2 mm","near":[1.5,1.5,10]},"expect":"one"}`. Radius must be positive and matches
+within 1e-6 mm; radius alone implies a cylinder filter. Conditions combine with existing
+provenance, unions, exclusions and nearest-face rules. Directions retain their planar
+semantics, so combining a normal filter with a cylinder filter matches nothing. Select one
+face: several coaxial patches remain ambiguous. Sketch/mirror planes still require a plane.
+The located cylinder's stored parameter Z supplies the directed axis. It can point opposite
+the extrusion direction; positive angles follow that stored direction, and negative angles
+reverse rotation. Reversing a face for a bore does not reverse its parameter axis. Source
+placements and boolean history are followed, and metadata/distance queries refresh on cache
+hits. Reference bodies stay unchanged unless authored targets; retained sources are charged
+to cache estimates. Revolution axes must still lie in the profile plane.
+Rebuild C++ clients of `kernel::FaceInfo`, which gains optional typed cylinder metadata.
+Backends populate finite unit axes and positive exact radii for analytic cylinders; other
+curved types have neither a plane nor a cylinder description. No document migration is needed.
+Other surface types, convexity filters and edge selectors remain
 unimplemented. Backend implementers must add
 `IKernel::faces` for snapshot-owned face handles/optional outward frames, and
 `IKernel::face_distance` for finite nonnegative point-to-trimmed-face distances.

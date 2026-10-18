@@ -51,7 +51,8 @@ struct BodyPattern {
 /// Coordinates are checked, never solved or moved. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
 /// Revolve/rotation/pattern axes resolve named lines from the supplied evaluated axis sketch; map
-/// start and start-to-end direction through its plane. Selector axes remain unsupported.
+/// start and start-to-end direction through its plane. The evaluator may supply an already
+/// resolved, directed cylinder axis for selector forms; no geometry queries occur here.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
 /// The evaluator may supply an already resolved, oriented face plane for a selector sketch.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs,
@@ -59,12 +60,12 @@ std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs,
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
                                                               const Sketch& sketch,
                                                               ProfileSources* sources = nullptr);
-std::expected<kernel::Revolution, ir::Error> prepare_revolution(const ir::json::Value& inputs,
-                                                                const Sketch& sketch,
-                                                                const Sketch* axis_sketch = nullptr,
-                                                                ProfileSources* sources = nullptr);
+std::expected<kernel::Revolution, ir::Error> prepare_revolution(
+    const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr,
+    ProfileSources* sources = nullptr, const kernel::Axis* selected_axis = nullptr);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
-    const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr);
+    const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr,
+    const kernel::Axis* selected_axis = nullptr);
 /// Unique body targets only; at most 64 total instances, including all seeds. Count 1
 /// preserves the seed; larger counts require |spacing| > 1e-6 mm and finite offsets.
 std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const ir::json::Value& inputs);
@@ -72,8 +73,9 @@ std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const ir::json::Val
 /// sweeps within 1e-9 rad of a full turn distribute unique instances (no duplicate endpoint).
 /// |angle| <= 2*pi + 1e-9 rad; count > 1 requires an angular step above 1e-9 rad.
 /// Count 1 permits zero sweep but still validates the axis and angle range.
-std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const ir::json::Value& inputs,
-                                                               const Sketch* axis_sketch = nullptr);
+std::expected<BodyPattern, ir::Error> prepare_circular_pattern(
+    const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr,
+    const kernel::Axis* selected_axis = nullptr);
 /// Body mirrors union each current seed with one exact reflection. Datum/explicit planes
 /// share sketch frame validation. Unique targets; at most 32 bodies (64 total instances).
 /// The evaluator may supply the current oriented plane resolved from a face selector.

@@ -42,11 +42,15 @@ T take(std::expected<T, E> value) {
   return std::move(*value);
 }
 const std::string& string(const Value& value) { return *value.if_string(); }
-struct PlaneFilter {
-  bool planar = false;
+struct FaceFilter {
+  bool planar = false, cylindrical = false;
+  std::optional<double> radius;
   std::optional<math::Vec3> normal, parallel, perpendicular;
   std::optional<math::Vec3> near;  // evaluated world point in mm; does not imply planar type
   bool matches(const kernel::FaceInfo& face) const {
+    if ((cylindrical || radius) && !face.cylinder) return false;
+    if (radius && std::abs(face.cylinder->radius - *radius) > math::Tolerance::standard().linear)
+      return false;
     if (!planar) return true;
     if (!face.plane) return false;
     const auto n = face.plane->normal;
@@ -57,14 +61,22 @@ struct PlaneFilter {
            (!perpendicular || aligned(*perpendicular));
   }
 };
-PlaneFilter plane_filter(const Value& where, const std::string& pointer) {
-  PlaneFilter result;
-  for (const auto* key : {"radius", "convex", "concave"})
+FaceFilter face_filter(const Value& where, const std::string& pointer) {
+  FaceFilter result;
+  for (const auto* key : {"convex", "concave"})
     if (where.find(key)) fail("kernel", "face filter is not implemented", pointer + "/" + key);
   if (const auto* type = where.find("type")) {
-    if (string(*type) != "plane")
-      fail("kernel", "only planar surface filters are implemented", pointer + "/type");
-    result.planar = true;
+    if (string(*type) == "plane")
+      result.planar = true;
+    else if (string(*type) == "cylinder")
+      result.cylindrical = true;
+    else
+      fail("kernel", "surface filter is not implemented", pointer + "/type");
+  }
+  if (const auto* radius = where.find("radius")) {
+    result.radius = *radius->if_number();
+    if (!(*result.radius > 0))
+      fail("kernel", "radius filter must be positive", pointer + "/radius");
   }
   if (const auto* near = where.find("near")) {
     const auto& v = *near->if_array();
@@ -227,7 +239,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/23;roles/5;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/24;roles/5;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -282,6 +294,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       std::optional<BodyPattern> pattern;
       std::optional<kernel::Plane> mirror;
       std::optional<kernel::Plane> selected_plane;
+      std::optional<kernel::Axis> selected_axis;
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -309,9 +322,16 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       }
       // Operation targets precede selector-only bindings retained for cache compatibility.
       const auto target_count = bindings.size();
-      if (feature.type == "sketch" || feature.type == "mirror") {
-        const auto& plane = *inputs.find("plane");
-        if (!plane.find("datum") && !plane.find("origin")) {
+      const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
+                              ? inputs.find("axis")
+                              : nullptr;
+      if (feature.type == "transform")
+        if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
+      const auto* selection = axis;
+      if (feature.type == "sketch" || feature.type == "mirror") selection = inputs.find("plane");
+      if (selection) {
+        const auto& plane = *selection;
+        if (!plane.find("datum") && !plane.find("origin") && !plane.find("sketch")) {
           std::map<kernel::ShapePtr, std::vector<kernel::FaceInfo>> face_queries;
           auto describe = [&](const kernel::ShapePtr& shape,
                               const std::string& pointer) -> const std::vector<kernel::FaceInfo>& {
@@ -320,10 +340,22 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             ++result.kernel_calls;
             auto queried = state_->kernel.faces(shape);
             if (!queried) fail(queried.error().code, queried.error().message, pointer);
-            for (const auto& face : *queried)
+            for (const auto& face : *queried) {
               if (!face.entity || face.entity->owner() != shape ||
                   face.entity->kind() != kernel::EntityKind::kFace)
                 fail("kernel", "face query returned an invalid snapshot handle", pointer);
+              if (face.cylinder) {
+                const auto& c = *face.cylinder;
+                for (const double v :
+                     {c.axis.origin.x, c.axis.origin.y, c.axis.origin.z, c.axis.direction.x,
+                      c.axis.direction.y, c.axis.direction.z, c.radius})
+                  if (!std::isfinite(v)) fail("kernel", "non-finite cylinder description", pointer);
+                if (face.plane || !(c.radius > 0) ||
+                    !math::near(math::length(c.axis.direction), 1,
+                                math::Tolerance::standard().angular))
+                  fail("kernel", "invalid cylinder description", pointer);
+              }
+            }
             return face_queries.emplace(shape, std::move(*queried)).first->second;
           };
           auto inspect = [&](const kernel::EntityPtr& entity,
@@ -344,7 +376,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               (void)bind_sketch(id.substr(0, id.find('/')), pointer + "/from");
             }
             const auto* where = node.find("where");
-            const auto filter = where ? plane_filter(*where, pointer + "/where") : PlaneFilter{};
+            const auto filter = where ? face_filter(*where, pointer + "/where") : FaceFilter{};
             std::vector<kernel::EntityPtr> matches;
             auto append = [&](const kernel::EntityPtr& entity) {
               if (std::ranges::none_of(matches, [&](const auto& m) { return m->same_as(*entity); }))
@@ -428,13 +460,20 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                    pointer);
             return matches;
           };
-          const std::string pointer = "/inputs/plane";
+          const std::string pointer = !axis                         ? "/inputs/plane"
+                                      : feature.type == "transform" ? "/inputs/rotation/axis"
+                                                                    : "/inputs/axis";
           const auto matches = select(plane, pointer);
           if (matches.size() != 1)
             fail("selector_count",
-                 "plane requires one face; selector matched " + std::to_string(matches.size()),
+                 std::string(axis ? "axis" : "plane") + " requires one face; selector matched " +
+                     std::to_string(matches.size()),
                  pointer);
-          if (face_queries.contains(matches.front()->owner())) {
+          if (axis) {
+            const auto& face = inspect(matches.front(), pointer);
+            if (!face.cylinder) fail("kernel", "selected axis face is not cylindrical", pointer);
+            selected_axis = face.cylinder->axis;
+          } else if (face_queries.contains(matches.front()->owner())) {
             const auto& face = inspect(matches.front(), pointer);
             if (!face.plane) fail("kernel", "selected face is not planar", pointer);
             selected_plane = face.plane;
@@ -448,18 +487,14 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       }
       if (feature.type == "mirror")
         mirror = take(prepare_mirror(inputs, selected_plane ? &*selected_plane : nullptr));
-      const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
-                              ? inputs.find("axis")
-                              : nullptr;
-      if (feature.type == "transform")
-        if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
       if (axis && axis->find("sketch"))
         axis_sketch = bind_sketch(
             string(*axis->find("sketch")),
             feature.type == "transform" ? "/inputs/rotation/axis/sketch" : "/inputs/axis/sketch");
       const auto* axis_input = axis_sketch ? &*axis_sketch->sketch : nullptr;
+      const auto* resolved_axis = selected_axis ? &*selected_axis : nullptr;
       if (feature.type == "pattern_circular")
-        pattern = take(prepare_circular_pattern(inputs, axis_input));
+        pattern = take(prepare_circular_pattern(inputs, axis_input, resolved_axis));
       std::vector<ir::Hash> upstream;
       for (const auto& [pointer, hash] : dependencies) upstream.push_back(hash);
       const auto key = ir::feature_hash(version, feature.type, inputs, upstream);
@@ -486,8 +521,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }
-            const auto operation =
-                take(prepare_revolution(inputs, *sketch->sketch, axis_input, &built->sources));
+            const auto operation = take(prepare_revolution(inputs, *sketch->sketch, axis_input,
+                                                           &built->sources, resolved_axis));
             ++result.kernel_calls;
             return take(state_->kernel.revolve(operation));
           }();
@@ -542,10 +577,10 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                 take(state_->kernel.boolean_operation(seed, instances, kernel::BooleanOp::kUnion)));
           }
         } else {
-          const auto operation = take(prepare_transform(inputs, axis_input));
-          for (const auto& input : bindings) {
+          const auto operation = take(prepare_transform(inputs, axis_input, resolved_axis));
+          for (std::size_t i = 0; i < target_count; ++i) {
             ++result.kernel_calls;
-            built->operations.push_back(take(state_->kernel.transform(input, operation)));
+            built->operations.push_back(take(state_->kernel.transform(bindings[i], operation)));
           }
         }
         for (const auto& operation : built->operations) built->bytes += operation.estimated_bytes;
@@ -561,7 +596,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
-        const auto* input = bindings.empty() ? nullptr : &result.bodies.at(affected[i]);
+        const auto* input = target_count == 0 ? nullptr : &result.bodies.at(affected[i]);
         std::vector<const BodyState*> named_inputs;
         if (input) named_inputs.push_back(input);
         for (const auto& tool : tools) named_inputs.push_back(&result.bodies.at(tool));

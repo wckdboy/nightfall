@@ -53,9 +53,17 @@ using EntityPtr = std::shared_ptr<const Entity>;
 struct Plane {
   math::Vec3 origin, x_axis{1, 0, 0}, normal{0, 0, 1};
 };
+struct Axis {
+  math::Vec3 origin, direction{0, 0, 1};  // finite origin and unit direction
+};
+struct Cylinder {
+  Axis axis;      // located surface parameter Z; reversing the face does not reverse this axis
+  double radius;  // finite, positive millimetres
+};
 struct FaceInfo {
   EntityPtr entity;
   std::optional<Plane> plane;  // located outward frame for analytic planes; empty for curved faces
+  std::optional<Cylinder> cylinder{};  // exact analytic cylinders only; no fitting/approximation
 };
 struct Extrusion {
   Plane plane;
@@ -114,8 +122,10 @@ class IKernel {
   [[nodiscard]] virtual std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>&) = 0;
   /// Enumerate every unique face of a validated snapshot, including curved faces and all solids.
-  /// Handles retain their owner; planar frames follow face_plane's convention. Order is unspecified
-  /// and must never be used as persistent identity. Reject null/foreign snapshots; do not mutate.
+  /// Handles retain their owner; planar frames follow face_plane's convention. Cylinders expose
+  /// their located parameter axis/radius, independent of face orientation. Other curved types
+  /// have neither description. Order is unspecified; never use it as persistent identity.
+  /// Reject null/foreign snapshots; do not mutate.
   [[nodiscard]] virtual std::expected<std::vector<FaceInfo>, KernelError> faces(
       const ShapePtr&) = 0;
   /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
