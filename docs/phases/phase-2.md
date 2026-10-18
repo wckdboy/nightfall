@@ -9,7 +9,7 @@
 All of these, with evidence linked:
 
 - [ ] 20 reference parts (gear, bracket, enclosure, …) build headlessly in CI
-- [ ] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); reopened for the [slanted-profile latency gap](#angle-and-fixed-constraint-rebuild-evidence))
+- [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
 ## Work items (build order)
@@ -30,6 +30,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#111](https://github.com/wckdboy/nightfall/issues/111) | Resolve point references and verify point constraints | kernel | Implemented with reference-safety, point-retention, constraint and solid regressions |
 | [#112](https://github.com/wckdboy/nightfall/issues/112) | Verify analytic tangent constraints in evaluated sketches | kernel | Implemented with finite-contact, unit, tolerance and solid/cache regressions; local verification below |
 | [#113](https://github.com/wckdboy/nightfall/issues/113) | Verify angle dimensions and fixed sketch references | kernel | Implemented with direction, tolerance, reference and solid/cache regressions; local evidence below |
+| [#114](https://github.com/wckdboy/nightfall/issues/114) | Bound polynomial mass integration for planar solids | kernel | Implemented with unconstrained latency, analytic geometry, placement, cavity and curved-trim regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -362,6 +363,30 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   takes 33.27 s / 46.11 s in these Release / sanitizer runs. The 30-feature benchmark
   follows; remote CI/review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #114 resolves the slanted-solid mass-integration bottleneck from #113.
+  Planar faces qualify for polynomial Gaussian quadrature only when every pcurve is an
+  analytic line with finite parameter bounds. These affine parameterizations make the
+  volume/first-moment integrands polynomial; OCCT's fixed Gaussian rule integrates them
+  exactly up to floating-point error. Other faces retain exact-surface adaptive
+  Gauss–Kronrod integration at 1e-9. The per-shell corner reference, signed cavity terms
+  and unnormalized first-moment accumulation are preserved. The backend cache identity
+  includes the new integration policy. No dependency, public API or format changes.
+  Five new regressions cover an unconstrained production extrusion, 16 fixed-seed
+  rotated/translated/scaled prisms, a concave profile with a straight hole, a slanted cavity
+  with a distant unequal solid, and curved trim boundaries. The tests-first unconstrained
+  extrusion failed only its 2 s runtime bound: 20.063 s, with all 24 geometry/naming
+  assertions passing. The same case now takes about 0.001 s; volume 6000 mm³ and area
+  3400 mm² remain within 1e-7. The existing angle-driven solid regression takes 0.008 s
+  in the targeted run, compared with 33.27 s in #113's Release gate. The focused planar,
+  mass-reference and analytic-circle selection passes 15 cases / 864 assertions; the
+  angle/fixed selection passes 9 cases / 725 assertions.
+  Full Release `tools/check.sh --preset occt` passes 406/406 (21.38 s), including hygiene,
+  202 schema corpus cases and 20 reference documents. The exact CI ASan/UBSan
+  kernel/evaluator/cache selection passes 172/172 (42.61 s), with no diagnostics.
+  Nightfall is instrumented; OCCT remains the pinned Release shared library. The unchanged
+  rebuild benchmark below restores the local latency gate for the slanted profile.
+  Remote CI/review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -681,3 +706,35 @@ These are local observations, not universal bounds or an optimization claim. The
 all builds/tests and includes parsing, validation, expressions, constraint verification,
 hashing, exact geometry, validity and naming. Serialization, IPC and tessellation remain
 excluded. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Polynomial mass integration rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+Run `build/occt/services/kernel/nf_evaluator_bench`. The benchmark source and analytic
+expectations are unchanged from #113: a slanted 30-feature part, angle/profile/depth
+edits, volume and area within 1e-5, centroid x/z within 1e-6 mm, plus kernel/cache counts.
+All samples of every mode pass those checks.
+
+| Slanted part after polynomial integration | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 1.858 | 1.924 | 1.971 | 29 / 0 |
+| Angle + profile + depth edit | 2.010 | 2.070 | 2.087 | 29 / 0 |
+| Last transform edit | 0.635 | 0.666 | 0.669 | 1 / 29 |
+| Unused parameter edit | 0.615 | 0.633 | 0.635 | 0 / 30 |
+
+#113's cold median was 17334.659 ms and parameter-edit p95/max were
+17102.398/17682.842 ms. The local slanted-profile latency gap is resolved in this run;
+all parameter-edit samples across the catalogue stay below 100 ms. Earlier measurements
+remain recorded above; these are local observations, not universal bounds.
+
+The 96-entry/64 MiB cache budget retains 96 entries / 10,528,224 estimated bytes after
+slanted-profile edits (not RSS). Same-run depth-edit median/p95/max:
+plate 1.853/1.995/2.104 ms, bored plate 7.221/7.413/7.443 ms,
+boolean-cut plate 7.936/8.285/8.306 ms, sleeve 2.933/2.985/3.092 ms,
+elliptic tube 9.724/9.999/10.002 ms, shared-edge plate 2.540/2.689/2.843 ms,
+shared-arc notch 3.260/3.456/3.489 ms, constrained plate 2.225/3.310/3.920 ms,
+point-reference plate 2.019/2.117/2.118 ms, tangent-constrained rounded part
+3.853/3.992/4.020 ms, toroidal seal 75.474/77.356/77.800 ms.
+The run follows all builds/tests and includes parsing, validation, expressions,
+constraint verification, hashing, exact geometry, validity and naming. Serialization,
+IPC and tessellation remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.

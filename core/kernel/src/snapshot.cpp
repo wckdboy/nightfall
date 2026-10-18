@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "snapshot.hpp"
 
+#include <BRepAdaptor_Curve2d.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
 #include <BRepGProp_Domain.hxx>
 #include <BRepGProp_Face.hxx>
+#include <BRepGProp_Vinert.hxx>
 #include <BRepGProp_VinertGK.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
@@ -38,10 +41,22 @@ bool solid_tree(const TopoDS_Shape& shape) {
   }
   return has_child;
 }
+bool polynomial_face(const TopoDS_Face& face) {
+  if (BRepAdaptor_Surface(face).GetType() != GeomAbs_Plane) return false;
+  bool bounded = false;
+  for (TopExp_Explorer edges(face, TopAbs_EDGE); edges.More(); edges.Next()) {
+    const BRepAdaptor_Curve2d curve(TopoDS::Edge(edges.Current()), face);
+    if (curve.GetType() != GeomAbs_Line || !std::isfinite(curve.FirstParameter()) ||
+        !std::isfinite(curve.LastParameter()))
+      return false;
+    bounded = true;
+  }
+  return bounded;
+}
 bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
   // A corner keeps each coordinate's first moment away from a symmetry-axis zero.
   // Use each shell's bounds so distant components and cavities integrate locally.
-  // The signed face integrals still use exact surfaces and the same GK tolerance.
+  // Signed face integrals use exact surfaces; non-polynomial faces keep the GK tolerance.
   math::Vec3 moment;
   for (TopExp_Explorer shells(shape, TopAbs_SHELL); shells.More(); shells.Next()) {
     Bnd_Box bounds;
@@ -51,6 +66,8 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
     if (!finite(point(reference))) return false;
     BRepGProp_VinertGK integral;
     integral.SetLocation(reference);
+    BRepGProp_Vinert polynomial;
+    polynomial.SetLocation(reference);
     double shell_volume = 0;
     math::Vec3 shell_moment;
     BRepGProp_Face surface(true);
@@ -59,16 +76,25 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
       if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED) continue;
       surface.Load(face);
       BRepGProp_Domain domain(face);
-      const auto error =
-          face.NbChildren() == 0
-              ? integral.Perform(surface, kMassRelativeAccuracy, true, false)
-              : integral.Perform(surface, domain, kMassRelativeAccuracy, true, false);
-      if (error < 0 || !std::isfinite(error)) return false;
+      const GProp_GProps* properties = &integral;
+      if (polynomial_face(face)) {
+        // Affine plane/line parameterizations make the integrands polynomial. OCCT's
+        // fixed Gaussian rule integrates them exactly (up to roundoff), avoiding
+        // relative-error refinement of almost-zero face contributions.
+        polynomial.Perform(surface, domain);
+        properties = &polynomial;
+      } else {
+        const auto error =
+            face.NbChildren() == 0
+                ? integral.Perform(surface, kMassRelativeAccuracy, true, false)
+                : integral.Perform(surface, domain, kMassRelativeAccuracy, true, false);
+        if (error < 0 || !std::isfinite(error)) return false;
+      }
       // GProps::Add normalizes after each face and drops first moments whenever a
       // partial signed sum is zero. Keep unnormalized moments until the shell is complete.
-      shell_volume += integral.Mass();
-      shell_moment =
-          shell_moment + point(integral.CentreOfMass().XYZ() - reference.XYZ()) * integral.Mass();
+      shell_volume += properties->Mass();
+      shell_moment = shell_moment +
+                     point(properties->CentreOfMass().XYZ() - reference.XYZ()) * properties->Mass();
     }
     measured.volume += shell_volume;
     moment = moment + shell_moment + (point(reference) - measured.maximum) * shell_volume;

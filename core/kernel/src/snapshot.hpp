@@ -33,6 +33,8 @@ struct Subshape final : Entity {
 /// Adopt newly built geometry (or an immutable snapshot with a new rigid location).
 /// Callers must never mutate shared geometry afterward.
 /// Checks all descendants belong to closed solids and computes finite measurements.
+/// Planar faces with analytic line pcurves use exact polynomial Gaussian quadrature;
+/// other faces retain adaptive Gauss–Kronrod integration at kMassRelativeAccuracy.
 std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry);
 /// Validate a direct rigid relocation of an already validated immutable snapshot. Unchanged
 /// topology/orientation plus a finite isometry preserve solid validity and mass properties.

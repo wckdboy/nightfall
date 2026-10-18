@@ -136,7 +136,8 @@ class OcctKernel final : public IKernel {
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
              << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;revolve=1;"
-                "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;mass="
+                "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
+                "mass-integrator=planar-gauss-v1;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
              << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
