@@ -1866,3 +1866,43 @@ The initial pre-default-refinement run also passes 455/455 (117.23 s); both are 
 `/tmp/nightfall-130-asan.log` and `/tmp/nightfall-130-initial-asan.log`. Nightfall code is
 instrumented; the pinned OCCT shared library remains Release. The final public query/defaults
 and both mesh-quality modes are covered; development app integration remains separate.
+
+### #131 — production plain-C evaluator/mesh bridge (2026-10-18)
+
+Under Accepted RFCs 0003 and 0007, `nf_kernel_bridge` exposes per-document sessions and
+independently owned results through `kernel_bridge.h`, with no C++/OCCT types in its C17
+or Swift 6 import surface. A session owns the existing evaluator/cache (96 entries,
+64 MiB estimated); results retain immutable JSON and indexed vertex/index/face buffers
+after later builds and session teardown. The manifest carries exact body measures/hashes,
+feature states/diagnostics, cache statistics and current semantic names per transient face.
+Names can remain ambiguous; body/face/vertex indices are never persisted selectors.
+
+Requests and result JSON are capped at 16 MiB; returned meshes share a request-wide budget
+of at most one million triangles / three million vertices. Any feature, meshing or budget
+error returns zero geometry, including independently successful branches. Exceptions stay
+behind the ABI; allocation/diagnostic failure can return null. These bounds do not cap OCCT
+working memory/runtime. Build calls stay serialized on the service worker. An atomic signed
+active-feature index reports the executing authored feature, including cache hits, and -1
+during validation, meshing and idle, preparing the later XPC watchdog.
+
+Tests first fail to compile for the missing bridge/progress interface. Swift importing then
+catches the unsigned size_t sentinel mismatch and unsupported macro expansion; the final
+signed 64-bit index and literal sentinel import together. Thirteen focused checks pass
+(1.28 s), including actual C17 compile/link and successful geometry, Swift 6 complete strict
+concurrency typechecking, cache isolation/rebinding/recovery, suppression/rollback/consumed
+bodies, sorted multi-body ranges, retained ownership and zero partial-success buffers.
+The exact 16 MiB input boundary succeeds; an 8 MiB unknown key whose RFC 6901 pointer
+expands past the output limit yields a small structured bounds error. All 20 reference
+baselines cross the C ABI with outward indexed meshes within 1% of exact volume and area;
+the analytic plate measures 6000 mm³ / 2200 mm² within 1e-7, with mesh relative tolerance 1e-9.
+
+`tools/check.sh --preset occt` passes 706/706 (52.16 s), plus 202 schema corpus cases and
+20 reference schemas, with license/layering/format checks and no new warnings. Targeted
+ASan/UBSan kernel/cache/evaluator/CLI/bridge passes 468/468 (120.92 s), without diagnostics;
+Nightfall code is instrumented, the pinned OCCT shared libraries remain Release. Logs:
+`/tmp/nightfall-131-red-build.log`, `/tmp/nightfall-131-swift-sentinel-red.log`,
+`/tmp/nightfall-131-bridge.log`, `/tmp/nightfall-131-check.log`, `/tmp/nightfall-131-asan.log`.
+CI now includes the bridge sanitizer targets; hygiene checks include the new C source.
+The Swift XPC worker/watchdog/restart policy, shared-memory transport, Metal viewer and
+portable app packaging remain separate increments. No production `.app` exists from this
+change; remote CI, human review and the full Phase 2 sign-off remain pending.

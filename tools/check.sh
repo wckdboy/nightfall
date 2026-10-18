@@ -29,7 +29,7 @@ fail=0
 step "License headers"
 # Every tracked or new source file must carry an SPDX license identifier.
 missing=$(git ls-files --cached --others --exclude-standard \
-  '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
+  '*.c' '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
   | while read -r f; do
       [[ -f "$f" ]] || continue
       head -n 5 "$f" | grep -q 'SPDX-License-Identifier:' || echo "$f"
@@ -67,7 +67,7 @@ elif ! clang-format --version | grep -q "version $(cat .clang-format-version)"; 
   msg="clang-format $(cat .clang-format-version) required (.clang-format-version), found: $(clang-format --version)"
   if [[ -n "${CI:-}" ]]; then echo "$msg"; fail=1; else echo "$msg; skipping locally"; fi
 else
-  files=$(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h' '*.mm')
+  files=$(git ls-files --cached --others --exclude-standard '*.c' '*.cpp' '*.hpp' '*.h' '*.mm')
   if [[ -n "$files" ]] && ! echo "$files" | xargs clang-format --dry-run --Werror; then
     echo "run: git ls-files '*.cpp' '*.hpp' '*.h' '*.mm' | xargs clang-format -i"
     fail=1
