@@ -76,6 +76,7 @@ class QueryKernel final : public kernel::IKernel {
   bool fail_query = false;
   bool null_face = false, omit_faces = false;
   bool fail_distance = false;
+  bool invalid_source = false;
   std::optional<double> distance_result;
   kernel::EntityPtr wrong_owner;
   std::size_t queries = 0;
@@ -115,7 +116,11 @@ class QueryKernel final : public kernel::IKernel {
   }
   std::expected<kernel::OperationResult, kernel::KernelError> extrude(
       const kernel::Extrusion& e) override {
-    return backend.extrude(e);
+    auto result = backend.extrude(e);
+    if (result && invalid_source)
+      for (auto& generated : result->generated)
+        if (generated.from) generated.from->curve = std::numeric_limits<std::size_t>::max();
+    return result;
   }
   std::expected<kernel::OperationResult, kernel::KernelError> revolve(
       const kernel::Revolution& r) override {
@@ -136,6 +141,347 @@ class QueryKernel final : public kernel::IKernel {
   }
 };
 }  // namespace
+
+namespace {
+ir::Document side_attached() {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"bottom","type":"line","start":[0,0],"end":[10,0]},
+    {"id":"right","type":"line","start":[10,0],"end":[10,20]},
+    {"id":"top","type":"line","start":[10,20],"end":[0,20]},
+    {"id":"left","type":"line","start":[0,20],"end":[0,0]},
+    {"id":"marker","type":"point","at":[10,0]}],"constraints":[]})");
+  selector(d, R"({"created_by":"base","role":"side","from":"outline/right","expect":"one"})");
+  return d;
+}
+void side_boss(const Evaluation& result, double x = 11) {
+  for (const auto& f : result.features)
+    for (const auto& e : f.errors) UNSCOPED_INFO(e.pointer << ": " << e.message);
+  REQUIRE(result.ok());
+  const auto& body = result.bodies.at("boss_body");
+  REQUIRE(body.shape);
+  const auto& m = body.shape->measures();
+  CHECK_THAT(m.volume, WithinAbs(8 * kPi, 1e-7));
+  CHECK_THAT(m.area, WithinAbs(16 * kPi, 1e-7));
+  CHECK_THAT(m.centroid.x, WithinAbs(x, 1e-8));
+  for (const auto& name : body.names) CHECK(name.entity->owner() == body.shape);
+}
+}  // namespace
+
+TEST_CASE("sketch entity qualifiers select one generated side across rebuilds", "[source-faces]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  auto d = side_attached();
+  const auto first = evaluator.evaluate(source(d)).value();
+  side_boss(first);
+  CHECK(first.kernel_calls == 3);
+  const auto cached = evaluator.evaluate(source(d)).value();
+  side_boss(cached);
+  CHECK(cached.cache_hits == 4);
+  CHECK(cached.kernel_calls == 1);
+  d.params[0].value = "40 mm";
+  side_boss(evaluator.evaluate(source(d)).value());
+  evaluator.clear_cache();
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("qualifiers follow reversed chains and authored entity ordering", "[source-faces]") {
+  auto d = side_attached();
+  auto entities = *d.features[0].inputs.find("entities")->if_array();
+  entities[1] =
+      ir::json::parse(R"({"id":"right","type":"line","start":[10,20],"end":[10,0]})").value();
+  std::ranges::reverse(entities);
+  d.features[0].inputs = set(d.features[0].inputs, "entities", entities);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("primitive qualifiers count every source span and never label caps", "[source-faces]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  for (const auto* text :
+       {R"({"created_by":"base","role":"side","from":"outline/r","expect":"one"})",
+        R"({"created_by":"base","role":"cap_end","from":"outline/r","expect":"one"})"}) {
+    auto d = attached();
+    selector(d, text);
+    Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+    const auto result = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(result.ok());
+    const auto& error = result.features[2].errors.front();
+    CHECK(error.code == "selector_count");
+    CHECK(error.pointer == "/features/2/inputs/plane");
+    CHECK(
+        error.message.find(
+            text == std::string_view(
+                        R"({"created_by":"base","role":"side","from":"outline/r","expect":"one"})")
+                ? "matched 4"
+                : "matched 0") != std::string::npos);
+  }
+  auto d = attached();
+  selector(d, R"({"created_by":"base","from":"outline/r","where":{"normal":"x"}})");
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("point entities have no generated face provenance", "[source-faces]") {
+  auto d = side_attached();
+  selector(d, R"({"any":[{"created_by":"base","from":"outline/marker","expect":"one"}]})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto result = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(result.ok());
+  CHECK(result.features[2].errors.front().code == "selector_count");
+  CHECK(result.features[2].errors.front().pointer == "/features/2/inputs/plane/any/0");
+}
+
+TEST_CASE("qualifiers compose with unions exclusions and signed plane filters", "[source-faces]") {
+  auto d = side_attached();
+  selector(d, R"({"any":[{"created_by":"base","from":"outline/right"},
+    {"created_by":"base","from":"outline/left"}],
+    "except":{"created_by":"base","from":"outline/left"},"where":{"normal":"x"},
+    "expect":"one"})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("qualified current faces survive transforms and repeated instances", "[source-faces]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  auto d = side_attached();
+  d.features.insert(d.features.begin() + 2,
+                    feature("move", "transform", R"({"bodies":["plate"],"translation":[3,0,0]})"));
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  side_boss(evaluator.evaluate(source(d)).value(), 14);
+  d.features[2] = feature("repeat", "pattern_linear",
+                          R"({"bodies":["plate"],"count":2,"spacing":20,"direction":"x"})");
+  selector(d, R"({"created_by":"base","from":"outline/right",
+    "where":{"near":[30,10,15]},"expect":"one"})",
+           3);
+  side_boss(evaluator.evaluate(source(d)).value(), 31);
+}
+
+TEST_CASE("qualified tool sides transfer to consumed boolean results", "[source-faces]") {
+  auto d = side_attached();
+  d.features[1].inputs = set(d.features[1].inputs, "distance", 40.0);
+  d.features.insert(d.features.begin() + 2,
+                    feature("tool", "extrude",
+                            R"({"profile":{"sketch":"outline"},"distance":30,
+        "result":{"new":"other","body_type":"brep"}})"));
+  d.features.insert(
+      d.features.begin() + 3,
+      feature("merge", "boolean", R"({"target":"plate","tools":["other"],"op":"intersect"})"));
+  selector(d, R"({"created_by":"tool","from":"outline/right","expect":"one"})", 4);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  side_boss(first);
+  CHECK_FALSE(first.bodies.at("other").shape);
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("source qualifiers retain shared coincident primitive ancestry", "[source-faces]") {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"a","type":"rect","corner":[0,0],"size":[10,20]},
+    {"id":"b","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]})");
+  d.features[1].inputs =
+      set(d.features[1].inputs, "profile",
+          ir::json::parse(R"({"sketch":"outline","fill_rule":"nonzero"})").value());
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  for (const auto* id : {"a", "b"}) {
+    const auto text = std::string(R"({"created_by":"base","from":"outline/)") + id +
+                      R"(","where":{"normal":"x"},"expect":"one"})";
+    selector(d, text.c_str());
+    side_boss(evaluator.evaluate(source(d)).value());
+  }
+}
+
+TEST_CASE("qualified curved sources retain cardinality before plane validation", "[source-faces]") {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"c","type":"circle","center":[0,0],"radius":10}],"constraints":[]})");
+  selector(d, R"({"created_by":"base","from":"outline/c","expect":"some"})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto result = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(result.ok());
+  const auto& error = result.features[2].errors.front();
+  // The circle is decomposed into several side patches, all with this ancestry.
+  CHECK(error.code == "selector_count");
+  CHECK(error.pointer == "/features/2/inputs/plane");
+  CHECK(error.message.find("matched 0") == std::string::npos);
+}
+
+TEST_CASE("source qualifiers enforce unavailable sketch dependencies", "[source-faces]") {
+  auto d = side_attached();
+  d.features[0].suppressed = true;
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto result = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(result.ok());
+  CHECK(result.features[2].errors.front().code == "input_suppressed");
+}
+
+TEST_CASE("source qualified mirrors reflect only their authored bodies", "[source-faces]") {
+  auto d = side_attached();
+  d.features.resize(2);
+  d.features.push_back(feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{
+    "created_by":"base","from":"outline/right","expect":"one"}})"));
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  solid(first, 12000, 3200, {10, 10, 15}, "plate");
+  const auto cached = evaluator.evaluate(source(d)).value();
+  solid(cached, 12000, 3200, {10, 10, 15}, "plate");
+  CHECK(cached.cache_hits == 3);
+}
+
+TEST_CASE("source entity names are rebound after producer and sketch identity edits",
+          "[source-faces]") {
+  auto d = side_attached();
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto first = evaluator.evaluate(source(d)).value();
+  side_boss(first);
+  d.features[1].id = "renamed";
+  selector(d, R"({"created_by":"renamed","from":"outline/right","expect":"one"})");
+  const auto renamed = evaluator.evaluate(source(d)).value();
+  side_boss(renamed);
+  CHECK(renamed.bodies.at("plate").shape == first.bodies.at("plate").shape);
+  CHECK(renamed.features[1].status == FeatureStatus::kCached);
+  for (const auto& name : renamed.bodies.at("plate").names) {
+    CHECK(name.feature == "renamed");
+    CHECK((name.from.empty() || name.from.starts_with("outline/")));
+  }
+  d.features[0].id = "new_outline";
+  d.features[1].inputs =
+      set(d.features[1].inputs, "profile", ir::json::parse(R"({"sketch":"new_outline"})").value());
+  selector(d, R"({"created_by":"renamed","from":"new_outline/right","expect":"one"})");
+  const auto rebound = evaluator.evaluate(source(d)).value();
+  side_boss(rebound);
+  for (const auto& name : rebound.bodies.at("plate").names)
+    CHECK((name.from.empty() || name.from.starts_with("new_outline/")));
+  evaluator.set_cache_limits({0, 0});
+  side_boss(evaluator.evaluate(source(d)).value());
+  CHECK(evaluator.cache_usage().estimated_bytes == 0);
+  side_boss(first);  // retained results survive metadata/cache eviction
+}
+
+TEST_CASE("primitive ancestry is absent on removed seams after profile union", "[source-faces]") {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"a","type":"rect","corner":[0,0],"size":[10,20]},
+    {"id":"b","type":"rect","corner":[5,0],"size":[10,20]}],"constraints":[]})");
+  d.features[1].inputs =
+      set(d.features[1].inputs, "profile",
+          ir::json::parse(R"({"sketch":"outline","fill_rule":"nonzero"})").value());
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  selector(d, R"({"created_by":"base","from":"outline/a","where":{"normal":"x"}})");
+  const auto absent = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(absent.ok());
+  CHECK(absent.features[2].errors.front().code == "selector_count");
+  CHECK(absent.features[2].errors.front().message.find("matched 0") != std::string::npos);
+  selector(d, R"({"created_by":"base","from":"outline/b","where":{"normal":"x"}})");
+  const auto built = evaluator.evaluate(source(d)).value();
+  side_boss(built, 16);
+  solid(built, 9000, 2700, {7.5, 10, 15}, "plate");
+}
+
+TEST_CASE("hole qualifiers retain ancestry through boundary reversal", "[source-faces]") {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"outer","type":"rect","corner":[0,0],"size":[10,20]},
+    {"id":"hole","type":"rect","corner":[3,4],"size":[4,8]}],"constraints":[]})");
+  selector(d, R"({"created_by":"base","from":"outline/hole","where":{"normal":"x"}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto built = evaluator.evaluate(source(d)).value();
+  side_boss(built, 4);
+  solid(built, 5040, 2856, {5, 1744.0 / 168, 15}, "plate");
+}
+
+TEST_CASE("region picks reindex profile edges without changing entity ancestry", "[source-faces]") {
+  auto d = attached();
+  d.features[0] = feature("outline", "sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"a","type":"rect","corner":[0,0],"size":[10,20]},
+    {"id":"b","type":"rect","corner":[20,0],"size":[10,20]}],"constraints":[]})");
+  d.features[1].inputs =
+      set(d.features[1].inputs, "profile",
+          ir::json::parse(R"({"sketch":"outline","regions":[[25,10]]})").value());
+  selector(d, R"({"created_by":"base","from":"outline/b","where":{"normal":"x"}})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto built = evaluator.evaluate(source(d)).value();
+  side_boss(built, 31);
+  solid(built, 6000, 2200, {25, 10, 15}, "plate");
+  for (const auto& name : built.bodies.at("plate").names)
+    CHECK((name.from.empty() || name.from == "outline/b"));
+}
+
+TEST_CASE("revolved line ancestry selects a generated planar annular wall", "[source-faces]") {
+  auto d = side_attached();
+  auto entities = *d.features[0].inputs.find("entities")->if_array();
+  for (auto& entity : entities) {
+    if (!entity.find("start")) continue;
+    for (const auto* key : {"start", "end"}) {
+      auto point = *entity.find(key)->if_array();
+      point[0] = *point[0].if_number() + 10;
+      entity = set(entity, key, point);
+    }
+  }
+  d.features[0].inputs = set(d.features[0].inputs, "entities", entities);
+  d.features[1] = feature("base", "revolve", R"({"profile":{"sketch":"outline"},
+    "axis":{"origin":[0,0,0],"direction":"y"},"angle":360,
+    "result":{"new":"plate","body_type":"brep"}})");
+  selector(d, R"({"created_by":"base","from":"outline/top","expect":"one"})");
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto built = evaluator.evaluate(source(d)).value();
+  REQUIRE(built.ok());
+  const auto& m = built.bodies.at("boss_body").shape->measures();
+  CHECK_THAT(m.volume, WithinAbs(8 * kPi, 1e-7));
+  CHECK_THAT(m.centroid.y, WithinAbs(21, 1e-8));
+  solid(built, 6000 * kPi, 1800 * kPi, {0, 10, 0}, "plate");
+}
+
+TEST_CASE("invalid backend profile provenance prevents geometry publication", "[source-faces]") {
+  auto real = kernel::make_occt_kernel().value();
+  QueryKernel kernel(*real);
+  kernel.invalid_source = true;
+  Evaluator evaluator(kernel, {128, 64 * 1024 * 1024});
+  const auto d = side_attached();
+  const auto failed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(failed.ok());
+  CHECK_FALSE(failed.bodies.at("plate").shape);
+  CHECK_FALSE(failed.bodies.at("boss_body").shape);
+  CHECK(failed.features[1].errors.front().code == "kernel");
+  CHECK(failed.features[1].errors.front().pointer == "/features/1/inputs");
+  CHECK(evaluator.cache_usage().entries == 1);  // the valid sketch only
+  kernel.invalid_source = false;
+  side_boss(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("unrelated source qualifiers cannot borrow geometrically coincident names",
+          "[source-faces]") {
+  auto d = side_attached();
+  auto spare = d.features[0];
+  spare.id = "spare";
+  d.features.insert(d.features.begin() + 1, spare);
+  selector(d, R"({"created_by":"base","from":"spare/right","expect":"one"})", 3);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
+  const auto missing = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(missing.ok());
+  CHECK(missing.features[3].errors.front().code == "selector_count");
+  d.features[1].suppressed = true;
+  const auto suppressed = evaluator.evaluate(source(d)).value();
+  REQUIRE_FALSE(suppressed.ok());
+  CHECK(suppressed.features[3].errors.front().code == "input_suppressed");
+  CHECK(suppressed.features[3].errors.front().pointer == "/features/3/inputs/plane/from");
+  CHECK(suppressed.bodies.at("plate").shape);
+}
 
 TEST_CASE("generative face selectors attach sketches to current caps and query on cache hits",
           "[face-attached]") {
@@ -348,15 +694,13 @@ TEST_CASE("consumed cutting tool cap planes keep current reversed face orientati
         "plate");
 }
 
-TEST_CASE("unsupported face selector qualifiers and edges fail at their fields",
-          "[face-attached]") {
+TEST_CASE("unsupported face selector edges fail at their fields", "[face-attached]") {
   struct Invalid {
     const char* selector;
     const char* field;
   };
   auto kernel = kernel::make_occt_kernel().value();
-  for (const auto& [text, field] : {Invalid{R"({"created_by":"base","from":"outline/r"})", "from"},
-                                    Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"}}) {
+  for (const auto& [text, field] : {Invalid{R"({"edges_of":{"created_by":"base"}})", "edges_of"}}) {
     auto d = attached();
     selector(d, text);
     Evaluator evaluator(*kernel, {128, 64 * 1024 * 1024});
@@ -1395,8 +1739,7 @@ TEST_CASE("unsupported fields and directions retain full selector tree pointers"
   };
   auto kernel = kernel::make_occt_kernel().value();
   for (const auto& [text, pointer] :
-       {Invalid{R"({"any":[{"created_by":"base","from":"outline/r"}]})", "/any/0/from"},
-        Invalid{R"({"faces_of":"plate","except":{"edges_of":{"created_by":"base"}}})",
+       {Invalid{R"({"faces_of":"plate","except":{"edges_of":{"created_by":"base"}}})",
                 "/except/edges_of"},
         Invalid{R"({"any":[{"any":[{"faces_of":"plate","where":{"type":"cylinder"}}]}]})",
                 "/any/0/any/0/where/type"},

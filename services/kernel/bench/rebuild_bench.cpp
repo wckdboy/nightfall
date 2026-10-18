@@ -150,6 +150,22 @@ int main() {
     attached_part.center_z_per_depth = 1.5;
     attached_part.surface_area = [](double depth) { return 400 + 60 * depth; };
     attached_part.queries = 1;
+    auto sourced_part = attached_part;
+    sourced_part.name = "source face";
+    sourced_part.center_z_per_depth = 0.5;
+    sourced_part.document.features[0] = test::feature("outline", "sketch", R"({
+      "plane":{"datum":"xy"},"entities":[
+        {"id":"bottom","type":"line","start":[0,0],"end":[10,0]},
+        {"id":"right","type":"line","start":[10,0],"end":[10,20]},
+        {"id":"top","type":"line","start":[10,20],"end":[0,20]},
+        {"id":"left","type":"line","start":[0,20],"end":[0,0]}],"constraints":[]})");
+    sourced_part.document.features[2] = test::feature("face_profile", "sketch", R"({
+      "plane":{"created_by":"base","from":"outline/bottom","expect":"one"},
+      "entities":[{"id":"r","type":"rect","corner":[0,0],"size":[10,"depth"]}],
+      "constraints":[]})");
+    sourced_part.document.features[3] = test::feature("cap", "extrude", R"({
+      "profile":{"sketch":"face_profile"},"distance":20,
+      "result":{"new":"plate","body_type":"brep"}})");
     auto filtered_part = attached_part;
     filtered_part.name = "filtered face";
     filtered_part.document.features[2] =
@@ -320,6 +336,7 @@ int main() {
           mirror_part,
           face_mirror_part,
           attached_part,
+          sourced_part,
           filtered_part,
           nearest_part,
           composed_part,

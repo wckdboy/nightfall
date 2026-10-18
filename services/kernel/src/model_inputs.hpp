@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <array>
 #include <map>
 
 #include "nf/ir/document.hpp"
@@ -17,7 +18,13 @@ struct Sketch {
   std::vector<math::NurbsCurve2> segments;   // unjoined entity curves, valid as open references
   std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
   std::map<std::string, Line> lines;         // authored direction, independent of path traversal
+  // Optional metadata parallel to paths/segments; omitted entries have no authored source.
+  std::vector<std::vector<std::string>> path_entities;
+  std::vector<std::string> segment_entities;
 };
+/// Local authored entity IDs by final region/loop/curve. Empty sets denote synthetic bridges.
+/// No producer/sketch ID is cached here; publication binds the current evaluation's IDs.
+using ProfileSources = std::map<std::array<std::size_t, 3>, std::vector<std::string>>;
 struct BodyPattern {
   std::size_t count;            // includes the original seed
   kernel::RigidTransform step;  // multiply translation/angle by each copy index
@@ -50,9 +57,12 @@ struct BodyPattern {
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs,
                                                 const kernel::Plane* selected_plane = nullptr);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
-                                                              const Sketch& sketch);
-std::expected<kernel::Revolution, ir::Error> prepare_revolution(
-    const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr);
+                                                              const Sketch& sketch,
+                                                              ProfileSources* sources = nullptr);
+std::expected<kernel::Revolution, ir::Error> prepare_revolution(const ir::json::Value& inputs,
+                                                                const Sketch& sketch,
+                                                                const Sketch* axis_sketch = nullptr,
+                                                                ProfileSources* sources = nullptr);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr);
 /// Unique body targets only; at most 64 total instances, including all seeds. Count 1

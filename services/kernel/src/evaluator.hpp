@@ -20,10 +20,12 @@ struct FeatureState {
 /// Sketch planes select generated faces by producer/role or all current faces via faces_of.
 /// Both accept planar type, normal/parallel_to/perpendicular_to and nearest-point filters.
 /// Face sets compose with recursive any/except; every node enforces its own expect.
-/// Sketch-entity qualifiers and other filters remain unsupported.
+/// from qualifies generated sides by the exact authored sketch/entity; caps have no source.
+/// Qualifiers survive splitting/merging, transforms, booleans and pattern history.
 struct NamedEntity {
   std::string feature, role;
   kernel::EntityPtr entity;
+  std::string from{};
 };
 struct BodyState {
   kernel::ShapePtr shape;

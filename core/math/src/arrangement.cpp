@@ -298,16 +298,20 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
   std::vector<NurbsCurve2> input;
   std::vector<NurbsCurve2> originals;
   std::vector<std::size_t> parents;
+  std::vector<std::vector<CurveSource>> sources;
   Vec2 lo{INFINITY, INFINITY}, hi{-INFINITY, -INFINITY};
-  for (const auto& path : paths) {
+  for (std::size_t p = 0; p < paths.size(); ++p) {
+    const auto& path = paths[p];
     if (path.empty()) continue;
-    for (const NurbsCurve2& c : path) {
+    for (std::size_t c_index = 0; c_index < path.size(); ++c_index) {
+      const auto& c = path[c_index];
       const auto parent = originals.size();
       if (c.degree() > 1) originals.push_back(c);
       for (const auto& span : decompose(c)) {
         parents.push_back(c.degree() > 1 ? parent : originals.size());
         if (c.degree() == 1) originals.push_back(span);
         input.push_back(span);
+        sources.push_back({{p, c_index}});
       }
       for (const Vec2 q : c.points()) {
         lo = {std::min(lo.x, q.x), std::min(lo.y, q.y)};
@@ -318,6 +322,7 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
       parents.push_back(originals.size());
       input.push_back(make_line(end_of(path.back()), start_of(path.front())));
       originals.push_back(input.back());
+      sources.emplace_back();
     }
   }
   Arrangement out;
@@ -424,6 +429,10 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
                                                                                           : 0;
         if (!direction) continue;
         edge.direction += direction;
+        for (const auto& source : sources[i])
+          if (std::ranges::find(edge.sources, source) == edge.sources.end())
+            edge.sources.push_back(source);
+        out.half_edges[h + 1].sources = edge.sources;
         out.half_edges[h + 1].direction = -edge.direction;
         merged = true;
         break;
@@ -431,8 +440,8 @@ std::expected<Arrangement, std::string> arrange(std::span<const std::vector<Nurb
       if (merged) continue;  // zero-winding seams still delimit arrangement faces
       const int f = static_cast<int>(out.half_edges.size());
       edge_sources.push_back(i);
-      out.half_edges.push_back({piece, a, b, f + 1, -1, -1, +1});
-      out.half_edges.push_back({reverse(piece), b, a, f, -1, -1, -1});
+      out.half_edges.push_back({piece, a, b, f + 1, -1, -1, +1, sources[i]});
+      out.half_edges.push_back({reverse(piece), b, a, f, -1, -1, -1, sources[i]});
     }
   }
 
@@ -552,6 +561,7 @@ std::expected<std::vector<Region>, std::string> regions(
       used[at(h)] = true;
       const NurbsCurve2& c = a.half_edges[at(h)].curve;
       loop.curves.push_back(c);
+      loop.sources.push_back(a.half_edges[at(h)].sources);
       size = std::max(size, extent(c));
       int c_next = a.half_edges[at(h)].next;
       while (!boundary(c_next)) c_next = a.half_edges[at(a.half_edges[at(c_next)].twin)].next;

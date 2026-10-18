@@ -120,7 +120,9 @@ std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::stri
   return result;
 }
 void join_curves(std::vector<math::NurbsCurve2> curves,
-                 std::vector<std::vector<math::NurbsCurve2>>& paths) {
+                 std::vector<std::vector<math::NurbsCurve2>>& paths,
+                 std::vector<std::string> entities,
+                 std::vector<std::vector<std::string>>& path_entities) {
   // Check both ends before walking: stopping at the first closed loop could hide a
   // multi-way junction at its starting vertex. Closed single curves are separate paths.
   std::vector<std::pair<Vec2, Vec2>> ends;
@@ -142,7 +144,9 @@ void join_curves(std::vector<math::NurbsCurve2> curves,
     const auto start = curves.back().point(curves.back().domain_start());
     auto end = curves.back().point(curves.back().domain_end());
     std::vector<math::NurbsCurve2> path{std::move(curves.back())};
+    std::vector<std::string> source{std::move(entities.back())};
     curves.pop_back();
+    entities.pop_back();
     while (!math::near(start, end, kTolerance)) {
       auto found = curves.end();
       bool reverse = false;
@@ -159,13 +163,23 @@ void join_curves(std::vector<math::NurbsCurve2> curves,
       const auto next_start = next.point(next.domain_start());
       // Keep the original curves exact and explicitly connect tolerance-matched ends.
       // Arrangement vertex welding may use a tighter, drawing-relative tolerance.
-      if (end != next_start) path.push_back(math::make_line(end, next_start));
+      if (end != next_start) {
+        path.push_back(math::make_line(end, next_start));
+        source.emplace_back();
+      }
       path.push_back(std::move(next));
+      const auto index = static_cast<std::size_t>(found - curves.begin());
+      source.push_back(std::move(entities[index]));
+      entities.erase(entities.begin() + static_cast<std::ptrdiff_t>(index));
       end = path.back().point(path.back().domain_end());
       curves.erase(found);
     }
-    if (end != start) path.push_back(math::make_line(end, start));
+    if (end != start) {
+      path.push_back(math::make_line(end, start));
+      source.emplace_back();
+    }
     paths.push_back(std::move(path));
+    path_entities.push_back(std::move(source));
   }
 }
 math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
@@ -433,6 +447,7 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
     std::size_t curves = 0, control_points = 0;
     for (std::size_t i = 0; i < entities.size(); ++i) {
       const auto& entity = entities[i];
+      const auto previous_paths = sketch.paths.size(), previous_segments = sketch.segments.size();
       const auto pointer = "/entities/" + std::to_string(i);
       const auto& type = *field(entity, "type").if_string();
       if (++curves > 4096) fail(pointer, "sketch exceeds the initial 4096-curve work limit");
@@ -487,6 +502,11 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
       } else {
         fail(pointer + "/type", "sketch entity is not implemented: " + type);
       }
+      const auto& id = *field(entity, "id").if_string();
+      for (std::size_t p = previous_paths; p < sketch.paths.size(); ++p)
+        sketch.path_entities.emplace_back(sketch.paths[p].size(), id);
+      for (std::size_t s = previous_segments; s < sketch.segments.size(); ++s)
+        sketch.segment_entities.push_back(id);
     }
     return sketch;
   });
@@ -494,7 +514,8 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
 
 namespace {
 std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value& inputs,
-                                                                    const Sketch& sketch) {
+                                                                    const Sketch& sketch,
+                                                                    ProfileSources* sources) {
   return guarded([&] {
     const auto& result = field(inputs, "result");
     if (result.find("new") && *field(result, "body_type").if_string() != "brep")
@@ -504,18 +525,27 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
       rule = math::FillRule::kNonZero;
     auto closed_paths = sketch.paths;
-    join_curves(sketch.segments, closed_paths);
+    auto closed_entities = sketch.path_entities;
+    closed_entities.resize(closed_paths.size());
+    for (std::size_t p = 0; p < closed_paths.size(); ++p)
+      closed_entities[p].resize(closed_paths[p].size());
+    auto segment_entities = sketch.segment_entities;
+    segment_entities.resize(sketch.segments.size());
+    join_curves(sketch.segments, closed_paths, std::move(segment_entities), closed_entities);
     // Arrangement probes must lie on a smooth span, not an interior spline corner.
     // Exact Bézier decomposition also exposes intersections between different spans.
     std::vector<std::vector<math::NurbsCurve2>> paths;
+    std::vector<std::vector<std::string>> entities;
     std::size_t spans = 0;
-    for (const auto& path : closed_paths) {
+    for (std::size_t p = 0; p < closed_paths.size(); ++p) {
       paths.emplace_back();
-      for (const auto& curve : path) {
-        auto pieces = math::decompose(curve);
+      entities.emplace_back();
+      for (std::size_t c = 0; c < closed_paths[p].size(); ++c) {
+        auto pieces = math::decompose(closed_paths[p][c]);
         spans += pieces.size();
         if (spans > 4096) fail("/profile", "profile exceeds the initial 4096-span work limit");
         paths.back().insert(paths.back().end(), pieces.begin(), pieces.end());
+        entities.back().insert(entities.back().end(), pieces.size(), closed_entities[p][c]);
       }
     }
     auto regions = math::regions(paths, rule);
@@ -548,14 +578,31 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
       *regions = std::move(picked);
     }
     if (regions->empty()) fail("/profile", "profile has no filled regions");
+    if (sources) {
+      sources->clear();
+      for (std::size_t r = 0; r < regions->size(); ++r) {
+        const auto& region = (*regions)[r];
+        for (std::size_t l = 0; l <= region.holes.size(); ++l) {
+          const auto& loop = l == 0 ? region.outer : region.holes[l - 1];
+          for (std::size_t c = 0; c < loop.curves.size(); ++c) {
+            auto& ids = (*sources)[{r, l, c}];
+            for (const auto& source : loop.sources[c]) {
+              const auto& id = entities[source.path][source.curve];
+              if (!id.empty() && std::ranges::find(ids, id) == ids.end()) ids.push_back(id);
+            }
+          }
+        }
+      }
+    }
     return std::move(*regions);
   });
 }
 }  // namespace
 
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& inputs,
-                                                              const Sketch& sketch) {
-  auto regions = prepare_regions(inputs, sketch);
+                                                              const Sketch& sketch,
+                                                              ProfileSources* sources) {
+  auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
     if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
@@ -573,8 +620,9 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
 
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inputs,
                                                                 const Sketch& sketch,
-                                                                const Sketch* axis_sketch) {
-  auto regions = prepare_regions(inputs, sketch);
+                                                                const Sketch* axis_sketch,
+                                                                ProfileSources* sources) {
+  auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
     const auto [origin, direction] = prepare_axis(field(inputs, "axis"), axis_sketch, "/axis");

@@ -42,6 +42,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#123](https://github.com/wckdboy/nightfall/issues/123) | Recursive face-selector unions and exclusions | kernel | Implemented with per-node cardinality, precise nested errors, complete dependencies and shared query descriptions; local evidence below |
 | [#124](https://github.com/wckdboy/nightfall/issues/124) | Mirror bodies across selected current planar faces | kernel | Implemented with shared face resolution, separate source/target bindings, current dependencies and cache ownership regressions; local evidence below |
 | [#125](https://github.com/wckdboy/nightfall/issues/125) | CLI parameter-expression overrides for variant exports | cli | Implemented with batch validation, exact STEP variants and immutable source files; local evidence below |
+| [#126](https://github.com/wckdboy/nightfall/issues/126) | Generated side-face selectors qualified by sketch entity | kernel | Implemented with exact curve ancestry, current naming, cache and atomic-failure regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -779,6 +780,35 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Release shared library. Command/rebuild measurements follow; remote CI/review and full
   Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #126 implements the existing `created_by` / `from: sketch/entity`
+  qualifier for sketch and mirror planes under RFCs 0004/0005/0007. Arrangement half-edges
+  retain exact input path/curve lineage through decomposition, splits, certified shared-span
+  merges and reversed boundaries. Region picks preserve that lineage while reindexing output
+  edges. Service profile preparation maps it to local authored entity IDs; kernel-generated
+  profile-edge roles bind those IDs to the current producer/sketch during publication.
+  Modified/split/merged faces retain qualifiers through transforms, booleans, patterns and
+  mirrors. Multiple names on one face deduplicate by snapshot/entity when selectors union.
+  Caps, named points and synthetic connectors invent no authored curve source; primitive
+  entities can yield multiple side faces and still obey exact cardinality. A qualifier from
+  an unrelated coincident sketch matches nothing. Referenced sketches must be available,
+  including in empty/excluded branches, and contribute dependency hashes before reuse.
+  Source bindings remain separate from operation targets. Cache entries retain local IDs,
+  never an authored producer/sketch prefix; retained metadata is included in byte estimates.
+  Invalid backend profile-edge provenance fails publication atomically. Existing directly
+  constructed sketches may omit metadata and retain unqualified geometry behavior.
+  Tests first: all eleven initial evaluator cases fail on the unsupported qualifier; the
+  four math cases initially cannot compile without the new source metadata. The first
+  full gate exposes a direct-sketch span-limit regression (omitted metadata); normalizing
+  optional metadata and explicit closed/segment regressions fix it. Expanded coverage also
+  exercises signed normals, nested unions/exclusions, consumed tools, reversed chains and
+  holes, removed seams, coincident primitives, revolved annuli, producer/sketch renames,
+  cache eviction, suppression, foreign sketch identities and malformed backend provenance.
+  Rebuild C++ clients: transient `math::Arrangement::HalfEdge` / `math::Loop` layouts and
+  region values passed to `IKernel` gain metadata. Direct loops may leave sources empty.
+  No persisted schema, virtual kernel operation or dependency change; evaluator identity
+  advances to `evaluator/23;roles/5`. Local verification and timings follow; remote CI,
+  maintainer review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1491,3 +1521,48 @@ and naming, and excludes CLI startup, file I/O, STEP encoding, serialization, IP
 tessellation. These are local observations, not latency guarantees; the prior loaded-run
 miss and #95 load-sensitivity follow-up remain recorded. Remote CI/review and full
 Phase 2 sign-off remain pending.
+
+### Sketch-entity face provenance and rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release, dynamically linked OCCT 7.9.3.
+The final focused runs pass 20 evaluator/adapter cases / 462 assertions and 4 math cases /
+160 assertions (seed 20261018). Analytic attachments have volume 8π mm³ / area 16π mm²
+with centroid x = 11 mm; moving the seed shifts x to 14, and the selected patterned wall
+places it at 31. A mirror through the qualified wall has volume 12000 mm³ / area 3200 mm²,
+centroid (10,10,15) mm. A reversed rectangular hole retains volume 5040 mm³ / area 2856 mm²
+and centroid (5,1744/168,15) mm. The revolved annular source has volume 6000π mm³ /
+area 1800π mm², centroid (0,10,0) mm. Comparisons use volume/area tolerance 1e-7 and
+centroid component tolerance 1e-8 mm. Other regressions cover exact source sets and failure
+pointers/counts, rather than inferring ancestry from geometric proximity.
+
+`tools/check.sh --preset occt` passes 621/621 (45.42 s), including hygiene, format,
+202 schema cases and 20 reference documents, with no warnings. The ASan/UBSan selection
+now includes math as well as kernel/cache/evaluator/CLI: 504/504 pass (295.73 s), without
+diagnostics. Nightfall is instrumented; OCCT remains the pinned Release shared library.
+The actual CLI builds `/tmp/nightfall-126-qualified-wall.nightfall` with
+`--set 'depth=45 mm'` into `/tmp/nightfall-126-qualified-wall.step` (30,216 bytes), containing
+two exact AP242 manifold solids, no tessellation. The source remains at 30 mm. This example
+checks successful export/format; existing CLI tests separately prove STEP geometry reloads.
+
+After all builds/tests, the catalogue covers 23 parts × 4 modes × 30 samples: 2760 measured
+rebuilds, every analytic geometry and execution-count check passing. The new source-face
+part has two sketches, two extrusions and 26 transforms. Its attached rectangular plate
+selects `outline/bottom`, has volume 200D mm³ / area 400 + 60D mm² and centroid z = D/2,
+with the expected translated x (D is depth in mm). Volume/area tolerance is 1e-5 and
+centroid tolerance 1e-6 mm. One current face-frame query executes on every rebuild.
+
+- Cold: median 2.420 ms / p95 2.515 / max 2.525; 29 kernel calls / 0 cache hits.
+- Depth edit: 2.563 / 2.677 / 2.745 ms; 29 calls / 1 hit.
+- Last transform edit: 0.613 / 0.652 / 0.680 ms; 2 calls / 29 hits.
+- Unused parameter edit: 0.590 / 0.625 / 0.626 ms; 1 call / 30 hits.
+
+The unchanged 96-entry/64 MiB estimated cache budget retains 96 entries / 10,423,762 bytes
+after source-face depth edits, including retained provenance (not RSS). Every catalogue
+parameter-edit sample stays below 100 ms in this run; the largest is toroidal depth editing
+at median 72.901 / p95 75.114 / max 75.930 ms. Timing includes parsing, validation,
+expressions, current references, selectors, hashing, exact geometry, validation and naming;
+it excludes authoring serialization, CLI startup, file I/O, STEP encoding, IPC and tessellation.
+These are local observations, not latency guarantees. The earlier loaded-run miss and #95
+follow-up remain recorded. Logs: `/tmp/nightfall-126-check.log`,
+`/tmp/nightfall-126-asan.log`, `/tmp/nightfall-126-bench.log`; per-mode numbers are in
+`/tmp/nightfall-126-bench.json`. Remote CI/review and full Phase 2 sign-off remain pending.

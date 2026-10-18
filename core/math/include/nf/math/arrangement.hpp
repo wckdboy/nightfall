@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <span>
@@ -18,11 +19,18 @@
 
 namespace nf::math {
 
+/// Original input path/curve, before decomposition or splitting. A merged span may have
+/// several sources; synthetic closing edges have none. Indices refer to this call's inputs.
+struct CurveSource {
+  std::size_t path, curve;
+  bool operator==(const CurveSource&) const = default;
+};
 struct Arrangement {
   struct HalfEdge {
     NurbsCurve2 curve;  // from origin to target; the twin runs the same edge backwards
     int origin, target, twin, next, face;
     int direction;  // signed sum of input traversals; coincident opposite paths can cancel
+    std::vector<CurveSource> sources{};
   };
   struct Face {
     std::vector<int> half_edges;  // the boundary cycle, the face on the left of each
@@ -64,6 +72,9 @@ enum class FillRule { kNonZero, kEvenOdd };
 /// A closed chain of curves: each starts where the previous ends, the last ends at the first.
 struct Loop {
   std::vector<NurbsCurve2> curves;
+  /// regions() supplies one source set per curve, including reversed hole boundaries.
+  /// Callers constructing loops directly may leave this metadata empty.
+  std::vector<std::vector<CurveSource>> sources{};
 };
 
 /// A connected filled area: its outer boundary (counter-clockwise) and holes (clockwise).

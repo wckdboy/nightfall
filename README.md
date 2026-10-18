@@ -209,7 +209,18 @@ Failures identify the nested selector's JSON Pointer; every referenced producer/
 a dependency, including excluded/empty branches. The final sketch or mirror plane needs one
 planar face. Face descriptions are shared within each feature evaluation and refreshed
 before cache reuse.
-Other surface types, radius/convexity filters, `from` qualifiers and edge selectors remain
+Generated side faces also accept an authored entity qualifier, for example
+`{"created_by":"base","role":"side","from":"outline/right","expect":"one"}`.
+Curve sources survive decomposition, arrangement splits, shared-span merges, region picks
+and later operation history. A rectangle/polygon can produce several matching walls; use
+filters to narrow them. Caps, named points and synthetic tolerance connectors have no
+authored curve qualifier. A source from an unrelated sketch matches nothing, even if its
+geometry coincides. The referenced sketch must be available and is a cache dependency.
+Local cached sources bind to the current producer/sketch IDs when names are published.
+Rebuild all C++ clients: `math::Arrangement::HalfEdge` and `math::Loop` gained transient
+source metadata, also changing the layout of region values passed to `IKernel`.
+Directly constructed loops may leave sources empty; no document migration is needed.
+Other surface types, radius/convexity filters and edge selectors remain
 unimplemented. Backend implementers must add
 `IKernel::faces` for snapshot-owned face handles/optional outward frames, and
 `IKernel::face_distance` for finite nonnegative point-to-trimmed-face distances.

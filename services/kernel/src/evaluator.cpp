@@ -21,6 +21,7 @@ struct Output {
   std::vector<kernel::OperationResult> operations;
   std::vector<std::vector<kernel::OperationResult>> copies;  // private per-body pattern history
   std::vector<kernel::ShapePtr> bindings;
+  ProfileSources sources;
   std::size_t bytes = sizeof(Output);
 };
 using Cache = GeometryCache<Output>;
@@ -135,17 +136,19 @@ std::vector<std::string> targets(const ir::Feature& feature, const Targets& prev
   return {ids.begin(), ids.end()};
 }
 std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
-                               const kernel::OperationResult& operation,
-                               const std::string& feature) {
+                               const kernel::OperationResult& operation, const std::string& feature,
+                               const ProfileSources* sources = nullptr,
+                               std::string_view sketch = {}) {
   std::vector<NamedEntity> result;
   auto append = [&](const std::string& producer, const std::string& role,
-                    const kernel::EntityPtr& entity) {
+                    const kernel::EntityPtr& entity, const std::string& from = "") {
     if (!entity || entity->owner() != operation.shape)
       fail("kernel", "naming history belongs to a different snapshot", "/inputs");
     if (std::ranges::none_of(result, [&](const auto& name) {
-          return name.feature == producer && name.role == role && name.entity->same_as(*entity);
+          return name.feature == producer && name.role == role && name.from == from &&
+                 name.entity->same_as(*entity);
         }))
-      result.push_back({producer, role, entity});
+      result.push_back({producer, role, entity, from});
   };
   for (const auto* input : inputs) {
     for (const auto& name : input->names) {
@@ -156,11 +159,23 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
       if (!found->deleted && found->modified.empty())
         fail("kernel", "history omitted a surviving entity", "/inputs");
       if (!found->deleted)
-        for (const auto& entity : found->modified) append(name.feature, name.role, entity);
+        for (const auto& entity : found->modified)
+          append(name.feature, name.role, entity, name.from);
     }
   }
-  for (const auto& generated : operation.generated)
+  for (const auto& generated : operation.generated) {
+    if (sources && generated.from) {
+      const auto& edge = *generated.from;
+      const auto found = sources->find({edge.region, edge.loop, edge.curve});
+      if (found == sources->end()) fail("kernel", "invalid profile edge provenance", "/inputs");
+      if (!found->second.empty()) {
+        for (const auto& id : found->second)
+          append(feature, generated.role, generated.entity, std::string(sketch) + "/" + id);
+        continue;
+      }
+    }
     append(feature, generated.role, generated.entity);
+  }
   return result;
 }
 std::size_t sketch_bytes(const Sketch& sketch) {
@@ -171,6 +186,11 @@ std::size_t sketch_bytes(const Sketch& sketch) {
   };
   for (const auto& point : sketch.points) bytes += sizeof(point) + 64 + point.first.size();
   for (const auto& line : sketch.lines) bytes += sizeof(line) + 64 + line.first.size();
+  for (const auto& path : sketch.path_entities) {
+    bytes += sizeof(path);
+    for (const auto& id : path) bytes += sizeof(id) + id.size();
+  }
+  for (const auto& id : sketch.segment_entities) bytes += sizeof(id) + id.size();
   for (const auto& path : sketch.paths) {
     bytes += sizeof(path);
     for (const auto& curve : path) bytes += curve_bytes(curve);
@@ -207,7 +227,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/22;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/23;roles/5;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -317,9 +337,12 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           };
           std::function<std::vector<kernel::EntityPtr>(const Value&, const std::string&)> select;
           select = [&](const Value& node, const std::string& pointer) {
-            for (const auto* key : {"from", "edges_of"})
-              if (node.find(key))
-                fail("kernel", "selector field is not implemented", pointer + "/" + key);
+            if (node.find("edges_of"))
+              fail("kernel", "selector field is not implemented", pointer + "/edges_of");
+            if (const auto* from = node.find("from")) {
+              const auto& id = string(*from);
+              (void)bind_sketch(id.substr(0, id.find('/')), pointer + "/from");
+            }
             const auto* where = node.find("where");
             const auto filter = where ? plane_filter(*where, pointer + "/where") : PlaneFilter{};
             std::vector<kernel::EntityPtr> matches;
@@ -355,6 +378,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                   for (const auto& name : body.names) {
                     if (name.feature != id) continue;
                     if (const auto* role = node.find("role"); role && name.role != string(*role))
+                      continue;
+                    if (const auto* from = node.find("from"); from && name.from != string(*from))
                       continue;
                     if (!name.entity || name.entity->owner() != body.shape)
                       fail("kernel", "selected name belongs to a different snapshot", pointer);
@@ -456,11 +481,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         } else if (profile_feature) {
           auto solid = [&] {
             if (feature.type == "extrude") {
-              const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
+              const auto operation =
+                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources));
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }
-            const auto operation = take(prepare_revolution(inputs, *sketch->sketch, axis_input));
+            const auto operation =
+                take(prepare_revolution(inputs, *sketch->sketch, axis_input, &built->sources));
             ++result.kernel_calls;
             return take(state_->kernel.revolve(operation));
           }();
@@ -522,9 +549,15 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           }
         }
         for (const auto& operation : built->operations) built->bytes += operation.estimated_bytes;
+        for (const auto& [edge, ids] : built->sources) {
+          built->bytes += sizeof(edge) + sizeof(ids) + 64;
+          for (const auto& id : ids) built->bytes += sizeof(id) + id.size();
+        }
         output = std::move(built);
       }
       std::vector<BodyState> published;
+      const auto source_sketch =
+          profile_feature ? string(*inputs.find("profile")->find("sketch")) : std::string{};
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
@@ -539,12 +572,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         for (const auto& copy : copied) named_inputs.push_back(&copy);
         BodyState temporary;
         if (output->tool) {
-          temporary.names = names({}, *output->tool, feature.id);
+          temporary.names = names({}, *output->tool, feature.id, &output->sources, source_sketch);
           named_inputs.push_back(&temporary);
         }
         published.push_back({operation.shape,
                              ir::body_hash(input ? input->hash : std::nullopt, key),
-                             names(named_inputs, operation, feature.id),
+                             names(named_inputs, operation, feature.id,
+                                   profile_feature ? &output->sources : nullptr, source_sketch),
                              {}});
       }
       // Publish complete geometry and naming together, after every operation/history succeeds.

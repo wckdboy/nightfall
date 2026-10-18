@@ -86,6 +86,72 @@ TEST_CASE("overlapping squares under both rules", "[regions]") {
   CHECK(std::abs(total_area(evenodd) - 6.0) <= 1e-9);
 }
 
+TEST_CASE("region boundaries retain both certified coincident source paths", "[region-sources]") {
+  const std::vector paths{square(0, 0, 2), square(0, 0, 2)};
+  const auto result = regions_of(paths, FillRule::kNonZero);
+  REQUIRE(result.size() == 1);
+  const auto& loop = result.front().outer;
+  REQUIRE(loop.sources.size() == loop.curves.size());
+  REQUIRE(loop.curves.size() == 4);
+  for (std::size_t c = 0; c < loop.curves.size(); ++c) {
+    CHECK(loop.sources[c] == std::vector<CurveSource>{{0, c}, {1, c}});
+  }
+}
+
+TEST_CASE("region sources survive splitting and reversed hole boundaries", "[region-sources]") {
+  const std::vector paths{square(0, 0, 4), square(1, 1, 2), square(3, 0, 2)};
+  const auto result = regions_of(paths, FillRule::kEvenOdd);
+  for (const auto& region : result) {
+    std::vector<const Loop*> loops{&region.outer};
+    for (const auto& hole : region.holes) loops.push_back(&hole);
+    for (const auto* loop : loops) {
+      REQUIRE(loop->sources.size() == loop->curves.size());
+      for (std::size_t c = 0; c < loop->curves.size(); ++c) {
+        REQUIRE_FALSE(loop->sources[c].empty());
+        const auto& curve = loop->curves[c];
+        for (const auto& source : loop->sources[c]) {
+          REQUIRE(source.path < paths.size());
+          REQUIRE(source.curve < paths[source.path].size());
+          const auto& authored = paths[source.path][source.curve];
+          for (const double t : {0.0, 0.3, 0.7, 1.0})
+            CHECK(closest_point(authored,
+                                curve.point(std::lerp(curve.domain_start(), curve.domain_end(), t)))
+                      .distance <= 1e-10);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("arrangement synthetic closing edges have no authored source", "[region-sources]") {
+  const std::vector<std::vector<NurbsCurve2>> paths{
+      std::vector{make_line(Vec2{0, 0}, Vec2{2, 0}), make_line(Vec2{2, 0}, Vec2{0, 2})}};
+  const auto result = arrange(paths).value();
+  std::size_t synthetic = 0;
+  for (const auto& edge : result.half_edges) {
+    if (edge.sources.empty())
+      ++synthetic;
+    else {
+      REQUIRE(edge.sources.size() == 1);
+      CHECK(edge.sources.front().path == 0);
+      CHECK(edge.sources.front().curve < 2);
+    }
+  }
+  CHECK(synthetic == 2);  // a half-edge and its twin
+}
+
+TEST_CASE("curved decomposition and coincident reversals retain source identity",
+          "[region-sources]") {
+  const auto circle = make_circle({0, 0}, 3);
+  const std::vector paths{std::vector{circle}, std::vector{reverse(circle)}};
+  const auto result = arrange(paths).value();
+  REQUIRE(result.half_edges.size() >= 8);
+  for (const auto& edge : result.half_edges) {
+    CHECK(edge.sources == std::vector<CurveSource>{{0, 0}, {1, 0}});
+    CHECK(edge.direction == 0);
+  }
+}
+
 TEST_CASE("nested shapes: holes by rule and orientation", "[regions]") {
   const NurbsCurve2 outer = make_circle(Vec2{0, 0}, 5.0), inner = make_circle(Vec2{1, 0}, 2.0);
   const double annulus = std::numbers::pi * (25 - 4);
