@@ -182,8 +182,7 @@ TEST_CASE("sketch constraints compare circle and partial arc radii", "[constrain
   rejected(sketch(unequal, {relation("equal", {"a", "b"})}), "", "constraint is not satisfied");
 }
 
-TEST_CASE("sketch constraints reject unsupported relations and incompatible references",
-          "[constraints]") {
+TEST_CASE("sketch constraints reject incompatible entities and references", "[constraints]") {
   rejected(circle(10.0, {relation("horizontal", {"a"})}), "/entities/0", "line");
   rejected(rectangle({radius("a", 10.0)}), "/entities/0", "circle or arc");
   auto mixed = *circle(10.0, {}).find("entities")->if_array();
@@ -192,7 +191,7 @@ TEST_CASE("sketch constraints reject unsupported relations and incompatible refe
   rejected(sketch(mixed, {relation("equal", {"a", "r"})}), "/entities/1", "circle or arc");
   rejected(circle(10.0, {radius("missing", 10.0)}), "/entities/0", "unknown");
   rejected(circle(10.0, {relation("tangent", {"a", "a"})}), "", "distinct centers");
-  rejected(circle(10.0, {relation("fixed", {"a"})}), "/type", "not implemented");
+  CHECK(prepare(circle(10.0, {relation("fixed", {"a"})})));
   rejected(circle(10.0, {relation("coincident", {"a", "a"})}), "/entities/0", "point reference");
 }
 

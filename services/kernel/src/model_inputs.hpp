@@ -26,7 +26,11 @@ struct Sketch {
 /// Tangency supports line/circle/arc pairs with at least one circular curve: radial gap
 /// and segment extent within 1e-6 mm, contact inside each arc within 1e-9 rad. Check
 /// internal/external circle contact; centers must be separated by more than 1e-6 mm.
-/// Coordinates are checked, never solved or moved. Other constraints fail explicitly.
+/// Angle dimensions compare start-to-end line directions in [0, pi], within 1e-9 rad.
+/// Swapping operands or reversing both preserves the angle; reversing one takes its supplement.
+/// Fixed whole entities and supported point references retain evaluated authored coordinates;
+/// they do not pin values from a previous document or prevent subsequent parameter edits.
+/// Coordinates are checked, never solved or moved. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);

@@ -75,9 +75,9 @@ TEST_CASE("line sketches join unordered reversed edges without silently closing 
 TEST_CASE("unsupported sketch semantics are errors with field pointers") {
   auto constraints = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"circle","center":[0,0],"radius":10}],
-    "constraints":[{"type":"fixed","entities":["a"]}]})"));
+    "constraints":[{"type":"fixed","entities":[{"entity":"a","point":"start"}]}]})"));
   REQUIRE_FALSE(constraints);
-  CHECK(constraints.error().pointer == "/inputs/constraints/0/type");
+  CHECK(constraints.error().pointer == "/inputs/constraints/0/entities/0/point");
   auto point = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"point","at":[0,0]}],"constraints":[]})"));
   REQUIRE(point);

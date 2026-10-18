@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <numbers>
 #include <stdexcept>
@@ -22,6 +23,7 @@ struct Part {
   std::size_t transforms = 28, cold_calls = 29, depth_calls = 29, depth_hits = 1;
   bool scale_profile_with_depth = false;
   double center_z_per_depth = 0.5;
+  double (*surface_area)(double depth) = nullptr;
 };
 void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
@@ -37,6 +39,8 @@ void verify(const Evaluation& result, const Part& part, double depth, double tai
       std::abs(m.centroid.x - (part.center_x + translation)) > 1e-6 ||
       std::abs(m.centroid.z - depth * part.center_z_per_depth) > 1e-6)
     throw std::runtime_error("analytic geometry verification failed");
+  if (part.surface_area && std::abs(m.area - part.surface_area(depth)) > 1e-5)
+    throw std::runtime_error("analytic surface area verification failed");
 }
 void measure(kernel::IKernel& backend, const Part& part, const std::string& mode) {
   // Explicit benchmark budget, not a proposed service-wide default.
@@ -171,6 +175,20 @@ int main() {
       "constraints":[{"type":"tangent","entities":["a","b"]},{"type":"tangent","entities":["b","c"]},
       {"type":"tangent","entities":["c","d"]},{"type":"tangent","entities":["d","a"]}]})")
                                      .value();
+    auto angled = plate;
+    angled.params.push_back({"theta", "depth / 1 mm * 1 deg", {}, {}, {}, {}});
+    angled.features[0].inputs = ir::json::parse(R"json({"plane":{"datum":"xy"},"entities":[
+      {"id":"a","type":"line","start":["-5 mm - 10 mm / tan(theta)",-10],"end":["5 mm - 10 mm / tan(theta)",-10]},
+      {"id":"b","type":"line","start":["5 mm - 10 mm / tan(theta)",-10],"end":["5 mm + 10 mm / tan(theta)",10]},
+      {"id":"c","type":"line","start":["5 mm + 10 mm / tan(theta)",10],"end":["-5 mm + 10 mm / tan(theta)",10]},
+      {"id":"d","type":"line","start":["-5 mm + 10 mm / tan(theta)",10],"end":["-5 mm - 10 mm / tan(theta)",-10]}],
+      "constraints":[{"type":"angle","entities":["a","b"],"value":"theta"},
+        {"type":"fixed","entities":["a"]},{"type":"fixed","entities":[{"entity":"b","point":"end"}]}]})json")
+                                    .value();
+    Part angle_part{"angle fixed", angled, 200, 0, 28, 29, 29, 0};
+    angle_part.surface_area = [](double depth) {
+      return 400 + depth * (20 + 40 / std::sin(depth * std::numbers::pi / 180));
+    };
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -196,7 +214,7 @@ int main() {
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
           Part{"constrained", constrained, 200, 0, 28, 29, 29, 0, true},
           Part{"point refs", point_constrained, 200, 0, 28, 29, 29, 0, true},
-          Part{"tangent", rounded, 25 * (8 + std::numbers::pi), 0, 28, 29, 29, 0, true},
+          Part{"tangent", rounded, 25 * (8 + std::numbers::pi), 0, 28, 29, 29, 0, true}, angle_part,
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

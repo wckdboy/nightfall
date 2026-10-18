@@ -158,7 +158,8 @@ void verify_constraints(const Value& inputs) {
     const auto pointer = "/constraints/" + std::to_string(i);
     if (kind != "horizontal" && kind != "vertical" && kind != "parallel" &&
         kind != "perpendicular" && kind != "equal" && kind != "radius" && kind != "coincident" &&
-        kind != "distance" && kind != "midpoint" && kind != "symmetric" && kind != "tangent")
+        kind != "distance" && kind != "midpoint" && kind != "symmetric" && kind != "tangent" &&
+        kind != "angle" && kind != "fixed")
       fail(pointer + "/type", "constraint is not implemented: " + kind);
     const auto reference = [&](std::size_t index) {
       return pointer + "/entities/" + std::to_string(index);
@@ -232,7 +233,14 @@ void verify_constraints(const Value& inputs) {
       return Vec2{std::midpoint(a.x, b.x), std::midpoint(a.y, b.y)};
     };
     double residual = 0, tolerance = kTolerance.linear;
-    if (kind == "tangent") {
+    if (kind == "fixed") {
+      // Coordinates are already authored values; fixing them does not freeze parameter edits.
+      // Resolve the reference now; all whole entities still undergo geometry validation below.
+      if (operand(0).if_string())
+        (void)whole(0);
+      else
+        (void)point(0);
+    } else if (kind == "tangent") {
       const Value* curves[] = {&whole(0), &whole(1)};
       bool lines[2]{};
       constexpr double turn = 2 * std::numbers::pi;
@@ -328,8 +336,16 @@ void verify_constraints(const Value& inputs) {
         residual = std::atan2(std::abs(a.x), std::abs(a.y));
       else {
         const auto b = *math::normalized(line(1), kTolerance);
-        const double cross = std::abs(math::cross(a, b)), dot = std::abs(math::dot(a, b));
-        residual = kind == "parallel" ? std::atan2(cross, dot) : std::atan2(dot, cross);
+        const double cross = std::abs(math::cross(a, b)), dot = math::dot(a, b);
+        if (kind == "angle") {
+          const double expected = number(field(constraint, "value"));
+          if (!(expected >= 0 && expected <= std::numbers::pi))
+            fail(pointer + "/value", "angle dimension must be between zero and pi radians");
+          residual = std::abs(std::atan2(cross, dot) - expected);
+        } else {
+          residual = kind == "parallel" ? std::atan2(cross, std::abs(dot))
+                                        : std::atan2(std::abs(dot), cross);
+        }
       }
     }
     if (!std::isfinite(residual))

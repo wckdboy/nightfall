@@ -9,7 +9,7 @@
 All of these, with evidence linked:
 
 - [ ] 20 reference parts (gear, bracket, enclosure, …) build headlessly in CI
-- [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([local evidence](#rebuild-benchmark-evidence))
+- [ ] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); reopened for the [slanted-profile latency gap](#angle-and-fixed-constraint-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
 ## Work items (build order)
@@ -29,6 +29,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#110](https://github.com/wckdboy/nightfall/issues/110) | Verify line and radius constraints in evaluated sketches | kernel | Implemented with tolerance, unit, dependency and cache regressions; local evidence below |
 | [#111](https://github.com/wckdboy/nightfall/issues/111) | Resolve point references and verify point constraints | kernel | Implemented with reference-safety, point-retention, constraint and solid regressions |
 | [#112](https://github.com/wckdboy/nightfall/issues/112) | Verify analytic tangent constraints in evaluated sketches | kernel | Implemented with finite-contact, unit, tolerance and solid/cache regressions; local verification below |
+| [#113](https://github.com/wckdboy/nightfall/issues/113) | Verify angle dimensions and fixed sketch references | kernel | Implemented with direction, tolerance, reference and solid/cache regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -329,6 +330,38 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   pinned Release shared library. Benchmark evidence follows; remote CI/review and full
   phase sign-off remain pending.
 
+- 2026-10-18 — #113 adds angle dimensions and fixed references, the two remaining v1
+  constraint kinds. Angle dimensions use the smaller angle between start-to-end directions
+  of two nonzero lines, in [0, π], within 1e-9 rad. Swapping operands or reversing both lines
+  preserves the angle; reversing one takes its supplement. Fixed whole entities and supported
+  point references preserve their evaluated authored coordinates, while all entity and other
+  constraint checks still run. They do not freeze parameter edits or compare against a prior
+  document. No solver, schema, public kernel API or dependency is added; the cache identity
+  is bumped.
+  Nine tests-first regressions originally failed 90 assertions; all nine now pass 725 assertions.
+  Coverage includes acute/obtuse/0°/180° angles, mm/cm and deg/rad, dimensional expressions,
+  invalid references and dimensions, finite arithmetic, tolerance bounds at three scales,
+  48 fixed-seed rigid placements, every supported fixed entity and point role, and unchanged
+  exact curves. A slanted extrusion with angle θ = 45°/60°/120° checks volume 6000 mm³,
+  surface area `1000 + 1200/sin(θ)` mm² and centroid (3,0,15) mm within 1e-7. Constraint-only
+  edits fail both dependents without kernel work; equivalent-unit restoration hits all three
+  cached outputs. Subsequent angle edits update even fixed coordinates; cold comparisons
+  and retained naming after cache eviction pass.
+  The new solid regression exposed a mass-integration performance problem: one targeted
+  Release run took 32.610 s in that case, while all eight other new cases took 0.000–0.003 s.
+  A process sample locates the work in the existing OCCT `BRepGProp_VinertGK::Perform` /
+  nested Kronrod integration during snapshot measurement. This remains a separate kernel
+  performance follow-up; the correctness regression is retained. The fix plan is to isolate
+  an unconstrained planar-solid reproduction, investigate integration/reference conditioning
+  without loosening mass tolerances, and rerun the slanted-profile and existing cavity,
+  multi-solid and curved-surface checks.
+  Full Release `tools/check.sh --preset occt` passes 401/401 (54.40 s), including hygiene,
+  202 schema corpus cases and 20 reference documents. The exact CI ASan/UBSan
+  kernel/evaluator/cache selection passes 167/167 (86.63 s), with no diagnostics. Nightfall
+  is instrumented; OCCT uses the pinned Release shared libraries. The solid regression
+  takes 33.27 s / 46.11 s in these Release / sanitizer runs. The 30-feature benchmark
+  follows; remote CI/review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -612,3 +645,39 @@ an optimization claim. The run follows all builds/tests and includes parsing, va
 expressions, constraint verification, hashing, exact geometry, validity and naming.
 Serialization, IPC and tessellation remain excluded. Remote CI/review and full Phase 2
 sign-off remain pending.
+
+### Angle and fixed constraint rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature part is a centered parallelogram (width 10 mm, height 20 mm), one extrusion
+and 28 transforms. Angle θ is `depth / (1 mm) × 1 deg`; each depth edit changes the slant,
+angle dimension and fixed line/endpoint coordinates. The profile area stays 200 mm².
+Every sample checks volume `200 × D` mm³ and surface area `400 + D × (20 + 40/sin(θ))`
+mm² within 1e-5, centroids x/z within 1e-6 mm, and kernel/cache counts. D is depth in mm.
+Run `build/occt/services/kernel/nf_evaluator_bench`. All 30 samples of every mode passed
+the analytic and execution-count checks.
+
+| Angle/fixed slanted part | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 17334.659 | 17738.942 | 20483.019 | 29 / 0 |
+| Angle + profile + depth edit | 37.344 | 17102.398 | 17682.842 | 29 / 0 |
+| Last transform edit | 0.627 | 0.661 | 0.661 | 1 / 29 |
+| Unused parameter edit | 0.630 | 0.656 | 0.659 | 0 / 30 |
+
+The cold builds and parameter-edit tail exceed 100 ms by orders of magnitude. The local
+performance gate is reopened for this profile; prior fast baseline measurements remain valid.
+The kernel mass-integration follow-up and fix plan are recorded in the #113 log entry above.
+A one-second process sample during an untimed warm-up corroborates the same OCCT nested
+Kronrod integration path as the targeted regression. Cached changes avoid rebuilding that solid.
+
+The 96-entry/64 MiB cache budget retains 96 entries / 10,528,224 estimated bytes after profile
+edits (not RSS). Same-run depth-edit median/p95/max: plate 1.862/1.924/1.937 ms,
+bored plate 7.013/7.171/7.176 ms, boolean-cut plate 7.788/7.957/8.053 ms,
+sleeve 2.836/2.891/2.899 ms, elliptic tube 9.633/10.112/10.176 ms,
+shared-edge plate 2.340/2.458/2.530 ms, shared-arc notch 3.140/3.224/3.253 ms,
+constrained plate 1.845/1.909/1.918 ms, point-reference plate 1.907/1.992/2.037 ms,
+tangent-constrained rounded part 3.925/4.038/4.085 ms, toroidal seal 75.710/76.513/76.671 ms.
+These are local observations, not universal bounds or an optimization claim. The run follows
+all builds/tests and includes parsing, validation, expressions, constraint verification,
+hashing, exact geometry, validity and naming. Serialization, IPC and tessellation remain
+excluded. Remote CI/review and full Phase 2 sign-off remain pending.
