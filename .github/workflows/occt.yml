@@ -84,6 +84,11 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - run: tools/check.sh --preset occt --skip-format
+      - name: Sanitize Swift worker concurrency
+        run: |
+          cmake --preset occt -B build/swift-tsan -DCMAKE_Swift_FLAGS=-sanitize=thread -DFETCHCONTENT_SOURCE_DIR_CATCH2="$PWD/build/occt/_deps/catch2-src"
+          cmake --build build/swift-tsan --target nf_native_worker_tests --parallel 2
+          ctest --test-dir build/swift-tsan -R '^native\.' --output-on-failure
       - name: Sanitize production geometry and evaluator ownership
         run: |
           cmake --preset asan -DNF_WITH_OCCT=ON

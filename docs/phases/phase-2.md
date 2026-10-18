@@ -1906,3 +1906,49 @@ CI now includes the bridge sanitizer targets; hygiene checks include the new C s
 The Swift XPC worker/watchdog/restart policy, shared-memory transport, Metal viewer and
 portable app packaging remain separate increments. No production `.app` exists from this
 change; remote CI, human review and the full Phase 2 sign-off remain pending.
+
+### #133 — bounded Swift XPC worker and watchdog (2026-10-19)
+
+Accepted RFCs 0003/0007 now have a reusable `nf_native_worker` Swift library and a shared
+Foundation-only `KernelServiceProtocol`. The listener shares one worker across connections.
+The worker accepts UUID document IDs and complete v1 JSON, rejects requests over 16 MiB,
+admits one rebuild without a waiting build queue, and retains four document caches by LRU.
+Explicit closure releases a document cache; native destruction returns to the same serial
+queue as all kernel work. A narrowly documented unchecked-Sendable wrapper owns the opaque
+C session; only its C atomic active-feature accessor runs concurrently. Result JSON and
+indexed buffers are copied to owned Data before freeing the C result.
+
+A separate five-second watchdog starts at admission, covering cache/session creation,
+evaluation, meshing and payload copying. A Mutex-protected reply claim arbitrates completion
+and timeout. Timeout diagnostics name the active authored feature when available, reply once,
+then call _exit(124). A timed-out worker stays unavailable if termination is replaced in tests;
+late completion cannot publish a second result or make it reusable. Cache creation failures
+release normal admission. The cache count/estimated budgets do not cap process RSS or OCCT
+working memory; shared-memory transfer and service admission beyond this initial policy remain open.
+
+Tests first fail to import the missing module. Twelve focused cases pass (2.37 s): bounds,
+busy admission, cache isolation/LRU/closure/recovery, copied-buffer ownership, factory failure,
+watchdog during factory or feature work, 1000 concurrent completion/deadline claims, all twenty
+reference baselines, the actual NSXPC codec, and child-process timeout reply/exit. Timeout tests
+use injected 200 ms deadlines and blocking test engines, not new persisted IR features.
+All twenty meshes have complete face ranges, unit/outward normals, valid indices and volume/area
+within 1% of exact measures. Analytic plate quantities remain 6000 mm³ / 2200 mm² within 1e-7.
+Four real 30-feature plate documents stay warm with 30 cache hits each; a fifth evicts the LRU.
+An uncontended Release residency run peaks at 30,523,392 bytes RSS (29.1 MiB), including the
+framework/bridge process and transient eviction; this is a small-part baseline, not a memory cap.
+
+Swift builds in version 6 with complete strict concurrency and warnings as errors; vtool confirms
+minimum macOS 15.0 in the test executable. `tools/check.sh --preset occt` passes 718/718 (50.36 s),
+202 schema cases and 20 reference schemas, with license/layering/format checks. Swift-format lint
+also passes. A separate Swift ThreadSanitizer build passes 12/12 (30.32 s), without diagnostics;
+the C/C++ libraries stay Release in that build. CI now runs this concurrency check separately
+from the existing C/C++ ASan/UBSan preset. Logs: `/tmp/nightfall-133-red-build.log`,
+`/tmp/nightfall-133-{native,check,tsan,residency}.log` (the initial import failure is intentional).
+
+The anonymous-listener test follows [Apple TN3113](https://developer.apple.com/documentation/technotes/tn3113-testing-xpc-code-with-an-anonymous-listener)
+and runs client/server in one process. The child watchdog test proves reply/termination with
+injected engines. Portable .xpc/.app packaging, actual launchd crash/hang/restart/replay, the
+app-side backstop/retry, shared memory and Metal UI remain separate work before app use.
+No production visual-testing .app is produced here. Remote CI/human review and full Phase 2
+sign-off remain pending. The preceding bridge PR #132 now has all five remote CI checks green;
+its human review is still pending.

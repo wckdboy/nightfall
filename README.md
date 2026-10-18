@@ -87,8 +87,14 @@ indexed buffers, then free the result and session. Results survive later builds 
 teardown; any error returns zero geometry. Mesh budgets apply across all live bodies.
 The signed active-feature index is safe to poll from a watchdog and is -1 outside feature
 evaluation. Serialize builds on the service worker. C17 linking and Swift 6 strict importing
-are tested; the Swift XPC worker/watchdog, shared-memory transfer, Metal viewer and portable
-`.app` packaging still follow under RFC 0003. No production visual-testing app exists yet.
+are tested. The [Swift worker](services/kernel/swift/KernelWorker.swift) now serializes native
+access, admits one rebuild, retains four document caches by LRU, and returns owned buffers
+through the [shared XPC protocol](services/kernel/swift/KernelProtocol.swift). Its watchdog
+claims a single timeout reply with the active feature, then terminates the service.
+`nf_native_worker_tests` covers the real XPC codec with an anonymous listener and watchdog
+termination in child processes. Portable service/app bundles, launchd restart/replay, the
+app-side timeout/retry, shared-memory transfer and Metal viewer still follow under RFC 0003.
+No production visual-testing app exists yet.
 
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 
