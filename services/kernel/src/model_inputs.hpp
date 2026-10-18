@@ -66,5 +66,7 @@ std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const ir::json::V
                                                                const Sketch* axis_sketch = nullptr);
 /// Body mirrors union each current seed with one exact reflection. Datum/explicit planes
 /// share sketch frame validation. Unique targets; at most 32 bodies (64 total instances).
-std::expected<kernel::Plane, ir::Error> prepare_mirror(const ir::json::Value& inputs);
+/// The evaluator may supply the current oriented plane resolved from a face selector.
+std::expected<kernel::Plane, ir::Error> prepare_mirror(
+    const ir::json::Value& inputs, const kernel::Plane* selected_plane = nullptr);
 }  // namespace nf::kernel_service

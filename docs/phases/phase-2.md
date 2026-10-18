@@ -40,6 +40,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#121](https://github.com/wckdboy/nightfall/issues/121) | Body-face selectors and planar direction filters | kernel | Implemented with immutable face enumeration, signed world directions, exact cardinality and cache/failure regressions; local evidence below |
 | [#122](https://github.com/wckdboy/nightfall/issues/122) | Nearest attachment faces by trimmed B-rep distance | kernel | Implemented with exact-geometry distance queries, global candidates, tolerance ties and cache/failure regressions; local evidence below |
 | [#123](https://github.com/wckdboy/nightfall/issues/123) | Recursive face-selector unions and exclusions | kernel | Implemented with per-node cardinality, precise nested errors, complete dependencies and shared query descriptions; local evidence below |
+| [#124](https://github.com/wckdboy/nightfall/issues/124) | Mirror bodies across selected current planar faces | kernel | Implemented with shared face resolution, separate source/target bindings, current dependencies and cache ownership regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -674,6 +675,36 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   and README document composition, filter/cardinality order and remaining limits.
   Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #124 extends body mirrors to selected planar faces under RFCs 0005/0007.
+  Sketches and mirrors share generated-role/body-face resolution, planar direction filters,
+  trimmed-face nearest queries and recursive `any`/`except` composition. The final plane
+  requires exactly one analytic planar face, including with `expect: any/some`; ambiguity,
+  empty sets, curved faces and unsupported fields retain structured JSON Pointer errors.
+  Every referenced producer/current body remains a dependency and is queried before cache
+  reuse. Targets bind first; selector-only bindings retain source snapshots for compatibility
+  and conservative byte accounting without adding reflection targets. Reference bodies remain
+  unchanged unless explicitly targeted. Pattern publication remains atomic across targets.
+  Evaluator identity advances to 22, naming stays 4. No backend API, schema, persisted-format
+  or dependency change; feature-target mirrors and selector axes remain unsupported.
+  Tests first: all twelve initial mirror-selector cases fail on unsupported selector planes.
+  The final targeted mirror/attachment/filter/nearest/composition run passes 87 cases /
+  6184 assertions, seed 20261018, including fourteen new cases. Coverage includes shared
+  selector composition, source/target/unit edits, current translated/tilted faces, self-plane
+  fusion, consumed producer faces and retired body references, empty/ambiguous/tied/curved
+  selections, nested errors, suppression/rollback, query failures before cache reuse,
+  multi-target atomic failure/recovery, producer-ID swaps on identical source snapshots,
+  conservative binding misses, retained-source admission budgets, eviction and teardown.
+  A 2×2×30 mm seed mirrored across a reference cap at z = 40 mm retains two solids,
+  240 mm³ / 496 mm² and centroid (13,0,40) mm after a 3 mm x translation; the reference
+  stays 160 mm³ / 328 mm². Mirroring across the seed's own top cap fuses to one solid,
+  240 mm³ / 488 mm². Volume/area tolerance is 1e-7; centroid components 1e-8 mm.
+  Full Release `tools/check.sh --preset occt` passes 571/571 (34.78 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan kernel/
+  evaluator/cache selection passes 337/337 (77.05 s), with no diagnostics. Nightfall is
+  instrumented; OCCT remains the pinned Release shared library. Public evaluator contracts,
+  the input adapter and README document selected mirror planes and retained sources.
+  Rebuild measurements follow; remote CI/review and full Phase 2 sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -1300,4 +1331,33 @@ p95 76.076). These are observations, not universal bounds or an optimization cla
 Timing includes parsing, schema/parameter/input evaluation, recursive set/cardinality
 resolution, current references/provenance, enumeration/filtering/distance queries, hashing,
 exact geometry, validity and naming; serialization, IPC and tessellation remain excluded.
+Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Selected mirror-plane rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has one sketch, two extrusions, a mirror and 26 transforms. A
+2×2×D mm seed mirrors across the cap at z = 2D of a separate reference body. The selector
+unions generated caps with filtered body faces, excludes the starting cap, then selects the
+nearest remaining face. Reference bindings never add reflection targets. Each sample checks
+the mirrored pair's volume `8D` mm³ / area `16 + 16D` mm² within 1e-5 and centroid x
+(including translations) and z = 2D within 1e-6 mm, plus exact kernel/cache counts. D is
+depth in mm. Run `build/occt/services/kernel/nf_evaluator_bench` after builds/tests.
+All 30 samples of every mode on all twenty-two parts pass (2640 measured rebuilds).
+
+- Cold: median 6.058 ms / p95 7.891 / max 9.434; 32 kernel calls / 0 cache hits.
+- Seed + reference depth edit: 6.677 / 7.390 / 7.550 ms; 32 calls / 1 hit.
+- Last transform edit: 0.806 / 0.931 / 0.965 ms; 3 calls / 29 hits.
+- Unused parameter edit: 0.734 / 0.865 / 0.887 ms; 2 calls / 30 hits.
+
+Every evaluation performs one shared face enumeration and one trimmed-face distance query,
+including complete cache hits. Cold/depth samples add 30 modeling calls; last-transform
+edits add one, and unused edits none. The 96-entry/64 MiB cache budget retains 96 entries /
+20,936,832 estimated bytes after depth edits. Estimates include selector-source bindings;
+shared snapshots may be charged repeatedly, and this is not RSS. All catalogue parameter-edit
+samples stay below 100 ms in this local run; largest is the toroidal seal at 78.340 ms
+(median 76.306 / p95 77.952). These are observations, not universal bounds or an optimization
+claim. Timing includes parsing, schema/parameter/input evaluation, current references,
+recursive selector/cardinality resolution, enumeration/distance queries, hashing, exact
+reflection/union, validation and naming. Serialization, IPC and tessellation remain excluded.
 Remote CI/review and full Phase 2 sign-off remain pending.

@@ -119,6 +119,21 @@ int main() {
         test::feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{"datum":"yz"}})");
     Part mirror_part{"mirror", mirrored, 8, 0, 27, 30, 30, 1};
     mirror_part.surface_area = [](double depth) { return 16 + 16 * depth; };
+    auto face_mirrored = mirrored;
+    face_mirrored.features.erase(face_mirrored.features.begin() + 3);
+    face_mirrored.features.insert(
+        face_mirrored.features.begin() + 2,
+        test::feature("mirror_reference", "extrude", R"({"profile":{"sketch":"outline"},
+      "distance":"2 * depth","result":{"new":"reference","body_type":"brep"}})"));
+    face_mirrored.features[3] = test::feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{
+      "any":[{"created_by":"mirror_reference","role":"cap_end"},
+        {"faces_of":"reference","where":{"normal":"z"}}],
+      "except":{"created_by":"mirror_reference","role":"cap_start"},
+      "where":{"near":[10,0,"2 * depth + 1 mm"]},"expect":"one"}})");
+    Part face_mirror_part{"face mirror", face_mirrored, 8, 10, 26, 30, 30, 1};
+    face_mirror_part.center_z_per_depth = 2;
+    face_mirror_part.surface_area = [](double depth) { return 16 + 16 * depth; };
+    face_mirror_part.queries = 2;  // shared enumeration and one trimmed-face distance
     auto attached = plate;
     attached.features[1].inputs = ir::json::parse(R"({"profile":{"sketch":"outline"},
       "distance":"depth","result":{"new":"support","body_type":"brep"}})")
@@ -303,6 +318,7 @@ int main() {
           linear_part,
           circular_part,
           mirror_part,
+          face_mirror_part,
           attached_part,
           filtered_part,
           nearest_part,

@@ -207,7 +207,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/21;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/22;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -273,7 +273,6 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         }
       } else if (feature.type == "transform" || pattern_feature) {
         if (feature.type == "pattern_linear") pattern = take(prepare_linear_pattern(inputs));
-        if (feature.type == "mirror") mirror = take(prepare_mirror(inputs));
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
       } else if (feature.type == "boolean") {
@@ -288,7 +287,9 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       } else if (feature.type != "sketch") {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
-      if (feature.type == "sketch") {
+      // Operation targets precede selector-only bindings retained for cache compatibility.
+      const auto target_count = bindings.size();
+      if (feature.type == "sketch" || feature.type == "mirror") {
         const auto& plane = *inputs.find("plane");
         if (!plane.find("datum") && !plane.find("origin")) {
           std::map<kernel::ShapePtr, std::vector<kernel::FaceInfo>> face_queries;
@@ -406,8 +407,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           const auto matches = select(plane, pointer);
           if (matches.size() != 1)
             fail("selector_count",
-                 "sketch plane requires one face; selector matched " +
-                     std::to_string(matches.size()),
+                 "plane requires one face; selector matched " + std::to_string(matches.size()),
                  pointer);
           if (face_queries.contains(matches.front()->owner())) {
             const auto& face = inspect(matches.front(), pointer);
@@ -421,6 +421,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           }
         }
       }
+      if (feature.type == "mirror")
+        mirror = take(prepare_mirror(inputs, selected_plane ? &*selected_plane : nullptr));
       const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
                               ? inputs.find("axis")
                               : nullptr;
@@ -446,10 +448,11 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         auto built = std::make_shared<Output>();
         built->bindings = bindings;
         built->bytes += bindings.size() * sizeof(kernel::ShapePtr);
+        for (std::size_t i = target_count; i < bindings.size(); ++i)
+          built->bytes += bindings[i]->estimated_bytes();
         if (feature.type == "sketch") {
           built->sketch = take(prepare_sketch(inputs, selected_plane ? &*selected_plane : nullptr));
           built->bytes += sketch_bytes(*built->sketch);
-          for (const auto& input : bindings) built->bytes += input->estimated_bytes();
         } else if (profile_feature) {
           auto solid = [&] {
             if (feature.type == "extrude") {
@@ -477,9 +480,9 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
         } else if (pattern_feature) {
           const auto count = pattern ? pattern->count : std::size_t{2};
-          built->copies.resize(bindings.size());
-          built->bytes += bindings.size() * sizeof(built->copies.front());
-          for (std::size_t body = 0; body < bindings.size(); ++body) {
+          built->copies.resize(target_count);
+          built->bytes += target_count * sizeof(built->copies.front());
+          for (std::size_t body = 0; body < target_count; ++body) {
             const auto& seed = bindings[body];
             if (count == 1) {
               ++result.kernel_calls;

@@ -639,10 +639,11 @@ std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inpu
     return BodyPattern{count, placement};
   });
 }
-std::expected<kernel::Plane, ir::Error> prepare_mirror(const Value& inputs) {
+std::expected<kernel::Plane, ir::Error> prepare_mirror(const Value& inputs,
+                                                       const kernel::Plane* selected_plane) {
   return guarded([&] {
     pattern_targets(inputs, 2);
-    return prepare_plane(field(inputs, "plane"));
+    return selected_plane ? *selected_plane : prepare_plane(field(inputs, "plane"));
   });
 }
 }  // namespace nf::kernel_service

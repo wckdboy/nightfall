@@ -129,14 +129,16 @@ and 64-total-instance behavior. Each rotation starts from the original current s
 axis-sketch edits rebuild dependent arrays. Feature-target patterns and selector axes remain
 unimplemented.
 
-Body mirrors use `bodies` and a datum or explicit `plane`. Each current seed and one exact
-reflected copy union into that body, fusing shared material or retaining separate solid
+Body mirrors accept a datum, explicit frame or face selector as `plane`. Each body in
+`bodies` unions its seed with one exact reflection, fusing material or retaining separate solid
 components. Reflection preserves closed-solid orientation, analytic surfaces and complete
 face/edge history; source snapshots remain unchanged. Mirrored faces retain inherited names
 and gain the mirror feature's `instance` role. Plane parameters drive dependent rebuilds.
 The shared 64-total-instance limit admits at most 32 mirror targets. All bodies publish
-together after geometry and naming succeed. Feature targets and selector planes remain
-unimplemented.
+together after geometry and naming succeed. Mirrors share the face-selector semantics below:
+only authored `bodies` are modified; reference bodies remain unchanged unless also targeted.
+Source edits invalidate the mirror, and every selector source is retained/charged to its cache
+entry. Feature targets remain unimplemented.
 
 Sketch planes can select a generated analytic planar face, for example
 `{"created_by":"base","role":"cap_end","expect":"one"}`. Selection follows current face names
@@ -159,7 +161,7 @@ remain bound, including bodies removed by filters. Face enumeration also runs on
 After other filters, it compares distance to every remaining trimmed face, including edges
 and holes, across all candidate bodies. Every face within 1e-6 mm of the minimum survives;
 ties remain ambiguous. Distance queries also run on cache hits and count as kernel calls.
-`near` alone includes curved faces; the sketch-plane consumer still requires a planar face.
+`near` alone includes curved faces; sketch and mirror planes still require a planar face.
 Face selectors also compose recursively, for example:
 
 ```json
@@ -171,11 +173,11 @@ Each node unions by snapshot/entity identity, subtracts `except`, applies its ge
 and nearest filters, then checks `expect`: `one` means exactly one, `some` (default) means
 at least one, and `any` permits empty sets. Optional empty branches need `expect: any`.
 Failures identify the nested selector's JSON Pointer; every referenced producer/body is
-a dependency, including excluded/empty branches. The final sketch plane always needs one
+a dependency, including excluded/empty branches. The final sketch or mirror plane needs one
 planar face. Face descriptions are shared within each feature evaluation and refreshed
 before cache reuse.
-Other surface types, radius/convexity filters, `from` qualifiers, edge selectors and
-selector planes outside sketches remain unimplemented. Backend implementers must add
+Other surface types, radius/convexity filters, `from` qualifiers and edge selectors remain
+unimplemented. Backend implementers must add
 `IKernel::faces` for snapshot-owned face handles/optional outward frames, and
 `IKernel::face_distance` for finite nonnegative point-to-trimmed-face distances.
 These are source/ABI changes with no document migration.

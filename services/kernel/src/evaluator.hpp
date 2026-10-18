@@ -45,7 +45,7 @@ struct Evaluation {
 /// seeds; mirrors add one reflection per seed. Copied faces retain inherited names and gain
 /// the feature's local "instance" role. All target bodies publish atomically; private copy
 /// histories remain in bounded cache entries.
-/// Face-attached sketches require exactly one analytic planar face, bind all current
+/// Face-attached sketches and mirror planes require one analytic planar face, bind all current
 /// candidate bodies and query their oriented frame on cache hits too. Booleans transfer
 /// producer candidates to their surviving body, retaining tools as candidates when requested.
 /// Planar filters use signed normals; parallel/perpendicular describe the plane relative to
@@ -57,6 +57,8 @@ struct Evaluation {
 /// any unions by snapshot/entity identity; except subtracts before this node's filters.
 /// Every branch binds dependencies, including excluded/empty branches. Each node checks
 /// one/some(default)/any after filtering; face descriptions are shared within a feature only.
+/// Mirrors modify only authored body targets; selector-only source snapshots are retained
+/// and conservatively charged separately from operation inputs/history.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.
