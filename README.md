@@ -110,6 +110,16 @@ partial turns retain start/end cap provenance. Profile control hulls must stay o
 of the axis, touching it if needed; potentially overlapping sweeps are rejected. Selector axes
 remain unimplemented.
 
+Linear body patterns accept `bodies`, `count`, signed `spacing` and `direction`. Count includes
+the seed; every copy translates from that original seed by an integer multiple of the spacing
+along the normalized direction. Copies union into each targeted body: overlapping/touching
+copies fuse, while separated copies remain multiple valid solids within that body. Copied
+faces retain their original producer names and gain the pattern's `instance` role. All targets
+publish together after geometry and naming succeed. The initial work limit is 64 total
+instances across all targets, including seeds; count 1 preserves seed geometry. Larger counts
+require spacing magnitude above 1e-6 mm and finite offsets. Feature-target and circular
+patterns remain unimplemented.
+
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):
 

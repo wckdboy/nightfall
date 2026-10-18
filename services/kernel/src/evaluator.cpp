@@ -17,6 +17,7 @@ struct Output {
   std::optional<Sketch> sketch;
   std::optional<kernel::OperationResult> tool;  // private sweep before a result-mode boolean
   std::vector<kernel::OperationResult> operations;
+  std::vector<std::vector<kernel::OperationResult>> copies;  // private per-body pattern history
   std::vector<kernel::ShapePtr> bindings;
   std::size_t bytes = sizeof(Output);
 };
@@ -155,7 +156,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/14;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/15;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -165,6 +166,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
     const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
+    const bool pattern_feature = feature.type == "pattern_linear";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
     const auto affected = targets(feature, previous);
@@ -204,6 +206,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         return sketches.at(id);
       };
       std::shared_ptr<const Output> sketch, axis_sketch;
+      std::optional<LinearPattern> pattern;
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -213,7 +216,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           result_mode = mode;
           bind(affected.front(), "/inputs/result/" + result_mode);
         }
-      } else if (feature.type == "transform") {
+      } else if (feature.type == "transform" || pattern_feature) {
+        if (pattern_feature) pattern = take(prepare_linear_pattern(inputs));
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
       } else if (feature.type == "boolean") {
@@ -277,6 +281,36 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           ++result.kernel_calls;
           built->operations.push_back(take(state_->kernel.boolean_operation(
               bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
+        } else if (pattern_feature) {
+          built->copies.resize(bindings.size());
+          built->bytes += bindings.size() * sizeof(built->copies.front());
+          for (std::size_t body = 0; body < bindings.size(); ++body) {
+            const auto& seed = bindings[body];
+            if (pattern->count == 1) {
+              ++result.kernel_calls;
+              built->operations.push_back(take(state_->kernel.transform(seed, {})));
+              continue;
+            }
+            std::vector<kernel::ShapePtr> instances;
+            for (std::size_t i = 1; i < pattern->count; ++i) {
+              kernel::RigidTransform placement;
+              placement.translation = pattern->step * static_cast<double>(i);
+              ++result.kernel_calls;
+              auto copy = take(state_->kernel.transform(seed, placement));
+              for (const auto& h : copy.history)
+                for (const auto& entity : h.modified)
+                  if (entity && entity->kind() == kernel::EntityKind::kFace) {
+                    copy.generated.push_back({"instance", entity, {}});
+                    copy.estimated_bytes += sizeof(kernel::Generated) + 64;
+                  }
+              instances.push_back(copy.shape);
+              built->bytes += sizeof(copy) + copy.estimated_bytes;
+              built->copies[body].push_back(std::move(copy));
+            }
+            ++result.kernel_calls;
+            built->operations.push_back(
+                take(state_->kernel.boolean_operation(seed, instances, kernel::BooleanOp::kUnion)));
+          }
         } else {
           const auto operation = take(prepare_transform(inputs, axis_input));
           for (const auto& input : bindings) {
@@ -295,6 +329,11 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         std::vector<const BodyState*> named_inputs;
         if (input) named_inputs.push_back(input);
         for (const auto& tool : tools) named_inputs.push_back(&result.bodies.at(tool));
+        std::vector<BodyState> copied;
+        if (!output->copies.empty())
+          for (const auto& copy : output->copies[i])
+            copied.push_back({copy.shape, {}, names({input}, copy, feature.id), {}});
+        for (const auto& copy : copied) named_inputs.push_back(&copy);
         BodyState temporary;
         if (output->tool) {
           temporary.names = names({}, *output->tool, feature.id);

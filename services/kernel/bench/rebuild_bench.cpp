@@ -96,6 +96,14 @@ int main() {
     plate.params.push_back({"tail", "3 mm", {}, {}, {}, {}});
     plate.features.back().inputs =
         ir::json::parse(R"({"bodies":["plate"],"translation":["tail",0,0]})").value();
+    auto linear = plate;
+    linear.features.erase(linear.features.begin() + 2);  // 27 transforms: 30 features total
+    linear.features.insert(
+        linear.features.begin() + 2,
+        test::feature("repeat", "pattern_linear", R"({"bodies":["plate"],"count":3,
+          "spacing":15,"direction":"x"})"));
+    Part linear_part{"linear pattern", linear, 600, 20, 27, 31, 31, 1};
+    linear_part.surface_area = [](double depth) { return 1200 + 180 * depth; };
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -226,7 +234,8 @@ int main() {
         "Unique edits; analytic volume/centroid and execution counts checked for every sample. No "
         "IPC/tessellation.");
     for (const auto& part :
-         {Part{"plate", plate, 200, 5}, Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
+         {Part{"plate", plate, 200, 5}, linear_part,
+          Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},
           Part{"sketch axis", sketch_axis, 25 * std::numbers::pi, 5, 28, 29, 29, 0},

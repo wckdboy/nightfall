@@ -580,4 +580,29 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& 
     return result;
   });
 }
+
+std::expected<LinearPattern, ir::Error> prepare_linear_pattern(const Value& inputs) {
+  return guarded([&] {
+    if (inputs.find("features")) fail("/features", "feature-target patterns are not implemented");
+    const double evaluated_count = number(field(inputs, "count"));
+    if (evaluated_count > 64)
+      fail("/count", "linear pattern exceeds the initial 64-instance limit");
+    const auto count = static_cast<std::size_t>(evaluated_count);
+    const auto& targets = *field(inputs, "bodies").if_array();
+    if (targets.size() > 64 / count)
+      fail("/bodies", "linear pattern exceeds the initial 64-total-instance work limit");
+    std::set<std::string> bodies;
+    for (std::size_t i = 0; i < targets.size(); ++i)
+      if (!bodies.insert(*targets[i].if_string()).second)
+        fail("/bodies/" + std::to_string(i), "body targets must be unique");
+    const double spacing = number(field(inputs, "spacing"));
+    if (count > 1 && !(std::abs(spacing) > kTolerance.linear))
+      fail("/spacing", "pattern spacing must exceed the linear tolerance in magnitude");
+    const auto step = unit(field(inputs, "direction"), "/direction") * spacing;
+    const auto last = step * static_cast<double>(count - 1);
+    if (!std::isfinite(last.x) || !std::isfinite(last.y) || !std::isfinite(last.z))
+      fail("/spacing", "pattern offsets exceed finite coordinates");
+    return LinearPattern{count, step};
+  });
+}
 }  // namespace nf::kernel_service

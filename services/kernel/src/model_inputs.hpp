@@ -18,6 +18,10 @@ struct Sketch {
   std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
   std::map<std::string, Line> lines;         // authored direction, independent of path traversal
 };
+struct LinearPattern {
+  std::size_t count;  // includes the original seed
+  math::Vec3 step;    // normalized direction times signed spacing
+};
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
 /// Sketches support rect/circle/arc/ellipse/polygon/spline, including open reference curves.
@@ -49,4 +53,7 @@ std::expected<kernel::Revolution, ir::Error> prepare_revolution(
     const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr);
+/// Unique body targets only; at most 64 total instances, including all seeds. Count 1
+/// preserves the seed; larger counts require |spacing| > 1e-6 mm and finite offsets.
+std::expected<LinearPattern, ir::Error> prepare_linear_pattern(const ir::json::Value& inputs);
 }  // namespace nf::kernel_service

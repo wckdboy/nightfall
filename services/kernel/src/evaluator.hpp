@@ -37,7 +37,11 @@ struct Evaluation {
 
 /// Per-document, serialized service evaluator (RFC 0007). The borrowed kernel must outlive it.
 /// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions/revolutions
-/// (new/join/cut/intersect), rigid transforms and solid booleans. Booleans retire tools unless
+/// (new/join/cut/intersect), rigid transforms, linear body patterns and solid booleans.
+/// Patterns union translated copies into each seed body; count includes the seed. Copied
+/// faces retain inherited names and gain the pattern's local "instance" role. All target
+/// bodies publish atomically; private copy histories remain in bounded cache entries.
+/// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.
 /// Named points are retained separately from profile curves. Unsupported features are errors;
