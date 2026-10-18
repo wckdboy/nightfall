@@ -80,8 +80,9 @@ TEST_CASE("unsupported sketch semantics are errors with field pointers") {
   CHECK(constraints.error().pointer == "/inputs/constraints/0/type");
   auto point = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"point","at":[0,0]}],"constraints":[]})"));
-  REQUIRE_FALSE(point);
-  CHECK(point.error().pointer == "/inputs/entities/0/type");
+  REQUIRE(point);
+  CHECK(point->points.at("a") == math::Vec2{0, 0});
+  CHECK(point->paths.empty());
   auto radius = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"circle","center":[0,0],"radius":-1}],"constraints":[]})"));
   CHECK_FALSE(radius);

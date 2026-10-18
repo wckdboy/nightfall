@@ -140,6 +140,27 @@ int main() {
       {"type":"perpendicular","entities":["a","b"]},{"type":"equal","entities":["a","c"]},
       {"type":"equal","entities":["b","d"]}]})")
                                          .value();
+    auto point_constrained = constrained;
+    auto point_entities = *constrained.features[0].inputs.find("entities")->if_array();
+    const auto points = ir::json::parse(R"([
+      {"id":"m","type":"point","at":[0,-10]},
+      {"id":"p","type":"point","at":["-depth / 6 - 2 mm",0]},
+      {"id":"q","type":"point","at":["-depth / 6 + 2 mm",0]}])")
+                            .value();
+    point_entities.insert(point_entities.end(), points.if_array()->begin(),
+                          points.if_array()->end());
+    auto point_constraints = *constrained.features[0].inputs.find("constraints")->if_array();
+    const auto relations = ir::json::parse(R"([
+      {"type":"coincident","entities":[{"entity":"a","point":"end"},{"entity":"b","point":"start"}]},
+      {"type":"distance","entities":[{"entity":"a","point":"start"},{"entity":"a","point":"end"}],"value":"depth / 3"},
+      {"type":"midpoint","entities":["m","a"]},{"type":"symmetric","entities":["p","q","d"]}])")
+                               .value();
+    point_constraints.insert(point_constraints.end(), relations.if_array()->begin(),
+                             relations.if_array()->end());
+    point_constrained.features[0].inputs =
+        ir::json::Object{{"plane", *constrained.features[0].inputs.find("plane")},
+                         {"entities", std::move(point_entities)},
+                         {"constraints", std::move(point_constraints)}};
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -164,6 +185,7 @@ int main() {
           Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
           Part{"constrained", constrained, 200, 0, 28, 29, 29, 0, true},
+          Part{"point refs", point_constrained, 200, 0, 28, 29, 29, 0, true},
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

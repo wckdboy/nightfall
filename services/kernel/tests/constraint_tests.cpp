@@ -191,10 +191,9 @@ TEST_CASE("sketch constraints reject unsupported relations and incompatible refe
       {"id", "r"}, {"type", "rect"}, {"corner", Array{30.0, 0.0}}, {"size", Array{10.0, 20.0}}});
   rejected(sketch(mixed, {relation("equal", {"a", "r"})}), "/entities/1", "circle or arc");
   rejected(circle(10.0, {radius("missing", 10.0)}), "/entities/0", "unknown");
-  for (const auto* type : {"coincident", "tangent", "midpoint"})
-    rejected(circle(10.0, {relation(type, {"a", "a"})}), "/type", "not implemented");
+  rejected(circle(10.0, {relation("tangent", {"a", "a"})}), "/type", "not implemented");
   rejected(circle(10.0, {relation("fixed", {"a"})}), "/type", "not implemented");
-  rejected(circle(10.0, {relation("symmetric", {"a", "a", "a"})}), "/type", "not implemented");
+  rejected(circle(10.0, {relation("coincident", {"a", "a"})}), "/entities/0", "point reference");
 }
 
 TEST_CASE("sketch constraint work and derived geometry are bounded", "[constraints]") {

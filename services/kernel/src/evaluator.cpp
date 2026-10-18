@@ -113,6 +113,7 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
 }
 std::size_t sketch_bytes(const Sketch& sketch) {
   std::size_t bytes = sizeof(Sketch);
+  for (const auto& point : sketch.points) bytes += sizeof(point) + 64 + point.first.size();
   for (const auto& path : sketch.paths) {
     bytes += sizeof(path);
     for (const auto& curve : path)
@@ -150,7 +151,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/9;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/10;roles/3;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;

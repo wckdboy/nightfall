@@ -39,7 +39,8 @@ struct Evaluation {
 /// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions/revolutions
 /// (new/join/cut/intersect), rigid transforms and solid booleans. Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
-/// constraints without changing coordinates. Unsupported features are explicit errors;
+/// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.
+/// Named points are retained separately from profile curves. Unsupported features are errors;
 /// independent branches continue.
 /// No files are opened, no cache is persisted, and returned geometry survives cache eviction.
 class Evaluator {

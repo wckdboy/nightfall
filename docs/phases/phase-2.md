@@ -27,6 +27,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#108](https://github.com/wckdboy/nightfall/issues/108) | Analytic circular profiles and fast exact mass integration | kernel | Implemented with analytic-surface regressions; local verification and rebuild evidence below |
 | [#109](https://github.com/wckdboy/nightfall/issues/109) | Certified shared curved spans in sketch profiles | math | Implemented with rational-curve, fill-rule and production evaluator regressions |
 | [#110](https://github.com/wckdboy/nightfall/issues/110) | Verify line and radius constraints in evaluated sketches | kernel | Implemented with tolerance, unit, dependency and cache regressions; local evidence below |
+| [#111](https://github.com/wckdboy/nightfall/issues/111) | Resolve point references and verify point constraints | kernel | Implemented with reference-safety, point-retention, constraint and solid regressions |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -283,6 +284,30 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   diagnostics or retries. Nightfall is instrumented; OCCT remains the pinned Release shared
   library. Rebuild evidence follows; remote CI/review and full phase sign-off remain pending.
 
+- 2026-10-18 — #111 resolves schema-v1 point references safely: named points, line/arc
+  endpoints and arc/circle/ellipse centers. Point-qualified operands for entire-line/radius
+  constraints report a field error. A tests-first ASan/UBSan reproduction confirmed the old
+  evaluator bound a string reference to null and aborted on a schema-valid object operand;
+  its regression covers all six existing constraint kinds. Standalone points are retained
+  separately from closed profile curves and included in cache memory estimates. Point-only
+  sketches remain empty profiles for solid operations. Coincidence, point-point distance,
+  midpoint (point/line in either order) and two-point symmetry about a third line verify
+  evaluated coordinates within 1e-6 mm. Midpoint arithmetic avoids overflowing coordinate
+  sums; non-finite derived results and unsupported point roles fail explicitly. No coordinates
+  are solved or moved, and no schema, dependency or public kernel-interface change is made.
+  Evaluator identity is bumped; the combined curve/point work limit stays 4096.
+  Eleven new regressions cover mixed reference forms, unit conversion, negative arc sweeps,
+  wrapped angles, tolerance bounds, 48 fixed-seed rigid placements at two scales, reversed
+  axes, large coordinates, point retention and the work limit. Production solids verify
+  width edits from 10 to 12 mm: volumes 6000/7200 mm³ and areas 2200/2400 mm² within 1e-8,
+  plus centroids, dependency failures, equivalent-unit cache recovery and retained names.
+  The combined constraint selection passes 21 cases / 610 assertions. Full Release
+  `tools/check.sh --preset occt` passes 382/382 (19.47 s), including hygiene and the 202-case
+  plus 20-reference-document schema checks. The exact CI ASan/UBSan kernel/evaluator/cache
+  selection passes 148/148 (40.57 s), including the former null-reference reproduction,
+  without diagnostics or retries. Nightfall is instrumented; OCCT uses the pinned Release
+  shared libraries. Benchmark evidence follows; remote CI/review and phase sign-off remain open.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -505,3 +530,34 @@ observations, not universal bounds or an optimization claim. This run follows al
 and includes parsing, validation, expressions, constraint verification, hashing, exact geometry,
 validity and naming; serialization, IPC and tessellation remain excluded. Remote CI/review
 and full Phase 2 sign-off remain pending.
+
+### Point-reference constraint rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature part extends the constrained plate with three named points and four relations:
+endpoint coincidence, endpoint distance, midpoint and reflection symmetry. Each unique depth
+edit changes profile width, point positions and the distance dimension. All ten constraints
+are verified before rebuilding the extrusion and 28 transforms. Every sample checks volume
+`(20/3) × depth²` mm³ within 1e-5, centroid x/z within 1e-6 mm and execution/cache counts.
+Run `build/occt/services/kernel/nf_evaluator_bench`.
+
+| Point-reference plate | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 3.725 | 5.280 | 5.569 | 29 / 0 |
+| Profile + point + depth edit | 2.548 | 5.969 | 7.003 | 29 / 0 |
+| Last transform edit | 0.830 | 1.832 | 2.072 | 1 / 29 |
+| Unused parameter edit | 0.877 | 2.012 | 2.103 | 0 / 30 |
+
+The 96-entry/64 MiB cache budget retains 96 entries / 10,529,169 estimated bytes after profile
+edits, including named points (not RSS). Same-run depth-edit median/p95/max:
+plate 4.800/14.323/20.848 ms, bored plate 11.953/15.890/17.751 ms,
+boolean-cut plate 11.860/17.691/19.629 ms, sleeve 5.184/8.136/9.023 ms,
+elliptic tube 20.813/24.498/24.800 ms, shared-edge plate 5.312/6.653/7.398 ms,
+shared-arc notch 5.533/9.410/11.429 ms, constrained plate 2.793/5.331/5.854 ms,
+toroidal seal 103.771/149.924/153.931 ms. The toroidal median/tail exceeds 100 ms in this
+run; elliptic cold builds reach 404.300 ms and even fully cached sleeve edits reach 276.516 ms.
+The point-reference case stays below 100 ms in every sample. These observations include
+substantial timing variation and do not establish a universal bound or optimization claim.
+The run follows all builds/tests and includes parsing, validation, expressions, point/constraint
+verification, hashing, exact geometry, validity and naming. Serialization, IPC and tessellation
+remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.

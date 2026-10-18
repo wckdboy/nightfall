@@ -4,6 +4,7 @@
 
 #include <map>
 #include <numbers>
+#include <numeric>
 #include <set>
 
 #include "nf/math/constructors.hpp"
@@ -155,19 +156,31 @@ void verify_constraints(const Value& inputs) {
     const auto& kind = *field(constraint, "type").if_string();
     const auto pointer = "/constraints/" + std::to_string(i);
     if (kind != "horizontal" && kind != "vertical" && kind != "parallel" &&
-        kind != "perpendicular" && kind != "equal" && kind != "radius")
+        kind != "perpendicular" && kind != "equal" && kind != "radius" && kind != "coincident" &&
+        kind != "distance" && kind != "midpoint" && kind != "symmetric")
       fail(pointer + "/type", "constraint is not implemented: " + kind);
     const auto reference = [&](std::size_t index) {
       return pointer + "/entities/" + std::to_string(index);
     };
+    const auto operand = [&](std::size_t index) -> const Value& {
+      return field(constraint, "entities").if_array()->at(index);
+    };
     const auto entity = [&](std::size_t index) -> const Value& {
-      const auto& id = *field(constraint, "entities").if_array()->at(index).if_string();
+      const auto& r = operand(index);
+      const auto& id = r.if_string() ? *r.if_string() : *field(r, "entity").if_string();
       const auto found = by_id.find(id);
-      if (found == by_id.end()) fail(reference(index), "unknown constraint entity: " + id);
+      if (found == by_id.end())
+        fail(reference(index) + (r.if_string() ? "" : "/entity"),
+             "unknown constraint entity: " + id);
       return *found->second;
     };
+    const auto whole = [&](std::size_t index) -> const Value& {
+      if (!operand(index).if_string())
+        fail(reference(index) + "/point", kind + " constraint requires an entire entity");
+      return entity(index);
+    };
     const auto line = [&](std::size_t index) {
-      const auto& e = entity(index);
+      const auto& e = whole(index);
       if (*field(e, "type").if_string() != "line")
         fail(reference(index), kind + " constraint requires a line");
       const auto delta = point2(field(e, "end")) - point2(field(e, "start"));
@@ -177,7 +190,7 @@ void verify_constraints(const Value& inputs) {
       return delta;
     };
     const auto radius = [&](std::size_t index) {
-      const auto& e = entity(index);
+      const auto& e = whole(index);
       const auto& type = *field(e, "type").if_string();
       if (type != "circle" && type != "arc")
         fail(reference(index), kind + " constraint requires a circle or arc");
@@ -186,13 +199,62 @@ void verify_constraints(const Value& inputs) {
         fail(reference(index), "constraint requires a finite positive radius");
       return r;
     };
+    const auto point = [&](std::size_t index) -> Vec2 {
+      const auto& e = entity(index);
+      const auto& type = *field(e, "type").if_string();
+      const auto* role = operand(index).find("point");
+      if (!role) {
+        if (type == "point") return point2(field(e, "at"));
+        fail(reference(index), "point reference must specify start/end/center or name a point");
+      }
+      const auto& name = *role->if_string();
+      if (name == "center" && (type == "circle" || type == "arc" || type == "ellipse"))
+        return point2(field(e, "center"));
+      if (name != "center" && type == "line") return point2(field(e, name));
+      if (name != "center" && type == "arc") {
+        constexpr double turn = 2 * std::numbers::pi;
+        const double r = number(field(e, "radius")), sweep = number(field(e, "sweep_angle"));
+        if (!(r > kTolerance.linear && std::abs(sweep) > kTolerance.angular &&
+              std::abs(sweep) <= turn))
+          fail(reference(index) + "/point",
+               "arc point reference requires a valid radius and sweep");
+        const double angle =
+            std::remainder(number(field(e, "start_angle")), turn) + (name == "end" ? sweep : 0);
+        const auto p = point2(field(e, "center")) + Vec2{std::cos(angle), std::sin(angle)} * r;
+        if (!std::isfinite(p.x) || !std::isfinite(p.y))
+          fail(reference(index) + "/point", "point reference exceeds finite coordinates");
+        return p;
+      }
+      fail(reference(index) + "/point", name + " point is not supported for " + type);
+    };
+    const auto midpoint = [](Vec2 a, Vec2 b) {
+      return Vec2{std::midpoint(a.x, b.x), std::midpoint(a.y, b.y)};
+    };
     double residual = 0, tolerance = kTolerance.linear;
-    if (kind == "radius") {
+    if (kind == "coincident" || kind == "distance") {
+      const double expected = kind == "distance" ? number(field(constraint, "value")) : 0;
+      if (expected < 0) fail(pointer + "/value", "distance dimension must be nonnegative");
+      const auto a = point(0), b = point(1);
+      residual = std::abs(math::length(a - b) - expected);
+    } else if (kind == "midpoint") {
+      const std::size_t l =
+          operand(0).if_string() && *field(entity(0), "type").if_string() == "line" ? 0 : 1;
+      (void)line(l);
+      const auto& e = entity(l);
+      residual =
+          math::length(point(1 - l) - midpoint(point2(field(e, "start")), point2(field(e, "end"))));
+    } else if (kind == "symmetric") {
+      const auto direction = *math::normalized(line(2), kTolerance);
+      const auto a = point(0), b = point(1), anchor = point2(field(entity(2), "start"));
+      // Components of b minus the reflection of a; midpoint avoids adding huge coordinates.
+      residual = std::hypot(math::dot(b - a, direction),
+                            2 * math::cross(direction, midpoint(a, b) - anchor));
+    } else if (kind == "radius") {
       const double expected = number(field(constraint, "value"));
       if (!(expected > 0)) fail(pointer + "/value", "radius dimension must be positive");
       residual = std::abs(radius(0) - expected);
     } else if (kind == "equal") {
-      residual = *field(entity(0), "type").if_string() == "line"
+      residual = *field(whole(0), "type").if_string() == "line"
                      ? std::abs(math::length(line(0)) - math::length(line(1)))
                      : std::abs(radius(0) - radius(1));
     } else {
@@ -209,6 +271,8 @@ void verify_constraints(const Value& inputs) {
         residual = kind == "parallel" ? std::atan2(cross, dot) : std::atan2(dot, cross);
       }
     }
+    if (!std::isfinite(residual))
+      fail(pointer, "constraint calculation exceeds finite coordinates");
     if (!(residual <= tolerance)) {
       const auto unit = tolerance == kTolerance.linear ? " mm" : " rad";
       fail(pointer, kind + " constraint is not satisfied: residual " +
@@ -251,7 +315,9 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
       const auto pointer = "/entities/" + std::to_string(i);
       const auto& type = *field(entity, "type").if_string();
       if (++curves > 4096) fail(pointer, "sketch exceeds the initial 4096-curve work limit");
-      if (type == "circle") {
+      if (type == "point") {
+        sketch.points.emplace(*field(entity, "id").if_string(), point2(field(entity, "at")));
+      } else if (type == "circle") {
         const auto radius = number(field(entity, "radius"));
         if (!(radius > kTolerance.linear)) fail(pointer + "/radius", "radius is too small");
         sketch.paths.push_back({math::make_circle(point2(field(entity, "center")), radius)});

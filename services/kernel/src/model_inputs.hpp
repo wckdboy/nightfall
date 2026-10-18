@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <map>
+
 #include "nf/ir/document.hpp"
 #include "nf/kernel/kernel.hpp"
 
@@ -9,6 +11,7 @@ namespace nf::kernel_service {
 struct Sketch {
   kernel::Plane plane;
   std::vector<std::vector<math::NurbsCurve2>> paths;
+  std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
 };
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
@@ -16,8 +19,12 @@ struct Sketch {
 /// Verify horizontal/vertical lines, parallel/perpendicular line pairs (1e-9 rad), equal
 /// line lengths or circle/arc radii, and circle/arc radius dimensions (1e-6 mm). Reversed
 /// lines are equivalent for orientation; equal arcs compare radii, not sweep lengths.
+/// Point constraints (1e-6 mm): coincidence/distance between two points, midpoint with
+/// one point and one entire line in either order, symmetry of two points about a third
+/// entire line. Resolve named points, line/arc start/end and arc/circle/ellipse centers.
+/// Bare curve IDs never imply a point; point-qualified IDs cannot stand for entire curves.
 /// Coordinates are checked, never solved or moved. Other constraints fail explicitly.
-/// Work limits: 4096 sketch curves, spline poles, constraints and arranged profile spans.
+/// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
