@@ -156,7 +156,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/17;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/18;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -195,7 +195,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         const auto& body = result.bodies.at(id);
         if (!body.shape || !body.hash)
           fail(body.unavailable, "body is unavailable: " + id, pointer);
-        dependencies.emplace(pointer, *body.hash);
+        // A selector can bind multiple current bodies at one reference pointer.
+        dependencies.emplace(pointer + "/body/" + id, *body.hash);
         bindings.push_back(body.shape);
       };
       auto bind_sketch = [&](const std::string& id, const std::string& pointer) {
@@ -209,6 +210,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       std::shared_ptr<const Output> sketch, axis_sketch;
       std::optional<BodyPattern> pattern;
       std::optional<kernel::Plane> mirror;
+      std::optional<kernel::Plane> selected_plane;
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -234,6 +236,47 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         }
       } else if (feature.type != "sketch") {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
+      }
+      if (feature.type == "sketch") {
+        const auto& plane = *inputs.find("plane");
+        const std::string pointer = "/inputs/plane";
+        if (!plane.find("datum") && !plane.find("origin")) {
+          for (const auto* key : {"where", "from", "except", "any", "edges_of", "faces_of"})
+            if (plane.find(key))
+              fail("kernel", "selector field is not implemented", pointer + "/" + key);
+          const auto& id = string(*plane.find("created_by"));
+          const auto& producer = result.features[features.at(id)];
+          if (!producer.hash)
+            fail(
+                producer.status == FeatureStatus::kSuppressed ? "input_suppressed" : "input_failed",
+                "selected producer is unavailable: " + id, pointer + "/created_by");
+          dependencies.emplace(pointer + "/created_by/feature/" + id, *producer.hash);
+          std::vector<kernel::EntityPtr> matches;
+          for (const auto& body_id : previous.at(id)) {
+            bind(body_id, pointer + "/created_by");
+            const auto& body = result.bodies.at(body_id);
+            for (const auto& name : body.names) {
+              if (name.feature != id) continue;
+              if (const auto* role = plane.find("role"); role && name.role != string(*role))
+                continue;
+              if (!name.entity || name.entity->owner() != body.shape)
+                fail("kernel", "selected name belongs to a different snapshot", pointer);
+              if (name.entity->kind() != kernel::EntityKind::kFace) continue;
+              if (std::ranges::none_of(
+                      matches, [&](const auto& entity) { return entity->same_as(*name.entity); }))
+                matches.push_back(name.entity);
+            }
+          }
+          if (matches.size() != 1)
+            fail("selector_count",
+                 "sketch plane requires one face; selector matched " +
+                     std::to_string(matches.size()),
+                 pointer);
+          ++result.kernel_calls;
+          auto resolved = state_->kernel.face_plane(matches.front());
+          if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
+          selected_plane = *resolved;
+        }
       }
       const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
                               ? inputs.find("axis")
@@ -261,8 +304,9 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         built->bindings = bindings;
         built->bytes += bindings.size() * sizeof(kernel::ShapePtr);
         if (feature.type == "sketch") {
-          built->sketch = take(prepare_sketch(inputs));
+          built->sketch = take(prepare_sketch(inputs, selected_plane ? &*selected_plane : nullptr));
           built->bytes += sketch_bytes(*built->sketch);
+          for (const auto& input : bindings) built->bytes += input->estimated_bytes();
         } else if (profile_feature) {
           auto solid = [&] {
             if (feature.type == "extrude") {
@@ -361,7 +405,19 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       for (std::size_t i = 0; i < published.size(); ++i)
         result.bodies[affected[i]] = std::move(published[i]);
       const auto* keep = inputs.find("keep_tools");
-      if (!keep || !*keep->if_bool())
+      const bool keep_tools = keep && *keep->if_bool();
+      if (!tools.empty())
+        for (auto& [producer, ids] : previous) {
+          if (std::ranges::none_of(
+                  ids, [&](const auto& id) { return std::ranges::find(tools, id) != tools.end(); }))
+            continue;
+          std::set<std::string> current(ids.begin(), ids.end());
+          if (!keep_tools)
+            for (const auto& tool : tools) current.erase(tool);
+          current.insert(affected.front());
+          ids.assign(current.begin(), current.end());
+        }
+      if (!keep_tools)
         for (const auto& tool : tools) result.bodies[tool] = {{}, {}, {}, "input_failed"};
       if (output->sketch) sketches[feature.id] = output;
       if (cached)

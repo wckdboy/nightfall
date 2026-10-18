@@ -36,6 +36,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#117](https://github.com/wckdboy/nightfall/issues/117) | Parametric linear body patterns with complete provenance | kernel | Implemented with fused/separated arrays, input bounds, dependency, naming and atomic-failure regressions; local evidence below |
 | [#118](https://github.com/wckdboy/nightfall/issues/118) | Circular body patterns with sketch-line axes | kernel | Implemented with signed sweeps, angular bounds, nested arrays, axis dependencies, naming and failure regressions; local evidence below |
 | [#119](https://github.com/wckdboy/nightfall/issues/119) | Exact body mirrors with complete reflection history | kernel | Implemented with typed reflection, oriented history, immutable inputs, plane edits and atomic-publication regressions; local evidence below |
+| [#120](https://github.com/wckdboy/nightfall/issues/120) | Sketches attached to generated planar faces | kernel | Implemented with oriented face queries, current provenance, boolean transfers, exact cardinality and cache-binding regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -527,6 +528,43 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   is instrumented; OCCT remains the pinned Release shared library. API, adapter/evaluator
   headers and README document behavior and limits. Rebuild evidence follows; remote CI/review
   and full Phase 2 sign-off remain pending.
+- 2026-10-18 — #120 attaches sketches to generated analytic planar faces under RFCs
+  0005/0007. A sketch plane supports `created_by` and optional local `role`, requiring one
+  current face even with `expect: any/some`. Missing/multiple matches report `selector_count`;
+  filters, entity qualifiers, selector sets and selector planes outside sketches remain
+  unsupported. Typed `IKernel::face_plane` returns the located parameter origin/U axis and
+  outward normal, restoring a right-handed frame for reversed/reflected faces. It validates
+  backend/snapshot membership and rejects curved/non-face handles without changing geometry.
+  Body candidates follow naming history through modifiers and boolean transfers, including
+  successive tool retirements and retained copies. Every candidate binds before a result is
+  selected; a role-absent body's edit still changes the dependency hash. Unavailable current
+  bodies fail explicitly. Sketch cache entries retain source snapshot bindings, charge their
+  geometry estimates and conservatively rebuild after recreation. The face query runs before
+  cache reuse and is included in kernel-call counts.
+  A tests-first ID-swap regression catches stale sketch reuse on the exact same body snapshot:
+  swapping two producer IDs must move the boss from (5,10,31) to (25,10,41) mm. Depending on
+  both producer feature and current body hashes fixes this case, including downstream rebuilds.
+  Evaluator identity advances to 18, naming stays 4; backend identity adds the oriented face
+  query convention. Backends must implement the new typed query; commit/PR mark this source/
+  ABI change with `!`. No schema, persisted-format or dependency change.
+  Tests first: kernel tests fail compilation before the API, all five kernel cases fail on
+  a temporary unsupported query, and all fourteen initial evaluator cases fail on selector
+  planes. Final targeted tests pass 5 kernel cases / 59 assertions and 16 evaluator cases /
+  727 assertions (seed 20261018). Coverage includes signed caps, rigid/reflected placement,
+  cutting-face orientation, source serialization equality, invalid/foreign/curved handles,
+  parameter/unit edits, merged/separated names, missing/ambiguous faces, consumed/retained
+  tools, successive transfers, deleted roles, all candidate dependencies, suppression/
+  rollback/failure, query failure/retry, ID edits, binding misses, byte budgets and teardown.
+  A radius-2 mm, height-2 mm attached boss has volume 8π mm³ / area 16π mm², with centroid
+  z = D + 1 mm on the end cap and z = -1 mm on the outward start cap. The cutting-tool
+  attachment follows the reversed face at z = 5 mm into the cavity. Volume/area tolerances
+  are 1e-7; centroid components 1e-8 mm; queried normal/axis checks 1e-10.
+  Full Release `tools/check.sh --preset occt` passes 501/501 (29.50 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan
+  kernel/evaluator/cache selection passes 267/267 (64.39 s), with no diagnostics. Nightfall
+  is instrumented; OCCT remains the pinned Release shared library. API/adapter/evaluator
+  contracts and README document supported selectors, limits and migration. Rebuild evidence
+  follows; remote CI/review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
 
@@ -1035,5 +1073,36 @@ All parameter-edit samples across the seventeen-part catalogue stay below 100 ms
 local run; the largest is the toroidal seal at 77.652 ms (median 75.580 / p95 77.267).
 These are observations, not universal bounds or an optimization claim. Timing includes
 parsing, schema/parameter/input evaluation, references, hashing, geometry, validity and
+naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
+Phase 2 sign-off remain pending.
+
+### Face-attached sketch rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has two sketches, two extrusions and 26 transforms. The second
+sketch selects the first extrusion's current `cap_end` face; its extrusion creates the
+measured 10×20 mm plate from z = D to 2D. Every sample checks volume `200D` mm³ / area
+`400 + 60D` mm² within 1e-5, centroid x (including translations) and z = 1.5D within
+1e-6 mm, and exact kernel/cache counts. D is depth in mm. Run
+`build/occt/services/kernel/nf_evaluator_bench` after builds/tests. All 30 samples of every
+mode pass on all eighteen parts (2160 measured rebuilds).
+
+| Face-attached plate | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 2.712 | 2.795 | 3.005 | 29 / 0 |
+| Host depth + attached depth edit | 2.911 | 2.953 | 3.021 | 29 / 1 |
+| Last transform edit | 0.642 | 0.661 | 0.668 | 2 / 29 |
+| Unused parameter edit | 0.616 | 0.627 | 0.639 | 1 / 30 |
+
+Every evaluation performs one plane query, including cache-hit cases. Cold/depth samples
+also perform 28 modeling calls; the last-transform edit performs one modeling call, and
+the unused edit performs none. The 96-entry/64 MiB budget retains 96 entries / 10,412,368
+estimated bytes after depth edits, including source snapshots retained by attached sketches
+(not RSS). Same-run depth edits: linear pattern 6.785/6.975/7.119 ms median/p95/max,
+circular pattern 8.809/9.102/9.140 ms and mirror 5.867/6.260/6.989 ms. All parameter-edit
+samples across the eighteen-part catalogue stay below 100 ms in this local run; the largest
+is the toroidal seal at 98.014 ms (median 79.130 / p95 87.080). These are observations,
+not universal bounds or an optimization claim. Timing includes parsing, schema/parameter/
+input evaluation, current provenance and plane queries, hashing, geometry, validity and
 naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
 Phase 2 sign-off remain pending.

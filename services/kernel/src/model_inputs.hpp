@@ -46,7 +46,9 @@ struct BodyPattern {
 /// Revolve/rotation/pattern axes resolve named lines from the supplied evaluated axis sketch; map
 /// start and start-to-end direction through its plane. Selector axes remain unsupported.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
-std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
+/// The evaluator may supply an already resolved, oriented face plane for a selector sketch.
+std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs,
+                                                const kernel::Plane* selected_plane = nullptr);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
                                                               const Sketch& sketch);
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(

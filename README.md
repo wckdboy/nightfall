@@ -138,6 +138,17 @@ The shared 64-total-instance limit admits at most 32 mirror targets. All bodies 
 together after geometry and naming succeed. Feature targets and selector planes remain
 unimplemented.
 
+Sketch planes can select a generated analytic planar face, for example
+`{"created_by":"base","role":"cap_end","expect":"one"}`. Selection follows current face names
+through transforms, patterns, mirrors and booleans, including consumed or retained tools.
+The face supplies its located parameter origin/U axis and outward normal; the resulting
+right-handed frame places the sketch's authored entities. Every plane requires exactly one
+face, including with `expect: any/some`; zero or multiple matches report `selector_count`.
+The producer feature and all candidate bodies are dependencies before role filtering.
+Cached evaluations query the current face frame, and execution counts include that query.
+Geometric filters, `from` qualifiers, selector sets and selector planes outside sketches
+remain unimplemented.
+
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):
 

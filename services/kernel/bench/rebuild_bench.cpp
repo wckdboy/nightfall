@@ -24,6 +24,7 @@ struct Part {
   bool scale_profile_with_depth = false;
   double center_z_per_depth = 0.5;
   double (*surface_area)(double depth) = nullptr;
+  std::size_t queries = 0;  // queries also execute when every feature is cached
 };
 void verify(const Evaluation& result, const Part& part, double depth, double tail,
             std::size_t calls, std::size_t hits) {
@@ -47,7 +48,7 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
   Evaluator evaluator(backend, {96, 64 * 1024 * 1024});
   auto document = part.document;
   auto warm = evaluator.evaluate(test::source(document)).value();
-  verify(warm, part, 30, 3, part.cold_calls, 0);
+  verify(warm, part, 30, 3, part.cold_calls + part.queries, 0);
   std::vector<double> milliseconds;
   std::size_t calls = 0, hits = 0;
   for (int sample = 0; sample < kSamples; ++sample) {
@@ -71,6 +72,7 @@ void measure(kernel::IKernel& backend, const Part& part, const std::string& mode
             : mode == "last transform edit" ? 1
             : mode == "depth edit"          ? part.depth_calls
                                             : part.cold_calls;
+    calls += part.queries;
     hits = mode == "cold"          ? 0
            : mode == "depth edit"  ? part.depth_hits
            : mode == "unused edit" ? 30
@@ -117,6 +119,22 @@ int main() {
         test::feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{"datum":"yz"}})");
     Part mirror_part{"mirror", mirrored, 8, 0, 27, 30, 30, 1};
     mirror_part.surface_area = [](double depth) { return 16 + 16 * depth; };
+    auto attached = plate;
+    attached.features[1].inputs = ir::json::parse(R"({"profile":{"sketch":"outline"},
+      "distance":"depth","result":{"new":"support","body_type":"brep"}})")
+                                      .value();
+    attached.features.erase(attached.features.begin() + 2, attached.features.begin() + 4);
+    attached.features.insert(
+        attached.features.begin() + 2,
+        {test::feature("face_profile", "sketch", R"({"plane":{"created_by":"base","role":"cap_end",
+        "expect":"one"},"entities":[{"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],
+        "constraints":[]})"),
+         test::feature("cap", "extrude", R"({"profile":{"sketch":"face_profile"},"distance":"depth",
+        "result":{"new":"plate","body_type":"brep"}})")});
+    Part attached_part{"face attached", attached, 200, 5, 26, 28, 28, 1};
+    attached_part.center_z_per_depth = 1.5;
+    attached_part.surface_area = [](double depth) { return 400 + 60 * depth; };
+    attached_part.queries = 1;
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -247,7 +265,7 @@ int main() {
         "Unique edits; analytic volume/centroid and execution counts checked for every sample. No "
         "IPC/tessellation.");
     for (const auto& part :
-         {Part{"plate", plate, 200, 5}, linear_part, circular_part, mirror_part,
+         {Part{"plate", plate, 200, 5}, linear_part, circular_part, mirror_part, attached_part,
           Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},

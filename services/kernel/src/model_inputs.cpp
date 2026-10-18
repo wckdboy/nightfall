@@ -416,11 +416,12 @@ void verify_constraints(const Value& inputs) {
 }
 }  // namespace
 
-std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
+std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
+                                                const kernel::Plane* selected_plane) {
   return guarded([&] {
     verify_constraints(inputs);
     Sketch sketch;
-    sketch.plane = prepare_plane(field(inputs, "plane"));
+    sketch.plane = selected_plane ? *selected_plane : prepare_plane(field(inputs, "plane"));
     const auto add_curve = [&](math::NurbsCurve2 curve) {
       if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
                      kTolerance))

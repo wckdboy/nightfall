@@ -104,6 +104,10 @@ class IKernel {
     bool extrude, rigid_transform, booleans, revolve, mirror;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
+  /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
+  /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
+  /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.
+  [[nodiscard]] virtual std::expected<Plane, KernelError> face_plane(const EntityPtr&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
