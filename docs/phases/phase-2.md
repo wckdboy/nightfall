@@ -35,6 +35,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#116](https://github.com/wckdboy/nightfall/issues/116) | Open reference sketches with closed solid profiles | kernel | Implemented with standalone-axis, profile-boundary, exact-curve, validation and cache regressions; local evidence below |
 | [#117](https://github.com/wckdboy/nightfall/issues/117) | Parametric linear body patterns with complete provenance | kernel | Implemented with fused/separated arrays, input bounds, dependency, naming and atomic-failure regressions; local evidence below |
 | [#118](https://github.com/wckdboy/nightfall/issues/118) | Circular body patterns with sketch-line axes | kernel | Implemented with signed sweeps, angular bounds, nested arrays, axis dependencies, naming and failure regressions; local evidence below |
+| [#119](https://github.com/wckdboy/nightfall/issues/119) | Exact body mirrors with complete reflection history | kernel | Implemented with typed reflection, oriented history, immutable inputs, plane edits and atomic-publication regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -492,6 +493,40 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   is instrumented; OCCT remains the pinned Release shared library. README and private
   adapter/evaluator headers document semantics and limits. Rebuild evidence follows; remote
   CI/review and full Phase 2 sign-off remain pending.
+- 2026-10-18 — #119 adds exact body mirrors under RFCs 0005/0007. Typed `IKernel::mirror`
+  returns a reflected copy across a finite orthonormal plane; its capability and backend
+  identity are explicit. OCCT duplicates geometry, checks finite transformation coefficients
+  and fully validates reflected solids. The direct-isometry shortcut is not used. Every input
+  face/edge maps to the actual output entity/orientation; source B-reps remain unchanged.
+  The evaluator unions each reflection with its original current seed, sharing private copy
+  histories, local `instance` roles, cache estimates and atomic publication with patterns.
+  Datum and normalized explicit planes share sketch validation; parameter edits invalidate
+  dependent outputs. The 64-total-instance bound admits 32 mirror targets. Feature targets
+  and selector planes remain unsupported. Evaluator identity advances to 17; naming stays 4.
+  No schema, persisted-format or dependency change; the typed kernel extension follows
+  RFC 0007's provision for remaining v1 operations. Backend implementers must add `mirror`
+  and initialize its capability flag; the commit/PR mark this source/ABI change with `!`.
+  Tests first: the new API fails compilation before declaration; five geometry cases fail
+  against a temporary unsupported kernel call and all 13 initial evaluator cases fail on the
+  unsupported-feature path. Final kernel selection passes 6 cases / 7679 assertions: 32
+  fixed-seed arbitrary planes, double reflection, a chiral four-component arrangement,
+  analytic periodic surfaces, holes, enclosed cavities, complete oriented history, source
+  serialization equality, invalid/foreign inputs, overflow and facade teardown. A 2×3×5 mm
+  box retains volume 30 mm³ / area 62 mm²; the cavity retains 114 mm³ / 170 mm².
+  Final mirrors/patterns selection passes 49 cases / 6973 assertions, including 15 new mirror
+  cases. Two separated 2×2×30 mm boxes have volume 240 mm³ / area 496 mm² / 12 faces;
+  touching copies fuse to 240 mm³ / 376 mm² / six faces, and coincident copies retain
+  120 mm³ / 248 mm². Two annuli preserve through-holes and periodic faces at 180π mm³ /
+  372π mm² / eight faces. Volume/area tolerances are 1e-7; centroid components 1e-8 mm.
+  Coverage includes plane/depth/unit edits, all datums, tilted planes, overlap, nested seeds,
+  exact/aggregate work bounds, cache reuse/rebinding/eviction, suppression/rollback, coordinate
+  overflow, injected reflection/union failures, incomplete histories and retained readers.
+  Full Release `tools/check.sh --preset occt` passes 480/480 (27.48 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan
+  kernel/evaluator/cache selection passes 246/246 (59.65 s), with no diagnostics. Nightfall
+  is instrumented; OCCT remains the pinned Release shared library. API, adapter/evaluator
+  headers and README document behavior and limits. Rebuild evidence follows; remote CI/review
+  and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
 
@@ -974,3 +1009,31 @@ samples remain below 100 ms in this local run. These are observations, not unive
 or an optimization claim. Timing includes parsing, schema/parameter/input evaluation,
 reference resolution, hashing, geometry, validity and naming; serialization, IPC and
 tessellation remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.
+
+### Body mirror rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has one sketch, one extrusion, one body mirror across yz and 27
+transforms. Its 2×2 mm seed is centered at x = 10 mm. Each depth edit rebuilds the extrusion,
+the fully validated exact reflection, the seed/copy union and all transforms. Every sample
+checks volume `8D` mm³ / area `16 + 16D` mm² within 1e-5, centroid x (including translations)
+and z within 1e-6 mm, and exact kernel/cache counts. D is depth in mm. Run
+`build/occt/services/kernel/nf_evaluator_bench` after builds/tests. All 30 samples of every
+mode pass on all seventeen parts (2040 measured rebuilds).
+
+| Body mirror | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 5.071 | 5.169 | 5.177 | 30 / 0 |
+| Seed depth edit | 5.534 | 6.013 | 6.026 | 30 / 1 |
+| Last transform edit | 0.690 | 0.743 | 0.769 | 1 / 29 |
+| Unused parameter edit | 0.652 | 0.677 | 0.693 | 0 / 30 |
+
+The 96-entry/64 MiB budget retains 96 entries / 20,933,904 estimated bytes after depth
+edits, including private reflected geometry/history (not RSS). Same-run depth edits for the
+linear pattern are 6.318/6.428/6.491 ms median/p95/max; circular pattern 8.202/8.415/8.452 ms.
+All parameter-edit samples across the seventeen-part catalogue stay below 100 ms in this
+local run; the largest is the toroidal seal at 77.652 ms (median 75.580 / p95 77.267).
+These are observations, not universal bounds or an optimization claim. Timing includes
+parsing, schema/parameter/input evaluation, references, hashing, geometry, validity and
+naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
+Phase 2 sign-off remain pending.

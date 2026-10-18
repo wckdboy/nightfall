@@ -112,6 +112,11 @@ int main() {
       "count":4,"angle":360,"axis":{"origin":[0,0,0],"direction":"z"}})");
     Part circular_part{"circular pattern", circular, 16, 0, 27, 32, 32, 1};
     circular_part.surface_area = [](double depth) { return 32 + 32 * depth; };
+    auto mirrored = circular;
+    mirrored.features[2] =
+        test::feature("reflect", "mirror", R"({"bodies":["plate"],"plane":{"datum":"yz"}})");
+    Part mirror_part{"mirror", mirrored, 8, 0, 27, 30, 30, 1};
+    mirror_part.surface_area = [](double depth) { return 16 + 16 * depth; };
     auto bored = plate;
     bored.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
       {"id":"r","type":"rect","corner":[0,0],"size":[40,20]},
@@ -242,7 +247,7 @@ int main() {
         "Unique edits; analytic volume/centroid and execution counts checked for every sample. No "
         "IPC/tessellation.");
     for (const auto& part :
-         {Part{"plate", plate, 200, 5}, linear_part, circular_part,
+         {Part{"plate", plate, 200, 5}, linear_part, circular_part, mirror_part,
           Part{"bored plate", bored, 800 - 8 * std::numbers::pi, 20},
           Part{"boolean cut", cut, 200 - 4 * std::numbers::pi, 5, 25, 28, 27, 3},
           Part{"sleeve", sleeve, 75 * std::numbers::pi, 0, 28, 29, 29, 0},

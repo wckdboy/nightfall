@@ -101,7 +101,7 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans, revolve;
+    bool extrude, rigid_transform, booleans, revolve, mirror;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
@@ -109,6 +109,11 @@ class IKernel {
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> transform(
       const ShapePtr&, const RigidTransform&) = 0;
+  /// Reflect exact geometry across a finite orthonormal plane, preserving solid orientation.
+  /// Returns the reflected copy only; inputs stay immutable. History maps every input face
+  /// and edge to an entity with its output orientation; no new local faces are generated.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> mirror(const ShapePtr&,
+                                                                           const Plane&) = 0;
   /// Combine target with the union of nonempty tools: union, target minus tools, or common.
   /// Empty/non-solid results fail. History covers every input face/edge, including unchanged
   /// survivors; new intersection edges have the local role "intersection". Inputs stay intact.

@@ -156,7 +156,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/16;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/17;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -166,8 +166,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
     const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
-    const bool pattern_feature =
-        feature.type == "pattern_linear" || feature.type == "pattern_circular";
+    const bool pattern_feature = feature.type == "pattern_linear" ||
+                                 feature.type == "pattern_circular" || feature.type == "mirror";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
     const auto affected = targets(feature, previous);
@@ -208,6 +208,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       };
       std::shared_ptr<const Output> sketch, axis_sketch;
       std::optional<BodyPattern> pattern;
+      std::optional<kernel::Plane> mirror;
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -219,6 +220,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         }
       } else if (feature.type == "transform" || pattern_feature) {
         if (feature.type == "pattern_linear") pattern = take(prepare_linear_pattern(inputs));
+        if (feature.type == "mirror") mirror = take(prepare_mirror(inputs));
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
       } else if (feature.type == "boolean") {
@@ -287,22 +289,27 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           built->operations.push_back(take(state_->kernel.boolean_operation(
               bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
         } else if (pattern_feature) {
+          const auto count = pattern ? pattern->count : std::size_t{2};
           built->copies.resize(bindings.size());
           built->bytes += bindings.size() * sizeof(built->copies.front());
           for (std::size_t body = 0; body < bindings.size(); ++body) {
             const auto& seed = bindings[body];
-            if (pattern->count == 1) {
+            if (count == 1) {
               ++result.kernel_calls;
               built->operations.push_back(take(state_->kernel.transform(seed, {})));
               continue;
             }
             std::vector<kernel::ShapePtr> instances;
-            for (std::size_t i = 1; i < pattern->count; ++i) {
-              auto placement = pattern->step;
-              placement.translation = placement.translation * static_cast<double>(i);
-              placement.angle *= static_cast<double>(i);
+            for (std::size_t i = 1; i < count; ++i) {
+              kernel::RigidTransform placement;
+              if (pattern) {
+                placement = pattern->step;
+                placement.translation = placement.translation * static_cast<double>(i);
+                placement.angle *= static_cast<double>(i);
+              }
               ++result.kernel_calls;
-              auto copy = take(state_->kernel.transform(seed, placement));
+              auto copy = mirror ? take(state_->kernel.mirror(seed, *mirror))
+                                 : take(state_->kernel.transform(seed, placement));
               for (const auto& h : copy.history)
                 for (const auto& entity : h.modified)
                   if (entity && entity->kind() == kernel::EntityKind::kFace) {

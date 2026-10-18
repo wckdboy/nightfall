@@ -129,6 +129,15 @@ and 64-total-instance behavior. Each rotation starts from the original current s
 axis-sketch edits rebuild dependent arrays. Feature-target patterns and selector axes remain
 unimplemented.
 
+Body mirrors use `bodies` and a datum or explicit `plane`. Each current seed and one exact
+reflected copy union into that body, fusing shared material or retaining separate solid
+components. Reflection preserves closed-solid orientation, analytic surfaces and complete
+face/edge history; source snapshots remain unchanged. Mirrored faces retain inherited names
+and gain the mirror feature's `instance` role. Plane parameters drive dependent rebuilds.
+The shared 64-total-instance limit admits at most 32 mirror targets. All bodies publish
+together after geometry and naming succeed. Feature targets and selector planes remain
+unimplemented.
+
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):
 

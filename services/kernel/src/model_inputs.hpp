@@ -62,4 +62,7 @@ std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const ir::json::Val
 /// Count 1 permits zero sweep but still validates the axis and angle range.
 std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const ir::json::Value& inputs,
                                                                const Sketch* axis_sketch = nullptr);
+/// Body mirrors union each current seed with one exact reflection. Datum/explicit planes
+/// share sketch frame validation. Unique targets; at most 32 bodies (64 total instances).
+std::expected<kernel::Plane, ir::Error> prepare_mirror(const ir::json::Value& inputs);
 }  // namespace nf::kernel_service

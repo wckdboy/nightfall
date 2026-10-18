@@ -69,6 +69,10 @@ class FaultKernel final : public kernel::IKernel {
   explicit FaultKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<kernel::OperationResult, kernel::KernelError> mirror(
+      const kernel::ShapePtr& shape, const kernel::Plane& plane) override {
+    return backend.mirror(shape, plane);
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> extrude(
       const kernel::Extrusion& input) override {
     return backend.extrude(input);

@@ -135,7 +135,8 @@ class OcctKernel final : public IKernel {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
     identity << "occt/" << OCC_VERSION_COMPLETE
-             << ";solid-v1;rigid=located-invariants-v1;boolean=unified-tools-v1;revolve=1;"
+             << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
+                "boolean=unified-tools-v1;revolve=1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
                 "mass-integrator=planar-gauss-v1;mass="
              << detail::kMassRelativeAccuracy
@@ -144,7 +145,7 @@ class OcctKernel final : public IKernel {
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
-  Capabilities capabilities() const noexcept override { return {true, true, true, true}; }
+  Capabilities capabilities() const noexcept override { return {true, true, true, true, true}; }
 
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
     return guarded([&] {
@@ -254,6 +255,40 @@ class OcctKernel final : public IKernel {
         const auto after = operation.ModifiedShape(entity.geometry);
         if (after.IsNull()) fail("transform did not retain complete entity history");
         result.history.push_back({before, {detail::entity(shape, after)}, {}, false});
+      }
+      result.estimated_bytes +=
+          result.history.size() * (sizeof(History) + 2 * sizeof(detail::Subshape) + 64);
+      return result;
+    });
+  }
+
+  std::expected<OperationResult, KernelError> mirror(const ShapePtr& input,
+                                                     const Plane& plane) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source) fail("shape belongs to an incompatible backend");
+      validate_plane(plane);
+      gp_Trsf transform;
+      transform.SetMirror(
+          gp_Ax2(point(plane.origin), direction(plane.normal), direction(plane.x_axis)));
+      for (int row = 1; row <= 3; ++row)
+        for (int column = 1; column <= 4; ++column)
+          if (!std::isfinite(transform.Value(row, column)))
+            fail("mirror exceeds finite coordinates");
+      // A reflection reverses handedness. Duplicate geometry and fully validate its
+      // oriented solids; the direct-isometry relocation shortcut does not apply.
+      BRepBuilderAPI_Transform operation(source->geometry, transform, true);
+      if (!operation.IsDone()) fail("mirror failed");
+      auto shape = checked(operation.Shape());
+      OperationResult result{shape, {}, {}, shape->estimated_bytes() + source->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      for (const auto& before : detail::entities(source)) {
+        const auto& geometry = static_cast<const detail::Subshape&>(*before).geometry;
+        const auto after = operation.ModifiedShape(geometry);
+        const auto index = members.FindIndex(after);
+        if (!index) fail("mirror did not retain complete entity history");
+        result.history.push_back({before, {detail::entity(shape, members(index))}, {}, false});
       }
       result.estimated_bytes +=
           result.history.size() * (sizeof(History) + 2 * sizeof(detail::Subshape) + 64);

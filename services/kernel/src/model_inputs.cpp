@@ -53,11 +53,8 @@ Vec3 unit(const Value& value, const std::string& pointer) {
   if (!result) fail(pointer, "direction must be nonzero and finite");
   return *result;
 }
-std::size_t pattern_count(const Value& inputs) {
+void pattern_targets(const Value& inputs, std::size_t count) {
   if (inputs.find("features")) fail("/features", "feature-target patterns are not implemented");
-  const double evaluated_count = number(field(inputs, "count"));
-  if (evaluated_count > 64) fail("/count", "body pattern exceeds the initial 64-instance limit");
-  const auto count = static_cast<std::size_t>(evaluated_count);
   const auto& targets = *field(inputs, "bodies").if_array();
   if (targets.size() > 64 / count)
     fail("/bodies", "body pattern exceeds the initial 64-total-instance work limit");
@@ -65,7 +62,29 @@ std::size_t pattern_count(const Value& inputs) {
   for (std::size_t i = 0; i < targets.size(); ++i)
     if (!bodies.insert(*targets[i].if_string()).second)
       fail("/bodies/" + std::to_string(i), "body targets must be unique");
+}
+std::size_t pattern_count(const Value& inputs) {
+  const double evaluated_count = number(field(inputs, "count"));
+  if (evaluated_count > 64) fail("/count", "body pattern exceeds the initial 64-instance limit");
+  const auto count = static_cast<std::size_t>(evaluated_count);
+  pattern_targets(inputs, count);
   return count;
+}
+kernel::Plane prepare_plane(const Value& plane) {
+  kernel::Plane result;
+  if (const auto* datum = plane.find("datum")) {
+    if (*datum->if_string() == "yz") result = {{}, {0, 1, 0}, {1, 0, 0}};
+    if (*datum->if_string() == "zx") result = {{}, {0, 0, 1}, {0, 1, 0}};
+  } else if (plane.find("origin")) {
+    result = {vector3(field(plane, "origin")),
+              unit(field(plane, "x_direction"), "/plane/x_direction"),
+              unit(field(plane, "normal"), "/plane/normal")};
+    if (!math::near(math::dot(result.x_axis, result.normal), 0, kTolerance.angular))
+      fail("/plane", "plane axes must be perpendicular");
+  } else {
+    fail("/plane", "selector-based planes are not implemented");
+  }
+  return result;
 }
 std::pair<Vec3, Vec3> prepare_axis(const Value& axis, const Sketch* sketch,
                                    const std::string& pointer) {
@@ -401,19 +420,7 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
   return guarded([&] {
     verify_constraints(inputs);
     Sketch sketch;
-    const auto& plane = field(inputs, "plane");
-    if (const auto* datum = plane.find("datum")) {
-      if (*datum->if_string() == "yz") sketch.plane = {{}, {0, 1, 0}, {1, 0, 0}};
-      if (*datum->if_string() == "zx") sketch.plane = {{}, {0, 0, 1}, {0, 1, 0}};
-    } else if (plane.find("origin")) {
-      sketch.plane = {vector3(field(plane, "origin")),
-                      unit(field(plane, "x_direction"), "/plane/x_direction"),
-                      unit(field(plane, "normal"), "/plane/normal")};
-      if (!math::near(math::dot(sketch.plane.x_axis, sketch.plane.normal), 0, kTolerance.angular))
-        fail("/plane", "plane axes must be perpendicular");
-    } else {
-      fail("/plane", "selector-based sketch planes are not implemented");
-    }
+    sketch.plane = prepare_plane(field(inputs, "plane"));
     const auto add_curve = [&](math::NurbsCurve2 curve) {
       if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
                      kTolerance))
@@ -629,6 +636,12 @@ std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inpu
     placement.axis_direction = direction;
     placement.angle = count == 1 ? 0 : step;
     return BodyPattern{count, placement};
+  });
+}
+std::expected<kernel::Plane, ir::Error> prepare_mirror(const Value& inputs) {
+  return guarded([&] {
+    pattern_targets(inputs, 2);
+    return prepare_plane(field(inputs, "plane"));
   });
 }
 }  // namespace nf::kernel_service
