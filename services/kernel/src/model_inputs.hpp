@@ -13,8 +13,12 @@ struct Sketch {
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
 /// Sketches support rect/circle/arc/ellipse/polygon/spline and closed mixed curve chains.
-/// Work limits: 4096 sketch curves, 4096 spline poles per sketch, 4096 arranged profile spans.
-/// Constraints and unimplemented entity/selector/mode semantics fail explicitly.
+/// Verify horizontal/vertical lines, parallel/perpendicular line pairs (1e-9 rad), equal
+/// line lengths or circle/arc radii, and circle/arc radius dimensions (1e-6 mm). Reversed
+/// lines are equivalent for orientation; equal arcs compare radii, not sweep lengths.
+/// Coordinates are checked, never solved or moved. Other constraints fail explicitly.
+/// Work limits: 4096 sketch curves, spline poles, constraints and arranged profile spans.
+/// Unimplemented entity/selector/mode semantics fail explicitly.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const ir::json::Value& inputs,
                                                               const Sketch& sketch);

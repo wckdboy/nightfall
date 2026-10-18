@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "model_inputs.hpp"
 
+#include <map>
 #include <numbers>
 #include <set>
 
@@ -138,12 +139,89 @@ math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
     fail(pointer + (entity.find("weights") ? "/weights" : "/control_points"), curve.error());
   return std::move(*curve);
 }
+
+void verify_constraints(const Value& inputs) {
+  const auto& constraints = *field(inputs, "constraints").if_array();
+  if (constraints.empty()) return;
+  if (constraints.size() > 4096)
+    fail("/constraints", "sketch exceeds the initial 4096-constraint work limit");
+  const auto& entities = *field(inputs, "entities").if_array();
+  if (entities.size() > 4096)
+    fail("/entities/4096", "sketch exceeds the initial 4096-curve work limit");
+  std::map<std::string_view, const Value*> by_id;
+  for (const auto& entity : entities) by_id.emplace(*field(entity, "id").if_string(), &entity);
+  for (std::size_t i = 0; i < constraints.size(); ++i) {
+    const auto& constraint = constraints[i];
+    const auto& kind = *field(constraint, "type").if_string();
+    const auto pointer = "/constraints/" + std::to_string(i);
+    if (kind != "horizontal" && kind != "vertical" && kind != "parallel" &&
+        kind != "perpendicular" && kind != "equal" && kind != "radius")
+      fail(pointer + "/type", "constraint is not implemented: " + kind);
+    const auto reference = [&](std::size_t index) {
+      return pointer + "/entities/" + std::to_string(index);
+    };
+    const auto entity = [&](std::size_t index) -> const Value& {
+      const auto& id = *field(constraint, "entities").if_array()->at(index).if_string();
+      const auto found = by_id.find(id);
+      if (found == by_id.end()) fail(reference(index), "unknown constraint entity: " + id);
+      return *found->second;
+    };
+    const auto line = [&](std::size_t index) {
+      const auto& e = entity(index);
+      if (*field(e, "type").if_string() != "line")
+        fail(reference(index), kind + " constraint requires a line");
+      const auto delta = point2(field(e, "end")) - point2(field(e, "start"));
+      const double length = math::length(delta);
+      if (!(length > kTolerance.linear && std::isfinite(length)))
+        fail(reference(index), "constraint requires a finite nonzero line");
+      return delta;
+    };
+    const auto radius = [&](std::size_t index) {
+      const auto& e = entity(index);
+      const auto& type = *field(e, "type").if_string();
+      if (type != "circle" && type != "arc")
+        fail(reference(index), kind + " constraint requires a circle or arc");
+      const double r = number(field(e, "radius"));
+      if (!(r > kTolerance.linear && std::isfinite(r)))
+        fail(reference(index), "constraint requires a finite positive radius");
+      return r;
+    };
+    double residual = 0, tolerance = kTolerance.linear;
+    if (kind == "radius") {
+      const double expected = number(field(constraint, "value"));
+      if (!(expected > 0)) fail(pointer + "/value", "radius dimension must be positive");
+      residual = std::abs(radius(0) - expected);
+    } else if (kind == "equal") {
+      residual = *field(entity(0), "type").if_string() == "line"
+                     ? std::abs(math::length(line(0)) - math::length(line(1)))
+                     : std::abs(radius(0) - radius(1));
+    } else {
+      // Compare directions, not endpoint offsets: the angular bound is independent of size.
+      const auto a = *math::normalized(line(0), kTolerance);
+      tolerance = kTolerance.angular;
+      if (kind == "horizontal")
+        residual = std::atan2(std::abs(a.y), std::abs(a.x));
+      else if (kind == "vertical")
+        residual = std::atan2(std::abs(a.x), std::abs(a.y));
+      else {
+        const auto b = *math::normalized(line(1), kTolerance);
+        const double cross = std::abs(math::cross(a, b)), dot = std::abs(math::dot(a, b));
+        residual = kind == "parallel" ? std::atan2(cross, dot) : std::atan2(dot, cross);
+      }
+    }
+    if (!(residual <= tolerance)) {
+      const auto unit = tolerance == kTolerance.linear ? " mm" : " rad";
+      fail(pointer, kind + " constraint is not satisfied: residual " +
+                        ir::json::format_number(residual) + unit + ", tolerance " +
+                        ir::json::format_number(tolerance) + unit);
+    }
+  }
+}
 }  // namespace
 
 std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
   return guarded([&] {
-    if (!field(inputs, "constraints").if_array()->empty())
-      fail("/constraints", "constraint verification is not implemented");
+    verify_constraints(inputs);
     Sketch sketch;
     const auto& plane = field(inputs, "plane");
     if (const auto* datum = plane.find("datum")) {

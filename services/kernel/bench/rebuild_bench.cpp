@@ -129,6 +129,17 @@ int main() {
       {"id":"chord","type":"line","start":[0,5],"end":[5,0]}],"constraints":[]})")
                                         .value();
     const double shared_arc_area = 25 * (3 * std::numbers::pi / 4 + 0.5);
+    auto constrained = plate;
+    constrained.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+      {"id":"a","type":"line","start":["-depth / 6",-10],"end":["depth / 6",-10]},
+      {"id":"b","type":"line","start":["depth / 6",-10],"end":["depth / 6",10]},
+      {"id":"c","type":"line","start":["depth / 6",10],"end":["-depth / 6",10]},
+      {"id":"d","type":"line","start":["-depth / 6",10],"end":["-depth / 6",-10]}],
+      "constraints":[{"type":"horizontal","entities":["a"]},
+      {"type":"vertical","entities":["b"]},{"type":"parallel","entities":["a","c"]},
+      {"type":"perpendicular","entities":["a","b"]},{"type":"equal","entities":["a","c"]},
+      {"type":"equal","entities":["b","d"]}]})")
+                                         .value();
     auto cut = plate;
     cut.features.erase(cut.features.begin() + 2, cut.features.begin() + 5);
     cut.features.insert(cut.features.begin() + 2,
@@ -152,6 +163,7 @@ int main() {
           Part{"elliptic tube", elliptical, 37.5 * std::numbers::pi, 0, 28, 29, 29, 0, true},
           Part{"shared edge", shared, 400, 0, 28, 29, 29, 0, true},
           Part{"shared arc", shared_arc, shared_arc_area, -125 / (6 * shared_arc_area)},
+          Part{"constrained", constrained, 200, 0, 28, 29, 29, 0, true},
           Part{"toroidal seal", torus, 12 * std::numbers::pi * std::numbers::pi, 0, 28, 29, 29, 0,
                true, 0}})
       for (const auto& mode : {"cold", "depth edit", "last transform edit", "unused edit"})

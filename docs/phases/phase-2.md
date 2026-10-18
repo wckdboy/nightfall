@@ -26,6 +26,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#106](https://github.com/wckdboy/nightfall/issues/106) | Shared straight boundaries in sketch profiles | math | Implemented with arrangement, region and evaluator regressions; local benchmark evidence |
 | [#108](https://github.com/wckdboy/nightfall/issues/108) | Analytic circular profiles and fast exact mass integration | kernel | Implemented with analytic-surface regressions; local verification and rebuild evidence below |
 | [#109](https://github.com/wckdboy/nightfall/issues/109) | Certified shared curved spans in sketch profiles | math | Implemented with rational-curve, fill-rule and production evaluator regressions |
+| [#110](https://github.com/wckdboy/nightfall/issues/110) | Verify line and radius constraints in evaluated sketches | kernel | Implemented with tolerance, unit, dependency and cache regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -262,6 +263,26 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   Nightfall code is instrumented; OCCT remains the pinned Release shared-library build.
   Remote CI, maintainer review and full Phase 2 sign-off remain pending.
 
+- 2026-10-18 — #110 verifies horizontal/vertical lines and parallel/perpendicular line pairs
+  within 1e-9 rad, equal line lengths or circle/arc radii within 1e-6 mm, and circle/arc radius
+  dimensions after unit/expression evaluation. Reversed lines retain the same orientation
+  constraints; equal arcs compare radii, not sweep lengths. Coordinates and exact profile
+  geometry are preserved. Violations report the constraint's JSON Pointer, measured residual
+  and tolerance; invalid dimensions and incompatible entities identify their specific fields.
+  Constraint work is limited to 4096 relations per sketch; degenerate and non-finite derived
+  measurements fail explicitly. Other constraint kinds remain unsupported; no solver, schema,
+  public kernel interface or dependency change. Evaluator identity is bumped for the semantics.
+  Ten new regressions failed before implementation and now pass (343 assertions), including
+  48 fixed-seed rotated/translated rectangles, angular bounds across three scales, absolute
+  dimensional bounds, partial arcs and equivalent units. Production solids verify a 6000 mm³
+  constrained plate (1e-8 tolerance) and radius-edit cylinders (volume/area 1e-5, centroid
+  1e-7 mm), failure propagation with independent branches, cache recovery, suppression,
+  rollback and retained naming after cache eviction. Full Release `tools/check.sh --preset occt`
+  passes 371/371 (19.94 s), including hygiene, 202 schema corpus cases and 20 reference documents.
+  The exact CI ASan/UBSan kernel/evaluator/cache selection passes 137/137 (37.08 s), with no
+  diagnostics or retries. Nightfall is instrumented; OCCT remains the pinned Release shared
+  library. Rebuild evidence follows; remote CI/review and full phase sign-off remain pending.
+
 ## Rebuild benchmark evidence
 
 2026-10-17, Apple M3 Pro (12 cores, 36 GiB), Release, dynamically linked OCCT 7.9.3.
@@ -455,3 +476,32 @@ These local observations do not establish a universal bound or claim an optimiza
 This run follows all builds/tests and includes parsing, validation, expressions, hashing,
 exact geometry, validity and naming; serialization, IPC and tessellation remain excluded.
 Remote CI, review and full Phase 2 sign-off remain pending.
+
+### Constrained sketch rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per case.
+The 30-feature part has four authored lines, six orientation/equal-length constraints,
+one extrusion and 28 transforms. Each unique `depth` edit changes the centered rectangle's
+width to `depth/3` mm, retains its 20 mm height, and changes the extrusion distance. Every
+sample verifies volume `(20/3) × depth²` mm³ within 1e-5, centroid x/z within 1e-6 mm and
+execution counts. Profile edits recheck every constraint and rebuild all 29 solid operations.
+Run `build/occt/services/kernel/nf_evaluator_bench`.
+
+| Constrained plate | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 1.817 | 2.009 | 2.054 | 29 / 0 |
+| Profile + depth edit | 1.950 | 2.119 | 2.122 | 29 / 0 |
+| Last transform edit | 0.655 | 0.674 | 0.678 | 1 / 29 |
+| Unused parameter edit | 0.622 | 0.663 | 0.679 | 0 / 30 |
+
+The 96-entry/64 MiB cache budget retains 96 entries / 10,525,848 estimated bytes after profile
+edits (not RSS). Same-run depth-edit median/p95/max: plate 1.902/2.003/2.023 ms,
+bored plate 7.242/7.448/7.479 ms, boolean-cut plate 8.179/8.513/8.960 ms,
+sleeve 6.088/9.782/11.483 ms, elliptic tube 10.236/10.555/10.578 ms,
+shared-edge plate 2.568/2.691/2.691 ms, shared-arc notch 3.490/3.632/3.659 ms,
+toroidal seal 76.747/80.182/80.604 ms. All parameter-edit samples are below 100 ms in this
+run; elliptic-tube cold builds have a 19.084/109.299/173.630 ms median/p95/max. These are local
+observations, not universal bounds or an optimization claim. This run follows all builds/tests
+and includes parsing, validation, expressions, constraint verification, hashing, exact geometry,
+validity and naming; serialization, IPC and tessellation remain excluded. Remote CI/review
+and full Phase 2 sign-off remain pending.
