@@ -18,9 +18,9 @@ struct Sketch {
   std::map<std::string, math::Vec2> points;  // named references, never profile boundaries
   std::map<std::string, Line> lines;         // authored direction, independent of path traversal
 };
-struct LinearPattern {
-  std::size_t count;  // includes the original seed
-  math::Vec3 step;    // normalized direction times signed spacing
+struct BodyPattern {
+  std::size_t count;            // includes the original seed
+  kernel::RigidTransform step;  // multiply translation/angle by each copy index
 };
 /// Private service adapters: accept only schema-checked, dimensionally evaluated FeatureInputs.
 /// Preserve exact curves; errors have feature-relative pointers, prefixed by the evaluator.
@@ -43,7 +43,7 @@ struct LinearPattern {
 /// they do not pin values from a previous document or prevent subsequent parameter edits.
 /// Coordinates are checked, never solved or moved. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
-/// Revolve/rotation axes resolve named lines from the supplied evaluated axis sketch; map
+/// Revolve/rotation/pattern axes resolve named lines from the supplied evaluated axis sketch; map
 /// start and start-to-end direction through its plane. Selector axes remain unsupported.
 /// Unimplemented entity/selector/mode semantics fail explicitly.
 std::expected<Sketch, ir::Error> prepare_sketch(const ir::json::Value& inputs);
@@ -55,5 +55,11 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr);
 /// Unique body targets only; at most 64 total instances, including all seeds. Count 1
 /// preserves the seed; larger counts require |spacing| > 1e-6 mm and finite offsets.
-std::expected<LinearPattern, ir::Error> prepare_linear_pattern(const ir::json::Value& inputs);
+std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const ir::json::Value& inputs);
+/// Circular patterns share the body/count limit. Signed partial sweeps include both endpoints;
+/// sweeps within 1e-9 rad of a full turn distribute unique instances (no duplicate endpoint).
+/// |angle| <= 2*pi + 1e-9 rad; count > 1 requires an angular step above 1e-9 rad.
+/// Count 1 permits zero sweep but still validates the axis and angle range.
+std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const ir::json::Value& inputs,
+                                                               const Sketch* axis_sketch = nullptr);
 }  // namespace nf::kernel_service

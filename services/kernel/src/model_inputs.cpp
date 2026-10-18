@@ -53,6 +53,20 @@ Vec3 unit(const Value& value, const std::string& pointer) {
   if (!result) fail(pointer, "direction must be nonzero and finite");
   return *result;
 }
+std::size_t pattern_count(const Value& inputs) {
+  if (inputs.find("features")) fail("/features", "feature-target patterns are not implemented");
+  const double evaluated_count = number(field(inputs, "count"));
+  if (evaluated_count > 64) fail("/count", "body pattern exceeds the initial 64-instance limit");
+  const auto count = static_cast<std::size_t>(evaluated_count);
+  const auto& targets = *field(inputs, "bodies").if_array();
+  if (targets.size() > 64 / count)
+    fail("/bodies", "body pattern exceeds the initial 64-total-instance work limit");
+  std::set<std::string> bodies;
+  for (std::size_t i = 0; i < targets.size(); ++i)
+    if (!bodies.insert(*targets[i].if_string()).second)
+      fail("/bodies/" + std::to_string(i), "body targets must be unique");
+  return count;
+}
 std::pair<Vec3, Vec3> prepare_axis(const Value& axis, const Sketch* sketch,
                                    const std::string& pointer) {
   if (axis.find("origin"))
@@ -581,20 +595,9 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& 
   });
 }
 
-std::expected<LinearPattern, ir::Error> prepare_linear_pattern(const Value& inputs) {
+std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const Value& inputs) {
   return guarded([&] {
-    if (inputs.find("features")) fail("/features", "feature-target patterns are not implemented");
-    const double evaluated_count = number(field(inputs, "count"));
-    if (evaluated_count > 64)
-      fail("/count", "linear pattern exceeds the initial 64-instance limit");
-    const auto count = static_cast<std::size_t>(evaluated_count);
-    const auto& targets = *field(inputs, "bodies").if_array();
-    if (targets.size() > 64 / count)
-      fail("/bodies", "linear pattern exceeds the initial 64-total-instance work limit");
-    std::set<std::string> bodies;
-    for (std::size_t i = 0; i < targets.size(); ++i)
-      if (!bodies.insert(*targets[i].if_string()).second)
-        fail("/bodies/" + std::to_string(i), "body targets must be unique");
+    const auto count = pattern_count(inputs);
     const double spacing = number(field(inputs, "spacing"));
     if (count > 1 && !(std::abs(spacing) > kTolerance.linear))
       fail("/spacing", "pattern spacing must exceed the linear tolerance in magnitude");
@@ -602,7 +605,30 @@ std::expected<LinearPattern, ir::Error> prepare_linear_pattern(const Value& inpu
     const auto last = step * static_cast<double>(count - 1);
     if (!std::isfinite(last.x) || !std::isfinite(last.y) || !std::isfinite(last.z))
       fail("/spacing", "pattern offsets exceed finite coordinates");
-    return LinearPattern{count, step};
+    kernel::RigidTransform placement;
+    placement.translation = step;
+    return BodyPattern{count, placement};
+  });
+}
+
+std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inputs,
+                                                               const Sketch* axis_sketch) {
+  return guarded([&] {
+    const auto count = pattern_count(inputs);
+    const double sweep = number(field(inputs, "angle")), turn = 2 * std::numbers::pi;
+    if (std::abs(sweep) > turn + kTolerance.angular)
+      fail("/angle", "circular pattern sweep must be at most one full turn");
+    const bool full = std::abs(sweep) >= turn - kTolerance.angular;
+    const double step = full ? std::copysign(turn, sweep) / static_cast<double>(count)
+                             : sweep / static_cast<double>(std::max(std::size_t{1}, count - 1));
+    if (count > 1 && !(std::abs(step) > kTolerance.angular))
+      fail("/angle", "pattern angular step must exceed the angular tolerance in magnitude");
+    const auto [origin, direction] = prepare_axis(field(inputs, "axis"), axis_sketch, "/axis");
+    kernel::RigidTransform placement;
+    placement.axis_origin = origin;
+    placement.axis_direction = direction;
+    placement.angle = count == 1 ? 0 : step;
+    return BodyPattern{count, placement};
   });
 }
 }  // namespace nf::kernel_service

@@ -34,6 +34,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#115](https://github.com/wckdboy/nightfall/issues/115) | Resolve sketch-line axes for revolutions and rigid transforms | kernel | Implemented with directed-line, frame, dependency, cache and ownership regressions; local evidence below |
 | [#116](https://github.com/wckdboy/nightfall/issues/116) | Open reference sketches with closed solid profiles | kernel | Implemented with standalone-axis, profile-boundary, exact-curve, validation and cache regressions; local evidence below |
 | [#117](https://github.com/wckdboy/nightfall/issues/117) | Parametric linear body patterns with complete provenance | kernel | Implemented with fused/separated arrays, input bounds, dependency, naming and atomic-failure regressions; local evidence below |
+| [#118](https://github.com/wckdboy/nightfall/issues/118) | Circular body patterns with sketch-line axes | kernel | Implemented with signed sweeps, angular bounds, nested arrays, axis dependencies, naming and failure regressions; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli |  |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -460,6 +461,37 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
   remains the pinned Release shared library. README and adapter/evaluator contracts document
   pattern behavior and limits. Rebuild evidence follows; remote CI/review and full Phase 2
   sign-off remain pending.
+- 2026-10-18 — #118 implements schema-v1 circular body patterns with existing rigid rotations
+  and solid union (RFCs 0005/0007). Count includes the current seed. Signed partial sweeps
+  include both endpoints; sweeps within 1e-9 rad of a full turn distribute unique instances.
+  Count >1 requires angular steps above 1e-9 rad in magnitude; count 1 allows zero sweep.
+  Explicit and evaluated sketch-line axes support world placement and authored direction.
+  Independent axis edits invalidate dependent arrays. Body-target admission, the limit of 64
+  total instances and copy/union execution are shared with linear patterns. Original current
+  seeds may contain multiple solids or earlier patterns; copied faces retain inherited names
+  and the new pattern's local `instance` role. Atomic publication, private history estimates,
+  cache rebinding and ownership are preserved. Evaluator identity advances to 16; naming
+  remains 4. Feature-target patterns and selector axes remain unsupported. No schema, persisted
+  format, public kernel API or dependency change.
+  All 16 tests-first cases fail against the former unsupported-feature path. A separate
+  boundary regression catches an initial subtraction-rounding error at full-turn tolerance
+  (three instances instead of four); interval comparisons canonicalize both signs correctly.
+  The final 19 new circular cases and 15 existing linear cases pass together: 34 cases /
+  5450 assertions, seed 20261018. Coverage includes full/partial/signed sweeps, exact angular
+  bounds, count/angle units, explicit/placed/reversed open-sketch axes, independent edits,
+  touching/coincident/separated copies, through-holes, nested patterns, exact/aggregate work
+  admission, producer renaming, binding misses, suppression/rollback, failed seeds/axes,
+  incomplete histories, injected copy/union failures, eviction and kernel-facade teardown.
+  Four separated 2×2×30 mm boxes have volume 480 mm³, area 992 mm² and 24 faces. Four
+  touching boxes fuse to volume 480 mm³ / area 512 mm² / six faces; coincident boxes keep
+  seed volume 120 mm³ / area 248 mm². Four annuli retain holes and periodic faces: volume
+  360π mm³ / area 744π mm² / 16 faces. Volume/area tolerances are 1e-7; centroids 1e-8 mm.
+  Full Release `tools/check.sh --preset occt` passes 459/459 (25.03 s), including hygiene,
+  format, 202 schema corpus cases and 20 reference documents. CI's ASan/UBSan
+  kernel/evaluator/cache selection passes 225/225 (52.24 s), with no diagnostics. Nightfall
+  is instrumented; OCCT remains the pinned Release shared library. README and private
+  adapter/evaluator headers document semantics and limits. Rebuild evidence follows; remote
+  CI/review and full Phase 2 sign-off remain pending.
 
 ## Rebuild benchmark evidence
 
@@ -909,3 +941,36 @@ claim. The run follows all builds/tests and includes parsing, validation, expres
 constraint verification, reference resolution, hashing, exact geometry, validity and naming.
 Serialization, IPC and tessellation remain excluded. Remote CI/review and full Phase 2
 sign-off remain pending.
+
+### Circular body pattern rebuild evidence
+
+2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
+The new 30-feature part has one sketch, one extrusion, a four-instance full-circle body
+pattern around z, and 27 transforms. The seed is a 2×2 mm square centered 10 mm from the
+axis. Every depth edit rebuilds the extrusion, three private rotations, their union and
+all transforms. Each sample checks volume `16D` mm³ and area `32 + 32D` mm² within 1e-5,
+centroid x (including translations) and z within 1e-6 mm, and exact kernel/cache counts.
+D is depth in mm. Run `build/occt/services/kernel/nf_evaluator_bench` after builds/tests.
+All 30 samples of every mode pass on all sixteen parts (1920 measured rebuilds).
+
+| Four-instance circular pattern | Median ms | p95 ms | Max ms | Kernel calls / cache hits |
+| --- | ---: | ---: | ---: | ---: |
+| Cold | 7.398 | 7.474 | 7.560 | 32 / 0 |
+| Seed depth edit | 8.001 | 8.198 | 8.278 | 32 / 1 |
+| Last transform edit | 0.968 | 0.999 | 1.008 | 1 / 29 |
+| Unused parameter edit | 0.873 | 0.917 | 0.956 | 0 / 30 |
+
+The 96-entry/64 MiB budget retains 96 entries / 41,269,312 estimated bytes after depth
+edits, including private copies/history (not RSS). Same-run depth-edit median/p95/max:
+linear pattern 6.134/6.320/6.340 ms, plain plate 1.857/1.939/2.052 ms,
+bored plate 7.401/7.829/7.918 ms, boolean-cut plate 7.887/8.047/8.125 ms,
+sleeve 2.946/3.069/3.075 ms, closed-sketch-axis cylinder 1.794/1.883/1.888 ms,
+standalone-axis sleeve 2.788/2.964/2.970 ms, elliptic tube 9.580/9.800/9.869 ms,
+shared-edge plate 2.453/2.519/2.534 ms, shared-arc notch 3.248/3.333/3.362 ms,
+constrained plate 1.920/1.994/2.015 ms, point-reference plate 1.972/2.054/2.060 ms,
+tangent-constrained rounded part 3.785/3.873/3.937 ms, angle/fixed slanted part
+2.003/2.089/2.116 ms and toroidal seal 74.958/76.519/76.646 ms. All parameter-edit
+samples remain below 100 ms in this local run. These are observations, not universal bounds
+or an optimization claim. Timing includes parsing, schema/parameter/input evaluation,
+reference resolution, hashing, geometry, validity and naming; serialization, IPC and
+tessellation remain excluded. Remote CI/review and full Phase 2 sign-off remain pending.

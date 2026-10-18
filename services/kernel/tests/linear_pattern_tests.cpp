@@ -277,7 +277,7 @@ TEST_CASE("linear pattern admission accepts the full instance budget", "[linear-
     const auto admitted = prepare_linear_pattern(inputs);
     REQUIRE(admitted);
     CHECK(admitted->count == static_cast<std::size_t>(count));
-    CHECK(admitted->step == math::Vec3{15, 0, 0});
+    CHECK(admitted->step.translation == math::Vec3{15, 0, 0});
   }
 }
 

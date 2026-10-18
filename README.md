@@ -117,8 +117,17 @@ copies fuse, while separated copies remain multiple valid solids within that bod
 faces retain their original producer names and gain the pattern's `instance` role. All targets
 publish together after geometry and naming succeed. The initial work limit is 64 total
 instances across all targets, including seeds; count 1 preserves seed geometry. Larger counts
-require spacing magnitude above 1e-6 mm and finite offsets. Feature-target and circular
-patterns remain unimplemented.
+require spacing magnitude above 1e-6 mm and finite offsets.
+
+Circular body patterns use `bodies`, `count`, signed `angle` and an explicit or sketch-line
+`axis`. Partial sweeps include the seed at zero and the last copy at the specified angle;
+full turns distribute unique instances without repeating the seed endpoint. Angles within
+1e-9 rad of a full turn use that full-turn placement. Sweeps are limited to one turn (plus
+that tolerance), and count >1 requires an angular step above 1e-9 rad in magnitude. Count 1
+allows zero sweep. Circular patterns share linear patterns' union, naming, atomic publication
+and 64-total-instance behavior. Each rotation starts from the original current seed, and
+axis-sketch edits rebuild dependent arrays. Feature-target patterns and selector axes remain
+unimplemented.
 
 To run the real 30-feature geometry benchmark (plain, bored and boolean-cut plates, turned sleeve,
 parametric elliptic tube and a plate made from rectangles sharing an edge):

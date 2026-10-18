@@ -156,7 +156,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/15;roles/4;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/16;roles/4;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -166,7 +166,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
     const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
-    const bool pattern_feature = feature.type == "pattern_linear";
+    const bool pattern_feature =
+        feature.type == "pattern_linear" || feature.type == "pattern_circular";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
     const auto affected = targets(feature, previous);
@@ -206,7 +207,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         return sketches.at(id);
       };
       std::shared_ptr<const Output> sketch, axis_sketch;
-      std::optional<LinearPattern> pattern;
+      std::optional<BodyPattern> pattern;
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -217,7 +218,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           bind(affected.front(), "/inputs/result/" + result_mode);
         }
       } else if (feature.type == "transform" || pattern_feature) {
-        if (pattern_feature) pattern = take(prepare_linear_pattern(inputs));
+        if (feature.type == "pattern_linear") pattern = take(prepare_linear_pattern(inputs));
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
       } else if (feature.type == "boolean") {
@@ -232,14 +233,18 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       } else if (feature.type != "sketch") {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
-      const Value* axis = feature.type == "revolve" ? inputs.find("axis") : nullptr;
+      const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
+                              ? inputs.find("axis")
+                              : nullptr;
       if (feature.type == "transform")
         if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
       if (axis && axis->find("sketch"))
         axis_sketch = bind_sketch(
             string(*axis->find("sketch")),
-            feature.type == "revolve" ? "/inputs/axis/sketch" : "/inputs/rotation/axis/sketch");
+            feature.type == "transform" ? "/inputs/rotation/axis/sketch" : "/inputs/axis/sketch");
       const auto* axis_input = axis_sketch ? &*axis_sketch->sketch : nullptr;
+      if (feature.type == "pattern_circular")
+        pattern = take(prepare_circular_pattern(inputs, axis_input));
       std::vector<ir::Hash> upstream;
       for (const auto& [pointer, hash] : dependencies) upstream.push_back(hash);
       const auto key = ir::feature_hash(version, feature.type, inputs, upstream);
@@ -293,8 +298,9 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             }
             std::vector<kernel::ShapePtr> instances;
             for (std::size_t i = 1; i < pattern->count; ++i) {
-              kernel::RigidTransform placement;
-              placement.translation = pattern->step * static_cast<double>(i);
+              auto placement = pattern->step;
+              placement.translation = placement.translation * static_cast<double>(i);
+              placement.angle *= static_cast<double>(i);
               ++result.kernel_calls;
               auto copy = take(state_->kernel.transform(seed, placement));
               for (const auto& h : copy.history)
