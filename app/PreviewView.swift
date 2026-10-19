@@ -37,6 +37,7 @@ struct PreviewView: View {
         Text("NIGHTFALL").font(.system(size: 13, weight: .semibold, design: .rounded))
         Divider().frame(height: 18)
         Button("Open…", systemImage: "folder", action: model.open).keyboardShortcut("o")
+          .disabled(model.presentingSheet)
         Menu("Examples") {
           ForEach(model.examples, id: \.self) { url in
             Button(
@@ -45,6 +46,7 @@ struct PreviewView: View {
             ) { model.load(url) }
           }
         }
+        .disabled(model.presentingSheet)
         Spacer()
         if model.hasUnsavedChanges {
           Text("Unsaved changes").font(.caption).foregroundStyle(.secondary)
@@ -56,7 +58,7 @@ struct PreviewView: View {
           model.future.isEmpty || model.hasPendingParameters
         ).keyboardShortcut("z", modifiers: [.command, .shift])
         Button("Save copy…", systemImage: "square.and.arrow.down", action: model.saveCopy).disabled(
-          model.program == nil
+          model.program == nil || model.presentingSheet
         ).keyboardShortcut("s")
       }.buttonStyle(.borderless).padding(14)
       Divider()
