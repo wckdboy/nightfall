@@ -79,6 +79,10 @@ class QueryKernel final : public kernel::IKernel {
   }
   std::string_view identity() const noexcept override { return real.identity(); }
   Capabilities capabilities() const noexcept override { return real.capabilities(); }
+  std::expected<kernel::OperationResult, kernel::KernelError> loft(
+      const kernel::Loft& input) override {
+    return real.loft(input);
+  }
   std::expected<kernel::Mesh, kernel::KernelError> tessellate(
       const kernel::ShapePtr& shape, const kernel::MeshingOptions& options) override {
     return real.tessellate(shape, options);

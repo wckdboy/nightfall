@@ -162,6 +162,43 @@ An additional oblique-cylinder volume-integration stall is tracked separately in
 [#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
 This surface-area change does not resolve that existing volume path.
 
+## Solid loft kernel (#172)
+
+Accepted RFCs 0005/0007 cover a typed solid loft under the existing v1 operation.
+The first backend slice joins 2..32 ordered profiles on parallel planes: two sections
+interpolate linearly, while three or more use smooth interpolation with uniform section
+parameters and maximum longitudinal degree three. There is no ruled fallback. Initial
+bounds are one outer loop per section, 128 authored curves per loop and 1024 total knot
+spans. Holes, rails, point sections and nonparallel planes remain unsupported.
+
+Section and output checks include OCCT self-interference diagnostics as well as complete
+closed-solid validation. Cap roles and side ancestry cover every current output face;
+side records retain the section/region/loop/authored-curve address from every input
+section, including decomposed multi-span curves and reversed/cyclic nonconvex profiles.
+No names are inferred by proximity or persisted topology indices. Inputs are immutable.
+
+Independent checks cover a rectangular frustum (5600 mm³), a smooth three-section bulge
+(4320 mm³), placed circular sections (210π mm³), tapered ellipses (420π mm³), quadratic
+spline profiles (240/560 mm³), and a smooth rational circular bulge (486π mm³). Profile
+samples are checked against their attributed side faces; mesh winding/area/volume, STEP
+reload, retained owners, failure atomicity and explicit input bounds are also checked.
+
+The spline prism regression exposed generic boundary quadrature returning area
+304.5222705950 mm² versus the independent 304.5216528199 mm². Proven rectangular UV
+patches on B-spline/Bezier surfaces now use positive nested Gauss–Kronrod metric integration,
+split at surface knots, with bounded refinement and convergence checks. Trimmed/nonrectangular
+faces retain the existing path. This does not fix the separate oblique volume stall #168.
+Focused evidence: ten loft cases / 4080 assertions pass, including a smooth interpolation
+that collapses between positive sections, reversed plane normals, cap placement and
+near-coincident planes. The full Release gate passes 789/789 in 173.10 s before these
+additional assertions; the final gate is being rechecked. ASan/UBSan currently aborts in
+OCCT's incremental allocator during the existing sphere mesher and loft preservation
+mesh. Mixed-size allocation alignment is tracked as the release blocker
+[#174](https://github.com/wckdboy/nightfall/issues/174); no sanitizer pass is claimed.
+Evaluator/cache/selector integration and a native editable example follow in
+[#173](https://github.com/wckdboy/nightfall/issues/173); this backend increment alone
+does not expose loft in the client.
+
 ## Work items (build order)
 
 Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy/nightfall/milestone/3).
