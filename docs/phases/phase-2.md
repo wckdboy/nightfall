@@ -149,6 +149,15 @@ The oversized last cache entry remains unadmitted (27 hits / 77 warm kernel call
 Logs: `/tmp/nightfall-167-{bench-corrected,xpc-final}.jsonl`,
 `/tmp/nightfall-167-check.log` and `/tmp/nightfall-167-asan-*.log`.
 
+The final 0.0.7 extracted archive passes strict/deep signing, macOS 15.0/RPATH/dependency
+closure checks for 26 embedded OCCT dylibs and contains 22 examples. Actual CUA inspection
+builds 1→8 and 8→4 successfully, then 4→8 disconnects and preserves the marked last-valid
+four-module result. The first Undo/reconnect also fails; subsequent Undo restores clean,
+original one-module geometry with 27172 triangles and no dirty state. This remaining GUI
+variant/restart sensitivity is tracked in [#171](https://github.com/wckdboy/nightfall/issues/171).
+The local archive/receipt live at `out/Nightfall-0.0.7-preview-arm64-macos.{zip,json}`;
+the receipt identifies the built source separately from this documentation follow-up.
+
 An additional oblique-cylinder volume-integration stall is tracked separately in
 [#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
 This surface-area change does not resolve that existing volume path.

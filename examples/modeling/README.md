@@ -19,6 +19,9 @@ the native client after #162; this is a measured case, not a guaranteed maximum.
 After #167's surface-area integration improvement, three actual XPC/client/Metal rebuilds
 complete locally in about 2.4 seconds each, including rendering and clean Undo validation.
 The watchdog remains five seconds; machine load and geometry still affect success.
+The extracted 0.0.7 app displayed 1→8 and 8→4 edits, but a subsequent 4→8 edit hit the
+watchdog and kept marked last-valid geometry. Undo restored the clean original. Reliable
+GUI variant sequences remain follow-up [#171](https://github.com/wckdboy/nightfall/issues/171).
 
 ```sh
 build/occt/tools/cli/nf build examples/modeling/asterion.nightfall --out out/asterion.step
