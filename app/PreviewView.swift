@@ -46,11 +46,14 @@ struct PreviewView: View {
           }
         }
         Spacer()
+        if model.hasUnsavedChanges {
+          Text("Unsaved changes").font(.caption).foregroundStyle(.secondary)
+        }
         Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }.disabled(
-          model.past.isEmpty
+          model.past.isEmpty && !model.hasPendingParameters
         ).keyboardShortcut("z")
         Button(action: model.redo) { Image(systemName: "arrow.uturn.forward") }.disabled(
-          model.future.isEmpty
+          model.future.isEmpty || model.hasPendingParameters
         ).keyboardShortcut("z", modifiers: [.command, .shift])
         Button("Save copy…", systemImage: "square.and.arrow.down", action: model.saveCopy).disabled(
           model.program == nil
@@ -149,6 +152,10 @@ struct PreviewView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 18) {
             Label("Parameters", systemImage: "slider.horizontal.3").font(.headline)
+            if model.hasPendingParameters {
+              Label("Unapplied parameters", systemImage: "clock").font(.caption)
+                .foregroundStyle(.orange)
+            }
             ForEach(model.program?.parameters ?? []) { parameter in
               VStack(alignment: .leading, spacing: 6) {
                 Text(parameter.id).font(.caption).foregroundStyle(.secondary)
@@ -159,15 +166,21 @@ struct PreviewView: View {
                     set: { model.drafts[parameter.id] = $0 })
                 )
                 .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
-                .onSubmit { model.edit(parameter.id) }.disabled(model.busy)
+                .onSubmit { model.rebuild() }.disabled(model.busy)
                 .accessibilityLabel("\(parameter.id) expression").help(
-                  "Enter a value with units or a formula. Press Return to rebuild.")
+                  "Enter a value with units or a formula. Return applies all parameter edits.")
               }
             }
-            Button("Rebuild", systemImage: "arrow.trianglehead.2.clockwise", action: model.rebuild)
-              .disabled(model.program == nil || model.busy)
+            Button(
+              model.hasPendingParameters ? "Apply parameters" : "Rebuild",
+              systemImage: "arrow.trianglehead.2.clockwise", action: model.rebuild
+            ).disabled(model.program == nil || model.busy)
             Divider()
-            Text(model.stale || model.busy ? "LAST VALID GEOMETRY" : "EXACT GEOMETRY").font(
+            Text(
+              model.stale || model.busy
+                ? "LAST VALID GEOMETRY"
+                : (model.hasPendingParameters ? "APPLIED GEOMETRY" : "EXACT GEOMETRY")
+            ).font(
               .system(size: 10, weight: .semibold)
             ).foregroundStyle(
               .secondary)

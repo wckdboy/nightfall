@@ -1563,6 +1563,36 @@ as `out/Nightfall-0.0.2-preview-arm64-macos.zip`; the original 0.0.1 archive is 
 The preceding MVP PR #144 now has all three remote CI groups green. This increment's CI,
 all human reviews, formal distribution and full phase sign-off remain pending.
 
+### #149 — atomic pending parameters and Save copy (2026-10-19)
+
+Return and Apply parameters now apply all changed inspector expressions as one immutable
+revision and undo step. Suppression/rollback include those edits; Undo preserves unapplied
+text for Redo, and Redo cannot discard a newer draft. Unchanged values retain their JSON
+types, no-op rebuilds preserve source bytes/history, and unknown names reject the whole batch.
+Save copy writes the candidate atomically before changing history or its saved baseline;
+failed writes retain source, pending text and dirty state. Authored invalid geometry remains
+saveable, with diagnostics and marked last-valid geometry. Opening another part also guards
+unsubmitted text. The window distinguishes unapplied parameters from applied geometry.
+
+The real XPC regression first fails with `Rebuild discarded visible parameter edits`.
+Focused draft/preview/history checks pass 3/3 (0.94 s), covering dependent length expressions,
+exact volume within 1e-5 mm³, single-step undo/redo, saved-baseline round trips, failed writes,
+invalid authored source, history actions and byte-identical inputs. The full gate passes
+746/746 (153.90 s), 202 schema cases, twenty references and hygiene; strict Swift 6
+concurrency/warnings, strict swift-format and client TSAN checks pass. Logs:
+`/tmp/nightfall-149-{red-test,focused,check}.log`.
+
+Native window checks verify the pending badge, Apply without Return (9147.61→18295.22 mm³),
+Undo, and an unsaved-open warning whose Keep editing action preserves raw text. The extracted
+archive launches and renders the real solid. Screenshots are inspected in the native UI
+session. Save-dialog completion/cancellation observation remains incomplete: the automation
+surface shows a disabled Save action and times out after cancellation; direct file save and
+failure paths pass integration tests. No successful native Save-dialog claim is made here.
+Preview 0.0.3 is packaged in `out/Nightfall-0.0.3-preview-arm64-macos.zip` (arm64/macOS 15+),
+with strict/deep ad-hoc signatures, twenty examples and 26 service-local OCCT dylibs verified
+after extraction. Prior previews are preserved. PR #146 now has all three remote CI groups
+green; this increment's CI, human review, formal distribution and phase sign-off remain open.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.

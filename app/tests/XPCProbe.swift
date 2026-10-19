@@ -147,6 +147,7 @@ func restart(_ mode: String) throws {
       case "client": try await clientIntegration()
       case "preview": try await previewIntegration(CommandLine.arguments[2])
       case "history": try await historyIntegration(CommandLine.arguments[2])
+      case "drafts": try await draftsIntegration(CommandLine.arguments[2])
       case "render":
         try await rendererIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "references": try references(CommandLine.arguments[2])

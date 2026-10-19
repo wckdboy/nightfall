@@ -30,14 +30,14 @@ import Foundation
     model.errors.isEmpty && model.mesh != nil && model.bodies.count == 1, "initial document build")
   let volume = model.bodies[0].volume
   model.drafts["thickness"] = "8 mm"
-  model.edit("thickness")
+  model.rebuild()
   try await waitForDocument(model)
   try check(
     model.errors.isEmpty && abs(model.bodies[0].volume - 2 * volume) < 1e-5,
     "live parameter geometry")
   let good = model.mesh?.id
   model.drafts["thickness"] = "0 mm"
-  model.edit("thickness")
+  model.rebuild()
   try await waitForDocument(model)
   try check(
     !model.errors.isEmpty && model.stale && model.mesh?.id == good,
@@ -54,9 +54,9 @@ import Foundation
   try await waitForDocument(model)
   try check(abs(model.bodies[0].volume - 2 * volume) < 1e-5, "redo thickness")
   model.drafts["thickness"] = "6 mm"
-  model.edit("thickness")
+  model.rebuild()
   model.drafts["thickness"] = "10 mm"
-  model.edit("thickness")
+  model.rebuild()
   try await waitForDocument(model)
   try check(
     model.errors.isEmpty && abs(model.bodies[0].volume - 2.5 * volume) < 1e-5,
