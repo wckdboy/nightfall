@@ -187,6 +187,11 @@ class FaultKernel final : public kernel::IKernel {
       const kernel::EntityPtr& face) override {
     return backend.edges(face);
   }
+  std::expected<kernel::OperationResult, kernel::KernelError> fillet(
+      const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
+      double radius) override {
+    return backend.fillet(shape, edges, radius);
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> chamfer(
       const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
       double distance) override {
