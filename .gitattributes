@@ -1,2 +1,4 @@
 # Data files must keep LF line endings: scripts parse them byte for byte.
 *.csv text eol=lf
+# Unified diffs require a context marker on blank lines; preserve their exact patch bytes.
+third_party/occt/patches/*.patch text eol=lf whitespace=-blank-at-eol
