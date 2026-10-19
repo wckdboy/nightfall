@@ -57,6 +57,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#151](https://github.com/wckdboy/nightfall/issues/151) | Seeded direct-engine edit/failure/replay validation | kernel | Analytic, immutable ownership and exact STEP/mesh checks pass; evidence below |
 | [#153](https://github.com/wckdboy/nightfall/issues/153) | Retained asynchronous native Open/Save sheets | app | Save, reopen, cancellation and Keep editing verified; preview 0.0.4 and local gate below |
 | [#155](https://github.com/wckdboy/nightfall/issues/155) | Typed constant-radius fillets with complete immutable provenance | kernel | Exact OCCT rounds, complete topology-based ancestry and immutability implemented; evidence below |
+| [#157](https://github.com/wckdboy/nightfall/issues/157) | Execute v1 document fillets and native rounded-part preview | kernel | Evaluator, CLI and native edits/save/reopen implemented and visually verified; evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1694,6 +1695,50 @@ concurrency/warnings and existing native worker/client concurrency tests also pa
 Logs: `/tmp/nightfall-155-{red-build,initial-focused,focused,asan,check}.log`.
 Remote CI, human review, full production/phase sign-off and evaluator/UI integration remain
 open; the packaged 0.0.4 preview remains preserved at its original source commit.
+
+### #157 — document fillets and native preview 0.0.5 (2026-10-19)
+
+Existing v1 fillet features execute through the production evaluator and typed backend.
+Fillets share chamfer's recursive edge unions/exclusions, qualified source ancestry, exact
+cardinality, current body/dependency binding, atomic multi-body publication and immutable
+cache naming. Radius validation reports the authored field; backend failure retires intended
+targets while independent work continues. Evaluator identity advances to 27. Accepted RFCs
+0005/0007 cover this existing operation; no schema/dependency/process change. The unsupported
+modifier test now uses shell, which remains explicitly unimplemented.
+
+New tests first fail at `feature is not implemented: fillet`. Nine evaluator cases cover
+analytic radii, warm/cold/evicted caches, renamed producers, mm/cm equivalence, unmodified
+excluded-body dependencies, invalid radii/selectors, injected missing/foreign history,
+suppression/rollback, multi-body atomic failure/recovery and downstream placed cap attachment.
+Retained solids survive facade teardown, reload from exact AP242 STEP within 1e-5 mm³/mm²,
+and produce outward indexed meshes within 1% of analytic volume, with current face owners.
+Geometry checks use 1e-6 mm³/mm² and 1e-8 mm centroid tolerances. Focused evaluator/CLI/XPC
+checks pass 11/11 (1.58 s). ASan/UBSan passes nine evaluator cases / 585 assertions and one
+CLI case / 59 assertions without diagnostics; OCCT shared libraries remain Release.
+
+`examples/modeling/rounded_plate.nightfall` adds a 60×40 mm four-hole plate with editable
+thickness and exact corner radius. The twenty established reference baselines are unchanged;
+the native bundle contains this additional example (21 total), selected as Rounded Plate.
+Default thickness 8 mm/radius 6 mm measures 18048 mm³ / (5728 + 288π) mm². Radius 3 mm
+measures (18912 - 216π) mm³ / (6136 + 186π) mm². CLI tests export/reload both variants,
+preserve an existing output on invalid override and prove byte-identical source input.
+The real XPC/client test checks edits, Undo, suppression, rollback, marked last-valid geometry
+after a failed edit and recovery. The native window visually confirms rounded corners,
+6→3 mm Apply (18048.00→18233.42 mm³), Undo, sharp corners after suppression/rollback and
+restoration. Native Save accepts an unapplied 3 mm draft and reopens its 2701-byte document
+with all three original features and identical exact measures; the example remains 6 mm.
+Screenshots of both radii are displayed and inspected in the native UI session.
+
+The development app advances to 0.0.5; prior preview archives remain preserved. The full gate
+passes 766/766 (165.67 s), 202 schema cases, twenty reference schemas and hygiene. Strict Swift
+format/concurrency/warnings and existing native/client ThreadSanitizer checks pass. Preview
+`out/Nightfall-0.0.5-preview-arm64-macos.zip` is extracted into a path containing spaces;
+strict/deep signatures, runtime dependencies, 26 service-local OCCT dylibs and 21 examples
+are verified. The extracted app launches and renders the rounded plate with the same measures.
+Logs: `/tmp/nightfall-157-{red-test,focused,native,asan,cli-asan,check}.log`; focused CTest's
+11/11 result is recorded in the tool session. PRs #154 and #156 now have all remote CI groups
+green, including both-kernel/USD and SMLib checks. Human review, formal distribution,
+assemblies, collaboration, physics and full production/phase sign-off remain open.
 
 ### Face-attached sketch rebuild evidence
 

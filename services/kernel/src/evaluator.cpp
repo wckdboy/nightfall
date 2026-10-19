@@ -250,7 +250,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/26;roles/5;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/27;roles/5;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -309,6 +309,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       std::optional<kernel::Axis> selected_axis;
       std::vector<kernel::EntityPtr> selected_edges;
       const bool chamfer = feature.type == "chamfer";
+      const bool edge_blend = chamfer || feature.type == "fillet";
       std::string result_mode;
       if (profile_feature) {
         const auto& id = string(*inputs.find("profile")->find("sketch"));
@@ -331,7 +332,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           bind(id, pointer);
           tools.push_back(id);
         }
-      } else if (feature.type != "sketch" && !chamfer) {
+      } else if (feature.type != "sketch" && !edge_blend) {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
       // Operation targets precede selector-only bindings retained for cache compatibility.
@@ -344,11 +345,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       const auto* selection = axis;
       if (feature.type == "sketch" || feature.type == "mirror") selection = inputs.find("plane");
       if (feature.type == "extrude") selection = inputs.find("to");
-      if (chamfer) {
-        if (inputs.find("angle"))
+      if (edge_blend) {
+        if (chamfer && inputs.find("angle"))
           fail("kernel", "angled chamfer is not implemented", "/inputs/angle");
-        if (*inputs.find("distance")->if_number() <= math::Tolerance::standard().linear)
-          fail("kernel", "chamfer distance must exceed linear tolerance", "/inputs/distance");
+        const std::string quantity = chamfer ? "distance" : "radius";
+        if (*inputs.find(quantity)->if_number() <= math::Tolerance::standard().linear)
+          fail("kernel", feature.type + " " + quantity + " must exceed linear tolerance",
+               "/inputs/" + quantity);
         selection = inputs.find("edges");
       }
       if (selection) {
@@ -392,7 +395,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           };
           std::function<std::vector<kernel::EntityPtr>(const Value&, const std::string&)> select;
           select = [&](const Value& node, const std::string& pointer) {
-            if (!chamfer && node.find("edges_of"))
+            if (!edge_blend && node.find("edges_of"))
               fail("kernel", "face selector cannot use edges_of", pointer + "/edges_of");
             if (const auto* from = node.find("from")) {
               const auto& id = string(*from);
@@ -454,7 +457,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                       continue;
                     if (!name.entity || name.entity->owner() != body.shape)
                       fail("kernel", "selected name belongs to a different snapshot", pointer);
-                    if (chamfer || name.entity->kind() == kernel::EntityKind::kFace)
+                    if (edge_blend || name.entity->kind() == kernel::EntityKind::kFace)
                       append(name.entity);
                   }
                 }
@@ -504,17 +507,17 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                    pointer);
             return matches;
           };
-          const std::string pointer = chamfer                       ? "/inputs/edges"
+          const std::string pointer = edge_blend                    ? "/inputs/edges"
                                       : feature.type == "extrude"   ? "/inputs/to"
                                       : !axis                       ? "/inputs/plane"
                                       : feature.type == "transform" ? "/inputs/rotation/axis"
                                                                     : "/inputs/axis";
           const auto matches = select(plane, pointer);
-          if (chamfer) {
+          if (edge_blend) {
             if (matches.empty() || std::ranges::any_of(matches, [](const auto& e) {
                   return e->kind() != kernel::EntityKind::kEdge;
                 }))
-              fail("kernel", "chamfer requires a nonempty edge selection", pointer);
+              fail("kernel", feature.type + " requires a nonempty edge selection", pointer);
             selected_edges = matches;
           } else {
             if (matches.size() != 1 || matches.front()->kind() != kernel::EntityKind::kFace)
@@ -540,7 +543,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           }
         }
       }
-      if (chamfer) {
+      if (edge_blend) {
         std::vector<kernel::ShapePtr> targets;
         std::erase_if(affected, [&](const auto& id) {
           const auto& shape = result.bodies.at(id).shape;
@@ -605,14 +608,17 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             built->operations.push_back(take(state_->kernel.boolean_operation(
                 bindings.front(), {built->tool->shape}, boolean_kind(result_mode))));
           }
-        } else if (chamfer) {
+        } else if (edge_blend) {
           for (std::size_t i = 0; i < target_count; ++i) {
             std::vector<kernel::EntityPtr> edges;
             for (const auto& e : selected_edges)
               if (e->owner() == bindings[i]) edges.push_back(e);
             ++result.kernel_calls;
-            built->operations.push_back(take(
-                state_->kernel.chamfer(bindings[i], edges, *inputs.find("distance")->if_number())));
+            built->operations.push_back(
+                take(chamfer ? state_->kernel.chamfer(bindings[i], edges,
+                                                      *inputs.find("distance")->if_number())
+                             : state_->kernel.fillet(bindings[i], edges,
+                                                     *inputs.find("radius")->if_number())));
           }
         } else if (feature.type == "boolean") {
           const auto& op = string(*inputs.find("op"));

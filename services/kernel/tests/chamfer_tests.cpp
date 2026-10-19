@@ -96,7 +96,12 @@ class QueryKernel final : public kernel::IKernel {
   std::expected<kernel::OperationResult, kernel::KernelError> fillet(
       const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
       double radius) override {
-    return real.fillet(shape, edges, radius);
+    auto result = real.fillet(shape, edges, radius);
+    if (result) {
+      if (fault == 5) result->history.clear();
+      if (fault == 6) result->generated.front().entity = edges.front();
+    }
+    return result;
   }
   std::expected<kernel::OperationResult, kernel::KernelError> chamfer(
       const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
@@ -399,4 +404,28 @@ TEST_CASE("chamfer naming failures publish neither the new geometry nor partial 
   }
   proxy.fault = 0;
   solid(evaluator.evaluate(source(d)).value());
+}
+
+TEST_CASE("fillet naming failures publish neither partial geometry nor names or corrupt cache",
+          "[fillet-evaluator]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  QueryKernel proxy(*kernel);
+  Evaluator evaluator(proxy, {96, 64 * 1024 * 1024});
+  auto d = beveled();
+  d.features.back() = feature("round", "fillet", R"({
+    "edges":{"edges_of":{"created_by":"base","role":"cap_end"}},"radius":1})");
+  for (int fault = 5; fault <= 6; ++fault) {
+    evaluator.clear_cache();
+    proxy.fault = fault;
+    const auto result = evaluator.evaluate(source(d)).value();
+    REQUIRE_FALSE(result.ok());
+    CHECK_FALSE(result.bodies.at("plate").shape);
+    CHECK(result.bodies.at("plate").names.empty());
+    CHECK(result.features.back().errors.front().code == "kernel");
+    proxy.fault = 0;
+    const auto recovered = evaluator.evaluate(source(d)).value();
+    REQUIRE(recovered.ok());
+    CHECK(recovered.bodies.at("plate").shape);
+    CHECK_FALSE(recovered.bodies.at("plate").names.empty());
+  }
 }

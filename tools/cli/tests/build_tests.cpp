@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -626,5 +627,31 @@ TEST_CASE("all twenty reference parts export parameter variants without source e
     measures(reload(output), m.volume, m.area, m.centroid);
     CHECK(read(input) == original);
   }
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("filleted plate exports exact parameter variants through CLI without source edits",
+          "[cli-fillet]") {
+  Temp temp;
+  const auto input =
+      fs::path{NF_REFERENCE_PARTS_DIR}.parent_path() / "modeling/rounded_plate.nightfall";
+  const auto original = read(input);
+  const auto output = temp.path("rounded.step");
+  const auto first = run(temp, {"build", input.string(), "--out", output.string()});
+  INFO(first.error);
+  REQUIRE(first.status == 0);
+  constexpr double pi = std::numbers::pi;
+  measures(reload(output), 18048, 5728 + 288 * pi, {0, 0, 4});
+  const auto variant =
+      run(temp, {"build", input.string(), "--set", "corner_radius=3 mm", "--out", output.string()});
+  INFO(variant.error);
+  REQUIRE(variant.status == 0);
+  measures(reload(output), 18912 - 216 * pi, 6136 + 186 * pi, {0, 0, 4});
+  const auto saved = read(output);
+  CHECK(run(temp,
+            {"build", input.string(), "--set", "corner_radius=100 mm", "--out", output.string()})
+            .status != 0);
+  CHECK(read(output) == saved);
+  CHECK(read(input) == original);
   temp.no_temporary_outputs();
 }
