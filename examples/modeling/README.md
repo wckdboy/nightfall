@@ -1,5 +1,7 @@
 # Modeling showcases
 
+![Asterion rendered by Nightfall's native Metal viewport](../../docs/images/asterion.png)
+
 Preview 0.0.6 opens Asterion by default; choose **Examples → Asterion** to reopen it.
 Use each body's eye button to hide/show it, the viewfinder to isolate it, and **Show all
 bodies** to restore the complete model. Visibility affects the viewport only and resets
