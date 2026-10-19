@@ -48,9 +48,10 @@ open build/occt/app/Nightfall.app
 ```
 
 The app starts with the Asterion multi-body showcase and includes twenty reference parts
-plus three modeling showcases in **Examples**. Choose **Lofted Link** for a smooth
+plus four modeling showcases in **Examples**. Choose **Lofted Link** for a smooth
 three-section elliptic housing with a flange and five drilled holes; change `waist_scale`
-or `height` to explore its shape.
+or `height` to explore its shape. Choose **Swept Conduit** for a hollow cubic-spline
+sweep; edit `reach`, `lift`, `radius` or `wall` to reshape it.
 Quit older Nightfall copies before opening a newer development build.
 Edit a parameter expression, including its units, and press Return to rebuild. The window
 shows feature history, exact volume/area and diagnostics; failed edits retain clearly marked

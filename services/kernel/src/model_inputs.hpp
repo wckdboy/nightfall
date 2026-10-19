@@ -72,6 +72,11 @@ std::expected<kernel::Revolution, ir::Error> prepare_revolution(
 std::expected<kernel::Loft, ir::Error> prepare_loft(const ir::json::Value& inputs,
                                                     const std::vector<const Sketch*>& sketches,
                                                     std::vector<ProfileSources>* sources = nullptr);
+/// One selected profile region without holes and one whole open sketch entity as the
+/// authored path. Preserve curve direction; selector paths and point-qualified IDs fail.
+std::expected<kernel::Sweep, ir::Error> prepare_sweep(const ir::json::Value& inputs,
+                                                      const Sketch& profile, const Sketch& path,
+                                                      ProfileSources* sources = nullptr);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr,
     const kernel::Axis* selected_axis = nullptr);

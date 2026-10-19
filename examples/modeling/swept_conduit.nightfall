@@ -1,0 +1,48 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {"length": "mm", "angle": "deg"},
+  "meta": {
+    "name": "Swept spline conduit",
+    "doc": "Hollow conduit swept along a cubic spline with an inflection. Shared kernel geometry for human and AI design; a geometric prototype without flow, strength or motion validation."
+  },
+  "params": [
+    {"name": "reach", "value": "180 mm", "min": "160 mm", "max": "260 mm"},
+    {"name": "lift", "value": "100 mm", "min": "60 mm", "max": "120 mm"},
+    {"name": "radius", "value": "14 mm", "min": "10 mm", "max": "15 mm"},
+    {"name": "wall", "value": "3 mm", "min": "2 mm", "max": "5 mm"}
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "route", "type": "sketch", "name": "Cubic spline centerline",
+      "inputs": {"plane": {"datum": "xy"}, "entities": [
+        {"id": "centerline", "type": "spline", "degree": 3,
+          "knots": [0, 0, 0, 0, 1, 1, 1, 1],
+          "control_points": [[0, 0], ["reach * 4 / 9", 0], ["reach * 5 / 9", "lift"], ["reach", "lift"]]}
+      ], "constraints": []}
+    },
+    {
+      "id": "outer_section", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, 0], "normal": "x", "x_direction": "y"},
+        "entities": [{"id": "rim", "type": "circle", "center": [0, 0], "radius": "radius"}], "constraints": []}
+    },
+    {
+      "id": "outer_sweep", "type": "sweep", "name": "Sweep outer wall",
+      "inputs": {"profile": {"sketch": "outer_section"}, "path": {"sketch": "route", "entity": "centerline"},
+        "result": {"new": "conduit", "body_type": "brep"}}
+    },
+    {
+      "id": "bore_section", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, 0], "normal": "x", "x_direction": "y"},
+        "entities": [{"id": "bore", "type": "circle", "center": [0, 0], "radius": "radius - wall"}], "constraints": []}
+    },
+    {
+      "id": "bore_sweep", "type": "sweep", "name": "Sweep through bore",
+      "inputs": {"profile": {"sketch": "bore_section"}, "path": {"sketch": "route", "entity": "centerline"},
+        "result": {"cut": "conduit"}}
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

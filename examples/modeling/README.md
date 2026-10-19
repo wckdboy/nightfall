@@ -81,8 +81,35 @@ The initial loft supports 2..32 closed sections on parallel, strictly ordered pl
 filled region without holes per section. Two sections interpolate linearly; additional
 sections interpolate smoothly with uniform section parameters and maximum longitudinal
 degree three. Guide rails, point sections and nonparallel planes report errors. Flat sides
-represented as NURBS remain NURBS; plane selectors require analytic planes. Sweeps and
-interactive spline control-point editing are separate follow-ups.
+represented as NURBS remain NURBS; plane selectors require analytic planes. Interactive
+spline control-point editing remains a follow-up.
+
+## Swept spline conduit
+
+![Swept conduit rendered by Nightfall's native Metal viewport](../../docs/images/swept-conduit.png)
+
+Preview 0.0.9 includes **Examples → Swept Conduit**, from
+[swept_conduit.nightfall](swept_conduit.nightfall). A cubic spline with an inflection carries
+the outer circle and the through-bore cut, producing one hollow solid. Edit `reach`, `lift`,
+`radius` or `wall`, then press Return. This is a geometry prototype, without flow, strength
+or motion validation. Both humans and headless clients use the same v1 document and kernel.
+
+Independent centerline integration gives length 212.2747402664 mm, V = 50016.0573422607 mm³
+and A = 33815.2771262122 mm² at the defaults. Tests check mass and area within 1e-3 absolute
+tolerance at two parameter settings. The actual XPC/Metal test renders both variants,
+verifies clean Undo, bore suppression, invalid-parameter last-valid recovery and unchanged
+source bytes. The screenshot is its actual native render, visually inspected.
+
+```sh
+build/occt/tools/cli/nf build examples/modeling/swept_conduit.nightfall --out out/swept-conduit.step
+ctest --preset occt -R '^bundle.sweeps$' -V
+```
+
+Initial sweeps use one profile region without holes and one whole open sketch line, arc or
+spline as the path. The profile origin/normal matches the forward path start/tangent. The
+path's plane normal is a fixed binormal, preserving authored profile roll through an
+inflection. Corners, closed/spatial/selector paths and uncertified path spans report errors;
+the backend contract and work bounds are documented in `IKernel::sweep`.
 
 Measured on local arm64 builds, 2026-10-19: the native client displayed eight modules
 (640 solids / 512 fins / 217,142 triangles). The headless evaluator and indexed mesher
