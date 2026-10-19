@@ -34,8 +34,8 @@ OperationResult box(IKernel& kernel) {
        make_line(Vec2{10, 20}, {0, 20}), make_line(Vec2{0, 20}, {})}};
   return kernel.extrude({{}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 30}}).value();
 }
-EntityPtr cap(const OperationResult& input) {
-  return std::ranges::find_if(input.generated, [](const auto& g) { return g.role == "cap_end"; })
+EntityPtr cap(const OperationResult& input, std::string_view role = "cap_end") {
+  return std::ranges::find_if(input.generated, [&](const auto& g) { return g.role == role; })
       ->entity;
 }
 std::vector<EntityPtr> edges(const ShapePtr& source, bool vertical_only = false) {
@@ -91,6 +91,28 @@ void history(const OperationResult& result, const ShapePtr& source) {
     CHECK(covered.Contains(static_cast<const detail::Subshape&>(*g.entity).geometry));
   }
   CHECK(result.estimated_bytes >= source->estimated_bytes() + result.shape->estimated_bytes());
+}
+EntityPtr current_face(const OperationResult& result, const EntityPtr& before) {
+  const auto found = std::ranges::find_if(
+      result.history, [&](const auto& h) { return h.before->same_as(*before); });
+  REQUIRE(found != result.history.end());
+  REQUIRE_FALSE(found->deleted);
+  REQUIRE(found->modified.size() == 1);
+  return found->modified.front();
+}
+EntityPtr straight_edge(const ShapePtr& source, Vec3 a, Vec3 b) {
+  std::vector<EntityPtr> matches;
+  for (const auto& edge : edges(source)) {
+    const auto& e = static_cast<const detail::Subshape&>(*edge).geometry;
+    BRepAdaptor_Curve curve(TopoDS::Edge(e));
+    if (curve.GetType() != GeomAbs_Line) continue;
+    const auto p = curve.Value(curve.FirstParameter());
+    const auto q = curve.Value(curve.LastParameter());
+    auto near = [](const gp_Pnt& x, Vec3 y) { return x.Distance(gp_Pnt{y.x, y.y, y.z}) < 1e-9; };
+    if ((near(p, a) && near(q, b)) || (near(p, b) && near(q, a))) matches.push_back(edge);
+  }
+  REQUIRE(matches.size() == 1);
+  return matches.front();
 }
 }  // namespace
 
@@ -280,4 +302,115 @@ TEST_CASE("fillet snapshots and complete history survive facade and source scope
   history(retained, retained.history.front().before->owner());
   auto kernel = make_occt_kernel().value();
   CHECK(kernel->export_step({retained.shape}));
+}
+
+TEST_CASE(
+    "sequential corner and rim fillets preserve exact Steiner measures and every prior snapshot",
+    "[fillet-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = box(*kernel);
+  const auto saved = serialized(source.shape);
+  const auto corners = kernel->fillet(source.shape, edges(source.shape, true), 2).value();
+  const auto saved_corners = serialized(corners.shape);
+  const auto top = current_face(corners, cap(source));
+  const auto bottom = current_face(corners, cap(source, "cap_start"));
+  const auto top_result = kernel->fillet(corners.shape, kernel->edges(top).value(), 1);
+  INFO((top_result ? "success" : top_result.error().message));
+  REQUIRE(top_result);
+  // A convex rounded rectangle has inner-parallel perimeter P - 2*pi*u. Integrate the
+  // removed quarter-corner and its first moment; both top/bottom use the same exact loss.
+  const double cross_section = 200 - 4 * (4 - pi), perimeter = 44 + 4 * pi;
+  const double loss = perimeter * (1 - pi / 4) - 2 * pi * (5. / 6 - pi / 4);
+  const double area_change = (pi / 2 - 2) * perimeter + 3 * pi - pi * pi;
+  CHECK_THAT(top_result->shape->measures().volume, WithinAbs(30 * cross_section - loss, 1e-5));
+  CHECK_THAT(top_result->shape->measures().area,
+             WithinAbs(2 * cross_section + 30 * perimeter + area_change, 1e-5));
+  CHECK(top_result->shape->measures().faces == 18);
+  history(*top_result, corners.shape);
+  const auto saved_top = serialized(top_result->shape);
+  const auto final = kernel->fillet(top_result->shape,
+                                    kernel->edges(current_face(*top_result, bottom)).value(), 1);
+  INFO((final ? "success" : final.error().message));
+  REQUIRE(final);
+  const auto& m = final->shape->measures();
+  CHECK_THAT(m.volume, WithinAbs(30 * cross_section - 2 * loss, 1e-5));
+  CHECK_THAT(m.area, WithinAbs(2 * cross_section + 30 * perimeter + 2 * area_change, 1e-5));
+  CHECK_THAT(m.centroid.x, WithinAbs(5, 1e-8));
+  CHECK_THAT(m.centroid.y, WithinAbs(10, 1e-8));
+  CHECK_THAT(m.centroid.z, WithinAbs(15, 1e-8));
+  CHECK(m.faces == 26);
+  history(*final, top_result->shape);
+  CHECK(serialized(source.shape) == saved);
+  CHECK(serialized(corners.shape) == saved_corners);
+  CHECK(serialized(top_result->shape) == saved_top);
+}
+
+TEST_CASE("concave reflex fillets add analytic material with complete oriented ancestry",
+          "[fillet-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const std::vector<Vec2> points{{0, 0}, {10, 0}, {10, 4}, {4, 4}, {4, 10}, {0, 10}};
+  std::vector<NurbsCurve2> loop;
+  for (std::size_t i = 0; i < points.size(); ++i)
+    loop.push_back(make_line(points[i], points[(i + 1) % points.size()]));
+  const std::vector<std::vector<NurbsCurve2>> paths{std::move(loop)};
+  const auto source =
+      kernel->extrude({{}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 10}}).value();
+  const auto selected = straight_edge(source.shape, {4, 4, 0}, {4, 4, 10});
+  const auto saved = serialized(source.shape);
+  for (const double radius : {0.125, 1., 2., 4.}) {
+    CAPTURE(radius);
+    const auto result = kernel->fillet(source.shape, {selected}, radius);
+    INFO((result ? "success" : result.error().message));
+    REQUIRE(result);
+    const double added = radius * radius * (1 - pi / 4);
+    const double moment = radius * radius * radius * (5. / 6 - pi / 4);
+    const double cross_section = 64 + added;
+    const double perimeter = 40 - 2 * radius + pi * radius / 2;
+    const auto& m = result->shape->measures();
+    CHECK_THAT(m.volume, WithinAbs(10 * cross_section, 1e-6));
+    CHECK_THAT(m.area, WithinAbs(2 * cross_section + 10 * perimeter, 1e-6));
+    CHECK_THAT(m.centroid.x, WithinAbs((248 + 4 * added + moment) / cross_section, 1e-8));
+    CHECK_THAT(m.centroid.y, WithinAbs(m.centroid.x, 1e-8));
+    CHECK_THAT(m.centroid.z, WithinAbs(5, 1e-8));
+    CHECK(m.faces == 9);
+    CHECK(m.edges == 21);
+    history(*result, source.shape);
+    CHECK(serialized(source.shape) == saved);
+  }
+}
+
+TEST_CASE("fillets close to a through hole preserve its exact circular wall and immutable history",
+          "[fillet-kernel]") {
+  // Geometry adapted from SolidCraft issue_324_tests.rs at 4c30d944 (MIT OR Apache-2.0).
+  // Original exact C++ oracles; this tests positive clearance, not automatic radius reduction.
+  auto kernel = make_occt_kernel().value();
+  std::vector<std::vector<NurbsCurve2>> paths{
+      {make_line(Vec2{}, {40, 0}), make_line(Vec2{40, 0}, {40, 20}),
+       make_line(Vec2{40, 20}, {0, 20}), make_line(Vec2{0, 20}, {})},
+      {make_circle(Vec2{20, 14.5}, 3)}};
+  const auto source =
+      kernel->extrude({{}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 10}}).value();
+  const auto selected = straight_edge(source.shape, {0, 20, 10}, {40, 20, 10});
+  const auto saved = serialized(source.shape);
+  for (const double radius : {1., 2., 2.4}) {
+    CAPTURE(radius);
+    const auto result = kernel->fillet(source.shape, {selected}, radius);
+    INFO((result ? "success" : result.error().message));
+    REQUIRE(result);
+    const double corner = (1 - pi / 4) * radius * radius;
+    const auto& m = result->shape->measures();
+    CHECK_THAT(m.volume, WithinAbs(8000 - 90 * pi - 40 * corner, 1e-5));
+    CHECK_THAT(m.area,
+               WithinAbs(2800 + 42 * pi - 80 * radius + 20 * pi * radius - 2 * corner, 1e-5));
+    CHECK_THAT(m.centroid.x, WithinAbs(20, 1e-8));
+    history(*result, source.shape);
+    const auto faces = kernel->faces(result->shape).value();
+    CHECK(std::ranges::count_if(faces, [](const auto& f) {
+            return f.cylinder && std::abs(f.cylinder->radius - 3) < 1e-8;
+          }) == 4);
+    CHECK(serialized(source.shape) == saved);
+  }
+  CHECK_FALSE(kernel->fillet(source.shape, {selected}, 100));
+  CHECK(serialized(source.shape) == saved);
+  CHECK(kernel->fillet(source.shape, {selected}, 2));
 }
