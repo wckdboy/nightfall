@@ -4,11 +4,13 @@ import SwiftUI
 
 struct CADViewport: NSViewRepresentable {
   let mesh: DisplayMesh?
+  let hiddenBodies: Set<String>
   let pose: CADCamera.Preset, fit: Int
   class Coordinator { var pose = CADCamera.Preset.iso, fit = 0 }
   func makeCoordinator() -> Coordinator { Coordinator() }
   func makeNSView(context: Context) -> OrbitView { OrbitView() }
   func updateNSView(_ view: OrbitView, context: Context) {
+    view.renderer?.hiddenBodies = hiddenBodies
     if let mesh, view.meshID != mesh.id {
       try? view.renderer?.setMesh(mesh)
       view.meshID = mesh.id
@@ -130,7 +132,9 @@ struct PreviewView: View {
               .keyboardShortcut("f", modifiers: [])
           }.padding(12)
           ZStack(alignment: .topLeading) {
-            CADViewport(mesh: model.mesh, pose: model.pose, fit: model.fit).accessibilityLabel(
+            CADViewport(
+              mesh: model.mesh, hiddenBodies: model.hiddenBodies, pose: model.pose, fit: model.fit
+            ).accessibilityLabel(
               "CAD viewport")
             if model.mesh == nil {
               ContentUnavailableView {
@@ -147,6 +151,15 @@ struct PreviewView: View {
             if model.stale {
               Label("Last valid geometry", systemImage: "exclamationmark.triangle").font(.caption)
                 .padding(10).background(.orange.opacity(0.15), in: Capsule()).padding()
+            }
+            if model.mesh != nil && model.allBodiesHidden {
+              ContentUnavailableView {
+                Label("All bodies hidden", systemImage: "eye.slash")
+              } description: {
+                Text("Show a body or restore the whole model.")
+              } actions: {
+                Button("Show all bodies", action: model.showAllBodies)
+              }
             }
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -186,9 +199,30 @@ struct PreviewView: View {
               .system(size: 10, weight: .semibold)
             ).foregroundStyle(
               .secondary)
+            if !model.hiddenBodies.isEmpty {
+              Button("Show all bodies", systemImage: "eye", action: model.showAllBodies)
+            }
             ForEach(model.bodies) { body in
               VStack(alignment: .leading, spacing: 6) {
-                Text(body.id).font(.subheadline.bold())
+                HStack {
+                  Text(body.id).font(.subheadline.bold())
+                  Spacer()
+                  let hidden = model.hiddenBodies.contains(body.id)
+                  Button {
+                    model.setBodyVisible(body.id, to: hidden)
+                  } label: {
+                    Image(systemName: hidden ? "eye.slash" : "eye")
+                  }
+                  .accessibilityLabel("\(hidden ? "Show" : "Hide") \(body.id)")
+                  .help("\(hidden ? "Show" : "Hide") \(body.id)")
+                  Button {
+                    model.isolateBody(body.id)
+                  } label: {
+                    Image(systemName: "viewfinder")
+                  }
+                  .accessibilityLabel("Isolate \(body.id)")
+                  .help("Isolate \(body.id)")
+                }.buttonStyle(.borderless)
                 Text("\(body.volume, format: .number.precision(.fractionLength(2))) mm³")
                   .monospacedDigit()
                 Text("\(body.area, format: .number.precision(.fractionLength(2))) mm²").font(

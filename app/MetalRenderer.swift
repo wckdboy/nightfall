@@ -43,6 +43,8 @@ struct CADCamera {
   private var vertices: MTLBuffer?, indices: MTLBuffer?, edges: MTLBuffer?
   private var indexCount = 0
   private var edgeCount = 0
+  private var draws: [DisplayMesh.Draw] = []
+  var hiddenBodies: Set<String> = []
   var camera = CADCamera()
   init(device: MTLDevice) throws {
     let library = try device.makeLibrary(source: Self.shader, options: nil)
@@ -94,6 +96,7 @@ struct CADCamera {
     indexCount = mesh.indices.count / 4
     edges = edge
     edgeCount = mesh.edges.count / 4
+    draws = mesh.draws
   }
   func clearMesh() {
     vertices = nil
@@ -101,6 +104,7 @@ struct CADCamera {
     edges = nil
     indexCount = 0
     edgeCount = 0
+    draws = []
   }
   func encode(_ pass: MTLRenderPassDescriptor, aspect: Float, command: MTLCommandBuffer) {
     pass.colorAttachments[0].clearColor = MTLClearColor(
@@ -117,16 +121,21 @@ struct CADCamera {
       encoder.setFrontFacing(.counterClockwise)
       encoder.setVertexBuffer(vertices, offset: 0, index: 0)
       encoder.setVertexBytes(&matrix, length: MemoryLayout<simd_float4x4>.stride, index: 1)
-      encoder.drawIndexedPrimitives(
-        type: .triangle, indexCount: indexCount, indexType: .uint32,
-        indexBuffer: indices, indexBufferOffset: 0)
+      let visible = draws.filter { !hiddenBodies.contains($0.body) }
+      for draw in visible {
+        encoder.drawIndexedPrimitives(
+          type: .triangle, indexCount: draw.triangles.count, indexType: .uint32,
+          indexBuffer: indices, indexBufferOffset: draw.triangles.lowerBound * 4)
+      }
       if let edges, edgeCount > 0 {
         encoder.setRenderPipelineState(edgePipeline)
         encoder.setDepthStencilState(edgeDepth)
         encoder.setDepthBias(-1, slopeScale: -1, clamp: 0)
-        encoder.drawIndexedPrimitives(
-          type: .line, indexCount: edgeCount, indexType: .uint32, indexBuffer: edges,
-          indexBufferOffset: 0)
+        for draw in visible where !draw.edges.isEmpty {
+          encoder.drawIndexedPrimitives(
+            type: .line, indexCount: draw.edges.count, indexType: .uint32, indexBuffer: edges,
+            indexBufferOffset: draw.edges.lowerBound * 4)
+        }
       }
     }
     encoder.endEncoding()
