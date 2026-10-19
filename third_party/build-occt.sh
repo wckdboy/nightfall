@@ -32,6 +32,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+patch="$root/third_party/occt/patches/0001-align-incremental-allocations.patch"
+patch_hash="$(shasum -a 256 "$patch" | cut -d ' ' -f 1)"
 src="${NF_OCCT_SOURCE_DIR:-$root/third_party/src/occt}"
 variant=""
 sanitize_flags=()
@@ -45,9 +47,15 @@ fi
 prefix="${NF_OCCT_INSTALL_DIR:-$root/third_party/install/occt-$VERSION$variant}"
 # Keyed on the source path so a different NF_OCCT_SOURCE_DIR never reuses a CMake cache.
 build="$root/build/third_party/occt-$VERSION$variant-$(printf %s "$src" | shasum -a 256 | cut -c1-8)"
+# Reuse an older local build only when its cache proves the identical source directory.
+legacy_build="$root/build/third_party/occt-$VERSION$variant"
+if [[ -f "$legacy_build/CMakeCache.txt" ]] &&
+   grep -Fxq "CMAKE_HOME_DIRECTORY:INTERNAL=$src" "$legacy_build/CMakeCache.txt"; then
+  build="$legacy_build"
+fi
 
-# The stamp records commit and variant, so a sanitizer request never reuses a plain install.
-stamp="$COMMIT${variant:-}"
+# The stamp records commit, variant and patch content; sanitized/plain installs stay separate.
+stamp="$COMMIT${variant:-}-inc-align-$patch_hash"
 if [[ -f "$prefix/.nf-occt-commit" && "$(cat "$prefix/.nf-occt-commit")" == "$stamp" ]]; then
   echo "OCCT $VERSION${variant:-} already installed in $prefix"
   exit 0
@@ -60,9 +68,16 @@ if [[ "$(git -C "$src" rev-parse HEAD)" != "$COMMIT" ]]; then
   echo "OCCT checkout at $src is not at $COMMIT ($TAG); remove it and run again." >&2
   exit 1
 fi
-if [[ -n "$(git -C "$src" status --porcelain --untracked-files=no)" ]]; then
-  echo "OCCT checkout at $src has local modifications; discard them and run again." >&2
-  exit 1
+if [[ -z "$(git -C "$src" status --porcelain --untracked-files=no)" ]]; then
+  git -C "$src" apply --check "$patch"
+  git -C "$src" apply "$patch"
+else
+  actual_patch="$(git -C "$src" diff HEAD --no-ext-diff --no-color --binary --diff-algorithm=myers --unified=3 --no-renames)"
+  if [[ "$actual_patch" != "$(cat "$patch")" ]]; then
+    echo "OCCT checkout at $src has changes beyond Nightfall's pinned allocator patch." >&2
+    exit 1
+  fi
+  git -C "$src" apply --reverse --check "$patch"
 fi
 
 cmake -S "$src" -B "$build" -G Ninja \
