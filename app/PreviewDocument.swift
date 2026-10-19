@@ -67,11 +67,22 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   func edit(_ name: String) {
     guard let program else { return }
     do {
-      let next = try program.setting(name, to: drafts[name] ?? "")
-      past.append(program)
-      future = []
-      replace(next)
+      commit(try program.setting(name, to: drafts[name] ?? ""))
     } catch { notice = error.localizedDescription }
+  }
+  func setSuppressed(_ id: String, to value: Bool) {
+    guard let program else { return }
+    do { commit(try program.suppressing(id, value)) } catch { notice = error.localizedDescription }
+  }
+  func endHistory(at id: String?) {
+    guard let program else { return }
+    do { commit(try program.endingHistory(at: id)) } catch { notice = error.localizedDescription }
+  }
+  private func commit(_ next: PartProgram) {
+    guard let program, next.source != program.source else { return }
+    past.append(program)
+    future = []
+    replace(next)
   }
   func undo() {
     if let previous = past.popLast(), let program {
@@ -135,12 +146,15 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
       }
       if self.errors.isEmpty {
         do {
-          let result = try await Task.detached { [response] () -> (DisplayMesh, [BodyMeasure]) in
+          let result = try await Task.detached { [response] () -> (DisplayMesh?, [BodyMeasure]) in
             struct Measures: Decodable { let bodies: [BodyMeasure] }
-            return (
-              try DisplayMesh(response),
-              try JSONDecoder().decode(Measures.self, from: response.manifest).bodies
-            )
+            let bodies = try JSONDecoder().decode(Measures.self, from: response.manifest).bodies
+            if bodies.isEmpty {
+              guard response.vertices.isEmpty && response.indices.isEmpty && response.faces.isEmpty
+              else { throw DisplayMesh.Invalid() }
+              return (nil, [])
+            }
+            return (try DisplayMesh(response), bodies)
           }.value
           guard self.revision == token, !Task.isCancelled else { return }
           self.mesh = result.0

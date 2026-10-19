@@ -209,8 +209,40 @@ TEST_CASE("C bridge rejects malformed and oversized requests without accessing e
       nf_session_build(s.get(), nullptr, std::numeric_limits<std::size_t>::max(), nullptr),
       nf_result_free};
   failed(maximal, "bounds");
-  failed(build(s.get(), fixture::source(ir::Document{})), "kernel");
   mesh(build(s.get(), text), 6000, 2200, 1e-9);
+}
+
+TEST_CASE("C bridge returns successful empty construction history", "[bridge]") {
+  auto s = session();
+  const auto solid = build(s.get(), fixture::source(fixture::part()));
+  auto sketch = fixture::part(2);
+  sketch.features.resize(1);
+  auto suppressed = fixture::part(2);
+  suppressed.features[1].suppressed = true;
+  auto rolled = fixture::part();
+  rolled.history_end = "outline";
+  for (const auto& document : {ir::Document{}, sketch, suppressed, rolled}) {
+    const auto result = build(s.get(), fixture::source(document));
+    const auto data = manifest(result);
+    CHECK(array(data, "errors").empty());
+    CHECK(array(data, "features").size() == document.features.size());
+    CHECK(array(data, "bodies").empty());
+    CHECK(array(data, "face_names").empty());
+    REQUIRE(data.find("cache"));
+    CHECK(number(*data.find("cache"), "kernel_calls") == 0);
+    std::size_t count = 123;
+    CHECK(nf_result_vertices(result.get(), &count) == nullptr);
+    CHECK(count == 0);
+    CHECK(nf_result_indices(result.get(), &count) == nullptr);
+    CHECK(count == 0);
+    CHECK(nf_result_faces(result.get(), &count) == nullptr);
+    CHECK(count == 0);
+  }
+  auto dependent = fixture::part();
+  dependent.features[1].suppressed = true;
+  failed(build(s.get(), fixture::source(dependent)), "input_suppressed");
+  mesh(solid, 6000, 2200, 1e-9);
+  mesh(build(s.get(), fixture::source(fixture::part())), 6000, 2200, 1e-9);
 }
 
 TEST_CASE("C bridge never returns partial-success meshes on independent feature failures",

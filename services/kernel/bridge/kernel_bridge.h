@@ -32,6 +32,8 @@ void nf_session_destroy(nf_session*);
 // not OCCT working memory/time; XPC admission/watchdog remain the service's responsibility.
 // Owned results survive later builds/session teardown. NULL means allocation/diagnostic
 // failure. Other failures have errors and ZERO geometry, including partial feature success.
+// A valid empty/sketch-only/suppressed/rolled-back document succeeds with zero bodies and
+// empty buffers. Consumers distinguish it from failure by checking the manifest errors.
 nf_result* nf_session_build(nf_session*, const char*, size_t, const nf_mesh_options*);
 // May be polled concurrently with build. Zero-based authored feature index, or -1
 // during validation, meshing and idle. Only this accessor supports concurrent session access.

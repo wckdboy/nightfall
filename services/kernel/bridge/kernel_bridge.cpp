@@ -112,7 +112,6 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
                                  {"faces", numeric(m.faces)},
                                  {"edges", numeric(m.edges)}});
     }
-    if (bodies.empty()) fail("kernel", "document has no live solid bodies");
   }
   const auto usage = s.evaluator.cache_usage();
   result->json = ir::json::canonical(
