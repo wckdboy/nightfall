@@ -1593,6 +1593,36 @@ with strict/deep ad-hoc signatures, twenty examples and 26 service-local OCCT dy
 after extraction. Prior previews are preserved. PR #146 now has all three remote CI groups
 green; this increment's CI, human review, formal distribution and phase sign-off remain open.
 
+### #151 — seeded headless engine edit/failure/replay validation (2026-10-19)
+
+The kernel/evaluator is exercised directly, independently of the native client. Twelve fixed
+seeds produce 72 annular extrusion/pattern/mirror/placement edit states, 72 equivalent mm/cm
+variants and 144 reverse/forward source replays. Every state checks analytic volume/area,
+centroid/bounds, solid/face counts and complete current face-name ownership through warm
+cache, invalid documents/features, recovery, eviction and a fresh evaluator. All earlier
+results remain usable and unchanged. Suppression and inclusive rollback are interleaved.
+Mass tolerance is 1e-6 mm³/mm²; centroid/bounds tolerance is 1e-6 mm. The initial oracle
+incorrectly assumed four faces for the un-unified extrusion; it now distinguishes its ten
+analytic span faces from the four unified faces per annulus after a union. No runtime defect
+or kernel fix is claimed from that test-oracle correction.
+
+The scenario contract draws on SolidCraft's
+[`atomic_commands.rs` at 4c30d944](https://github.com/tangency-labs/solidcraft/blob/4c30d944f54113b75c3e2f06d343146a01118015/crates/engine/tests/atomic_commands.rs)
+(MIT OR Apache-2.0). Fixtures and analytic C++ oracles are original; no Rust dependency,
+source port or new transaction/API surface is introduced. This adapts the reference to
+Nightfall's immutable IR/evaluation contract under Accepted RFCs 0003/0005/0007.
+
+A second headless check retains final geometry after evaluator/backend teardown, exports
+exact AP242 STEP, reloads valid solids with cylinder surfaces and verifies volume/area within
+1e-5. It checks centroid within 1e-6 mm, current mesh face owners and outward mesh volume
+within 1% of the analytic solid. Focused Release checks pass 2/2 (7.79 s). ASan/UBSan passes
+2 cases / 164,210 assertions without diagnostics; Nightfall is instrumented, pinned OCCT
+remains a Release shared library. The full gate passes 748/748 (164.11 s), 202 schema cases,
+twenty reference schemas and hygiene. Remote CI/human review remain pending.
+Logs: `/tmp/nightfall-151-{focused,asan,check}.log`. This adds production-engine validation;
+production readiness, SMLib #15 deferral, USD interchange work and phase sign-off remain open.
+The visual preview 0.0.3 archive/source is preserved unchanged.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
