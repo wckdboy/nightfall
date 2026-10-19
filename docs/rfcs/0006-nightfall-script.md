@@ -51,8 +51,11 @@ and physics remain separate work; this RFC changes no phase gate.
 The immutable global `nf` exposes only these builder operations and frozen JSON arguments:
 
 - `nf.requireApi(1)` selects an exact supported API version before any builder call.
-- `nf.part({name, units})` begins exactly one part; units default to mm/deg. The host supplies
-  the nine required envelope fields, including empty references/UI and null `history_end`.
+- `nf.part({meta, units})` begins exactly one part; units default to mm/deg and metadata to
+  an empty object. `meta` accepts the complete RFC 0005 metadata object, including `name`,
+  `doc` and `x-` extensions, copied without dropping descriptions or extension values.
+  The host supplies the nine required envelope fields, including empty references/UI and
+  null `history_end`.
 - `nf.parameter(definition)` appends an RFC 0005 parameter with its authored name/value,
   optional bounds and documentation. No silent replacement of an existing name.
 - `nf.feature(definition)` appends an RFC 0005 feature, including optional suppression.
@@ -77,7 +80,8 @@ Example, proposed API (not executable in the current app):
 
 ```javascript
 nf.requireApi(1);
-nf.part({name: "Scripted plate", units: {length: "mm", angle: "deg"}});
+nf.part({meta: {name: "Scripted plate", doc: "60 × 40 mm parameterized plate."},
+         units: {length: "mm", angle: "deg"}});
 nf.parameter({name: "thickness", value: nf.arguments.thickness ?? "4 mm",
               min: "0.5 mm", max: "100 mm"});
 nf.feature({id: "outline", type: "sketch", inputs: {
@@ -198,7 +202,8 @@ The new compiler process/protocol require this RFC's acceptance before implement
 
 1. Unit/schema tests: exact envelope/units/IDs/history, immutable argument/input copies,
    invalid JSON values, sizes/depth/call bounds, unsupported language/import/script and locations.
-2. Differential recipes for all twenty parts: compare canonical IR, analytic volume/area/
+2. Differential recipes for all twenty parts: compare complete canonical IR (including
+   metadata descriptions/extensions, parameters, features and history), analytic volume/area/
    centroid/bounds, selectors, parameter variants and exact STEP round trips. No tolerance widening.
 3. Real process tests: startup, concurrency/admission, cancellation, stale/duplicate replies,
    missing callbacks, forced exit, infinite loops, budget failure, denied I/O and complete replay.

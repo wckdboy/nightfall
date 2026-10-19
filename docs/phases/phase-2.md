@@ -1579,6 +1579,9 @@ the existing phase gate is unchanged. The native development preview remains usa
 Docs-only `tools/check.sh --preset dev` passes 234/234 (52.13 s), including hygiene.
 Its optional Python schema cross-check is skipped without the system jsonschema package;
 the preceding unchanged runtime gate passed 745/745 plus 202 schema cases/twenty references.
+Review follow-up: the builder accepts complete v1 metadata, preserving `meta.doc` and
+extensions so full canonical comparisons can reproduce all twenty reference descriptions.
+The follow-up gate passes 234/234 (55.80 s), 202 schema cases and twenty reference parts.
 
 ### Face-attached sketch rebuild evidence
 
