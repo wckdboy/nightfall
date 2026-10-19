@@ -139,11 +139,12 @@ func restart(_ mode: String) throws {
   print("\(mode): pid \(first.pid) → \(rebuilt.pid), complete IR replay in \(ms) ms")
 }
 @main enum XPCProbe {
-  static func main() {
+  @MainActor static func main() async {
     do {
       let mode = CommandLine.arguments.dropFirst().first ?? "smoke"
       switch mode {
       case "smoke": try smoke()
+      case "client": try await clientIntegration()
       case "references": try references(CommandLine.arguments[2])
       case "restart", "crash", "hang": try restart(mode)
       default: throw Failure(description: "unknown mode")

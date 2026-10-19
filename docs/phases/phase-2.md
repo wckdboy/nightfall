@@ -1408,6 +1408,43 @@ packager regression fails first with the same missing-file error, then repackage
 executes both relocated hosts successfully. An isolated checkout using the cached OCCT
 install passes the full gate again: 724/724 (133.97 s), schema and hygiene included.
 
+### #137 — bounded app client and immutable suppression recovery (2026-10-19)
+
+The Foundation-only `KernelClient` compiles alongside the shared protocol, linking no
+native worker/kernel. Main-actor request and connection tokens arbitrate replies, transport
+failures, interruptions, invalidations, cancellation and deadlines. One logical rebuild is
+admitted; late/duplicate callbacks cannot settle a newer continuation. Cancellation,
+shutdown, protocol errors and the seven-second backstop retire the connection. The next
+request sends complete IR. Reply manifest/mesh byte limits, buffer strides and zero partial
+error geometry are checked off the main actor before publication.
+
+A timeout naming a valid authored feature retries exactly once on a fresh connection,
+suppressing only that feature in an ephemeral copy. Source bytes remain unchanged, and
+the returned response retains the original culprit diagnostic even when recovery succeeds.
+Invalid/absent/Boolean indices do not cause arbitrary edits or repeated retries.
+
+Tests first fail on missing client/transport types. Sixteen controlled checks (eight normal,
+eight Swift TSAN; first focused run 17.78 s) cover admission, warm reuse, closure, missing
+callbacks, deadline retirement, cancellation before/during requests, shutdown, stale events,
+single successful/failed suppression replay, invalid indices, malformed/partial replies
+and 100 four-way concurrent reply/error races. A real embedded service test covers exact
+geometry, owned buffers, cold/warm caches and complete-IR replay after SIGKILL.
+
+That real-process test initially traps in Foundation's background error callback: the
+class's imported callback lacks Sendable and Swift infers main-actor isolation. Explicit
+`@Sendable` types on every XPC event/error callback fix the executor assertion. The corrected
+integration test passes in 10.60 s; the final gate's same test passes in 10.27 s, including
+observed relaunch delay. Individual failed requests still respect the seven-second client
+backstop; the test allows later complete-IR attempts rather than extending that deadline.
+
+`tools/check.sh --preset occt` passes 741/741 (159.60 s), plus 202 schema cases, twenty
+reference schemas and license/layering/format checks. Swift 6 complete strict concurrency,
+warnings as errors and strict swift-format lint pass; no sanitizer diagnostics. Logs:
+`/tmp/nightfall-137-{red-build,build,client,integration,check}.log`. This includes the #135
+cached-install fix and source-free packaging regression. Remote CI/review remain pending;
+the production Metal viewport/native interface and large-mesh shared memory follow. The
+kernel/client infrastructure alone is not a visual MVP or a full Phase 2 sign-off.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.

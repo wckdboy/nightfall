@@ -110,6 +110,15 @@ The test host imports only the Foundation protocol and links no kernel library. 
 shared-memory transfer and Metal UI still follow under RFC 0003. The headless host is a
 development test artifact; no production visual-testing app or notarized release exists yet.
 
+The Foundation-only [app client](app/KernelClient.swift) keeps one rebuild in flight,
+settles each request once and enforces a seven-second backstop. Connection/request tokens
+discard stale callbacks; cancellation and shutdown retire the connection. A timeout with
+a valid feature index retries once with that feature suppressed in a temporary IR copy.
+The response retains the recovery diagnostic, while authored source bytes stay unchanged.
+Reply bounds/layout/diagnostics are checked off the main actor. Controlled tests also run
+under Swift ThreadSanitizer; the real embedded-service test exercises cache closure and
+complete-IR replay through the client after a crash, including bounded relaunch failures.
+
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 
 ```sh
