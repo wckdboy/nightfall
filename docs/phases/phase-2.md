@@ -12,6 +12,29 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Asterion capability and limit evidence (#161)
+
+The new `examples/modeling/asterion.nightfall` builds through the real evaluator/CLI and
+was opened and visually inspected in the native Metal client. Its 28 features produce
+eight live bodies / 80 closed solids / 745 faces / 27,172 display triangles. Independent
+primitive and frustum integration gives V = 359949.6576334083 mm³ and A = 265552.9240952252 mm²;
+all component volume/area checks and exported STEP reload pass at 1e-5 absolute tolerance.
+The indexed display mesh differs in volume by 0.0541% and area by 0.0165%.
+
+Three local Release samples on arm64: single-module median cold rebuild 378.636 ms,
+warm rebuild 20.497 ms, mesh 105.861 ms; cold/warm C bridge 482.989/128.348 ms (one each).
+Eight modules build headlessly: 640 solids / 5,768 faces / 217,142 triangles,
+V = 2879597.261067266 mm³. Cold/warm bridge 4943.289/4738.721 ms leaves little native
+deadline margin. The actual client displayed two modules (160 solids / 54,280 triangles),
+but four- and eight-module attempts disconnected and retained marked last-valid geometry.
+These observations are bounded stress evidence, not a universal maximum or a frame-rate claim.
+
+The 64-instance and 64-total-target-instance limits apply to each pattern operation,
+not the number of leaf solids in nested patterns. Large final pattern results can exceed
+the 64 MiB estimated admission budget: 27 rather than 28 cache hits, with repeated copy/
+union work on warm builds. The private `nf_showcase_bench` makes these costs reproducible.
+Kernel performance and client inspection improvements will be tracked separately.
+
 ## Work items (build order)
 
 Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy/nightfall/milestone/3).
