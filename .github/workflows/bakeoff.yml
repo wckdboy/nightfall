@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: third_party/install  # same path + key as occt.yml, so main's cache is shared
-          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh') }}
+          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh', 'third_party/occt/patches/*.patch') }}
       - name: Build OCCT
         if: steps.occt.outputs.cache-hit != 'true'
         run: third_party/build-occt.sh

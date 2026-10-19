@@ -30,4 +30,11 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
   SM_API test suite runs unchanged as `smlib.SM_API_test`.
 - **OpenCASCADE** is built by `third_party/build-occt.sh` with only the modeling and
   data-exchange toolkits (no Draw, Tcl/Tk, FreeType or OpenGL) and installed into the
-  git-ignored `third_party/install/`. CI caches that install keyed on the script's hash.
+  git-ignored `third_party/install/`. CI caches that install keyed on the script and patch
+  hashes. Nightfall's `occt/patches/0001-align-incremental-allocations.patch` fixes mixed-size
+  incremental allocation alignment in the pinned 7.9.3 source (#174), with size-overflow
+  rejection and no public ABI change. This modification retains OCCT's LGPL-2.1 license
+  and exception; the complete patch is distributed here for reproducible rebuilds.
+  The install receipt includes its SHA256, verified at configure time and included in the
+  backend's cache identity. A checkout must be clean upstream or contain exactly this patch;
+  unrelated source edits are rejected. The script preserves those edits on failure.

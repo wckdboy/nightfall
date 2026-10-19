@@ -15,10 +15,20 @@ endif()
 find_package(OpenCASCADE 7.9.3 EXACT CONFIG REQUIRED
   PATHS "${NF_OCCT_INSTALL_DIR}" NO_DEFAULT_PATH)
 message(STATUS "OpenCASCADE ${OpenCASCADE_VERSION} from ${NF_OCCT_INSTALL_DIR}")
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-align-incremental-allocations.patch" patch_hash)
+if(NOT EXISTS "${NF_OCCT_INSTALL_DIR}/.nf-occt-commit")
+  message(FATAL_ERROR "OCCT build receipt missing. Run third_party/build-occt.sh.")
+endif()
+file(READ "${NF_OCCT_INSTALL_DIR}/.nf-occt-commit" occt_build)
+string(STRIP "${occt_build}" occt_build)
+if(NOT occt_build MATCHES "^a016080bf6738d6aeae020badee4e888ad1540a5(-asan)?-inc-align-${patch_hash}$")
+  message(FATAL_ERROR "OCCT allocator patch receipt mismatch. Run third_party/build-occt.sh.")
+endif()
 
 # The toolkits Nightfall uses: modeling plus STEP.
 add_library(nf_occt INTERFACE)
 add_library(nf::occt ALIAS nf_occt)
+target_compile_definitions(nf_occt INTERFACE NF_OCCT_BUILD_ID="${occt_build}")
 target_link_libraries(nf_occt INTERFACE
   TKernel TKMath TKG2d TKG3d TKGeomBase TKBRep TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool
   TKFillet TKOffset TKShHealing TKMesh TKDE TKXSBase TKDESTEP)

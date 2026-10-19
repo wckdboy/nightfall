@@ -1,0 +1,32 @@
+diff --git a/src/NCollection/NCollection_IncAllocator.cxx b/src/NCollection/NCollection_IncAllocator.cxx
+index 9910079c..3d69be00 100644
+--- a/src/NCollection/NCollection_IncAllocator.cxx
++++ b/src/NCollection/NCollection_IncAllocator.cxx
+@@ -17,6 +17,8 @@
+ #include <Standard_OutOfMemory.hxx>
+ 
+ #include <cmath>
++#include <cstddef>
++#include <limits>
+ 
+ IMPLEMENT_STANDARD_RTTIEXT(NCollection_IncAllocator, NCollection_BaseAllocator)
+ 
+@@ -94,8 +96,17 @@ NCollection_IncAllocator::~NCollection_IncAllocator()
+ // function : AllocateOptimal
+ // purpose  : allocate a memory
+ //=======================================================================
+-void* NCollection_IncAllocator::AllocateOptimal(const size_t theSize)
++void* NCollection_IncAllocator::AllocateOptimal(const size_t theRequestedSize)
+ {
++  constexpr size_t anAlignment = alignof(std::max_align_t);
++  static_assert(sizeof(IBlock) % anAlignment == 0, "incremental block header must be aligned");
++  if (theRequestedSize > std::numeric_limits<unsigned int>::max() - (anAlignment - 1)
++      || theRequestedSize > std::numeric_limits<size_t>::max() - sizeof(IBlock) - (anAlignment - 1))
++  {
++    throw Standard_OutOfMemory("NCollection_IncAllocator allocation size is too large");
++  }
++  const size_t aNonzeroSize = theRequestedSize == 0 ? 1 : theRequestedSize;
++  const size_t theSize = (aNonzeroSize + anAlignment - 1) & ~(anAlignment - 1);
+   Standard_Mutex::Sentry aLock(myMutex);
+   // Allocating using general block
+   IBlock* aBlock = nullptr;

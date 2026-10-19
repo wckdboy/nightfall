@@ -167,7 +167,7 @@ class OcctKernel final : public IKernel {
   explicit OcctKernel(math::Tolerance tolerance) : tolerance_(tolerance) {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
-    identity << "occt/" << OCC_VERSION_COMPLETE
+    identity << "occt/" << OCC_VERSION_COMPLETE << ";build=" << NF_OCCT_BUILD_ID
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=separated-copy-unified-v2;revolve=1;loft=parallel-cubic-history-v1;"
                 "face-plane=uv-outward-v1;faces=analytic-v2;"

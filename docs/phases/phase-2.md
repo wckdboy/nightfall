@@ -188,16 +188,44 @@ The spline prism regression exposed generic boundary quadrature returning area
 patches on B-spline/Bezier surfaces now use positive nested Gauss–Kronrod metric integration,
 split at surface knots, with bounded refinement and convergence checks. Trimmed/nonrectangular
 faces retain the existing path. This does not fix the separate oblique volume stall #168.
-Focused evidence: ten loft cases / 4080 assertions pass, including a smooth interpolation
+Focused evidence: ten loft cases / 4086 assertions pass, including a smooth interpolation
 that collapses between positive sections, reversed plane normals, cap placement and
-near-coincident planes. The full Release gate passes 789/789 in 173.10 s before these
-additional assertions; the final gate is being rechecked. ASan/UBSan currently aborts in
+near-coincident planes. A final red regression catches an authored zero-length curve
+silently skipped by wire construction; loft now rejects such collapsed curves to preserve
+complete ancestry. The final full Release gate passes 789/789 in 189.87 s, with schema,
+hygiene and format checks. This backend is pushed in draft PR #175 (c6fb64c). ASan/UBSan aborts in
 OCCT's incremental allocator during the existing sphere mesher and loft preservation
 mesh. Mixed-size allocation alignment is tracked as the release blocker
 [#174](https://github.com/wckdboy/nightfall/issues/174); no sanitizer pass is claimed.
 Evaluator/cache/selector integration and a native editable example follow in
 [#173](https://github.com/wckdboy/nightfall/issues/173); this backend increment alone
 does not expose loft in the client.
+
+## OCCT incremental allocation alignment (#174)
+
+Loft validation exposed a misaligned integer-list deleter callback from OCCT's existing
+sphere mesher into instrumented Nightfall code. A direct mixed-allocation regression
+also fails: after one byte, the next fundamentally aligned object is returned at an odd
+address. The pinned 7.9.3 incremental allocator advances by raw requested sizes, without
+padding. Passing Release geometry tests did not prove those accesses were defined.
+
+A minimal distributed LGPL patch rounds allocations to `alignof(std::max_align_t)`,
+checks size/rounding overflow, gives zero-size requests progress, and verifies block-header
+alignment without changing public ABI. Source checkout checks accept clean upstream or
+exactly the pinned patch and preserve unrelated edits on failure. Installation receipts,
+configure verification, backend cache identity and CI cache keys include its SHA256:
+`d7887821ad973f2b2928fd4dcfabed5a4a4920d61a177634f865f9a8175054e4`.
+An existing local build is reused only when its cache confirms the identical source path.
+
+The allocator regressions pass 6539 assertions across two cases, including payload
+preservation, aligned object accesses, block growth, reset/reuse/release and overflow.
+The previously failing ASan/UBSan sphere test now passes 94895 assertions against the
+patched Release dylib, with the same instrumented binary and no suppression. Full kernel
+sanitizers pass 114 cases / 156536 assertions, including all ten loft cases; the C bridge
+passes 12 / 65400, showcase 2 / 9375 and allocator 2 / 6539. Nightfall and header callbacks
+are instrumented; the external OCCT dylib remains Release. The full application gate is
+being checked before release clearance. The unchanged build script reuses the matching
+receipt without recompilation. Logs: `/tmp/nightfall-174-{allocator-red,allocator,asan-*}.log`.
 
 ## Work items (build order)
 
