@@ -6,8 +6,9 @@ Nightfall pairs fluid direct modeling with a full parametric history, on exact N
 geometry. Every part is a program: defined by math, code and SVG, editable by hand or
 by any AI agent.
 
-> **Status:** Phase 2 — parametric documents, unit-aware expressions and incremental solid rebuilds. The NURBS math and SVG phase is
-> complete; the native modeling app is not usable yet. See the [phase tracker](docs/phases/phase-2.md).
+> **Status:** The first native macOS visual development preview is runnable: exact solids,
+> editable parameters, feature history and a Metal viewport. Phase 2 and the complete
+> modeling workflow remain in progress. See the [phase tracker](docs/phases/phase-2.md).
 
 ## Principles
 
@@ -36,6 +37,25 @@ Only directories with real content exist; the rest arrive with their phase.
 ## Building
 
 Requirements: macOS 15+ on Apple Silicon, Xcode 26+, CMake 3.28+, Ninja.
+
+Build the native visual preview with the production, dynamically linked OCCT kernel:
+
+```sh
+cmake --preset occt
+cmake --build --preset occt --target Nightfall
+open build/occt/app/Nightfall.app
+```
+
+The app starts with a mounting plate and includes twenty reference parts in **Examples**.
+Edit a parameter expression, including its units, and press Return to rebuild. The window
+shows feature history, exact volume/area and diagnostics; failed edits retain clearly marked
+last-valid geometry. Use Undo/Redo, Open and Save copy to try variants. Drag to orbit,
+Shift-drag or right-drag to pan, scroll/pinch to zoom, or use the view presets and Fit.
+
+This is an ad-hoc signed development preview for Apple Silicon/macOS 15+, without Developer
+ID signing or notarization. It supports existing part programs and named parameter edits;
+interactive sketch/feature authoring, in-app AI tools, assemblies, collaboration and physics
+simulation are still ahead. Shared-memory mesh transport and full phase sign-off are pending.
 
 ```sh
 tools/check.sh            # configure, build, test, format-check (what CI runs)
@@ -68,16 +88,16 @@ It supports rectangles, circles, signed arcs, rotated ellipses, NURBS splines, p
 closed profiles, holes, interior-point selection, datum/explicit planes and symmetric extrusion.
 Content hashes and a bounded cache preserve unchanged geometry. Rollback, suppression and
 failures have explicit states; unsupported
-constraints, selectors and modeling operations report errors. This is the headless kernel
-path; native app integration and the remaining v1 operations are still in progress.
+constraints, selectors and modeling operations report errors. This headless kernel path
+also powers the native preview; the remaining v1 operations are still in progress.
 
 Viewport consumers can call `IKernel::tessellate(shape, {0.1, 0.2})` for an indexed display
 mesh (absolute mm/radian deflections). Positions are world-space doubles; normals point
 outward. Each face range retains its original snapshot handle for transient picking.
 Meshing deep-copies geometry and preserves existing triangulations and cached solid names.
 The default returned-data limit is one million triangles and three million vertices;
-it does not bound OCCT's internal working memory or runtime. Service admission/watchdog
-handling remains part of native integration. Backends must implement the new virtual query,
+it does not bound OCCT's internal working memory or runtime. The native worker handles
+service admission and the watchdog. Backends must implement the new virtual query,
 and vtable consumers must rebuild.
 
 Native service code can now use the [plain-C bridge](services/kernel/bridge/kernel_bridge.h)
@@ -106,9 +126,9 @@ ctest --preset occt -R '^bundle\.' --output-on-failure
 
 Tests require launchd access; restricted process sandboxes can reject the service lookup.
 The test host imports only the Foundation protocol and links no kernel library. Set
-`NF_BUILD_XPC_BUNDLE=OFF` for a standalone Swift sanitizer build. App-side timeout/retry,
-shared-memory transfer and Metal UI still follow under RFC 0003. The headless host is a
-development test artifact; no production visual-testing app or notarized release exists yet.
+`NF_BUILD_XPC_BUNDLE=OFF` for a standalone Swift sanitizer build. The native app uses the
+same production service and packager. Shared-memory transfer remains pending under RFC 0003;
+both the test host and visual app are development artifacts, without a notarized release.
 
 The Foundation-only [app client](app/KernelClient.swift) keeps one rebuild in flight,
 settles each request once and enforces a seven-second backstop. Connection/request tokens
@@ -121,10 +141,11 @@ complete-IR replay through the client after a crash, including bounded relaunch 
 
 The [Metal viewport](app/MetalRenderer.swift) consumes finite, bounded Float32 display
 data derived off the main actor from the service's indexed meshes. It supports depth-tested
-normal lighting and fitted orthographic orbit/pan/zoom/presets. `bundle.render` exercises all
-twenty real reference parts and saves inspected PNGs in `build/occt/renders`; it requires a
+normal lighting, face-boundary outlines and fitted orthographic orbit/pan/zoom/presets.
+`bundle.render` exercises all twenty real parts and saves inspected PNGs in `build/occt/renders`; it requires a
 physical Metal device (GPU-only checks skip with code 77 when none is available). This
-renderer is being connected to the native preview shell; a render alone is not the MVP.
+renderer powers the native preview window. `bundle.preview` tests actual service rebuilds,
+parameter edits, retained valid geometry, revision ordering and undo/redo through its document model.
 
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 

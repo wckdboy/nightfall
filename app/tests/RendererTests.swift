@@ -16,6 +16,10 @@ func meshValidation() throws {
   }
   let mesh = try DisplayMesh(response(vertices, indices))
   try check(mesh.triangleCount == 1 && mesh.vertices.count == 18 * 4, "display vertex/index layout")
+  try check(mesh.edges.count == 6 * 4, "triangle boundary edges")
+  let square = vertices + [1, 1, 0, 0, 0, 1]
+  let quad = try DisplayMesh(response(square, [0, 1, 2, 1, 3, 2]))
+  try check(quad.edges.count == 8 * 4, "internal triangulation diagonal was drawn")
   let positions = mesh.vertices.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
   try check(positions.allSatisfy(\.isFinite) && abs(positions[0]) <= 1, "normalized finite mesh")
   for invalid in [

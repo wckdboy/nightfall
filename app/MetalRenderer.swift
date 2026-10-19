@@ -39,15 +39,16 @@ struct CADCamera {
 @MainActor final class MetalRenderer: NSObject, MTKViewDelegate {
   let device: MTLDevice, queue: MTLCommandQueue
   private let pipeline: MTLRenderPipelineState, depth: MTLDepthStencilState
-  private var vertices: MTLBuffer?, indices: MTLBuffer?
+  private let edgePipeline: MTLRenderPipelineState, edgeDepth: MTLDepthStencilState
+  private var vertices: MTLBuffer?, indices: MTLBuffer?, edges: MTLBuffer?
   private var indexCount = 0
+  private var edgeCount = 0
   var camera = CADCamera()
   init(device: MTLDevice) throws {
+    let library = try device.makeLibrary(source: Self.shader, options: nil)
     guard let queue = device.makeCommandQueue(),
-      let vertex = try device.makeLibrary(source: Self.shader, options: nil).makeFunction(
-        name: "vertexMain"),
-      let fragment = try device.makeLibrary(source: Self.shader, options: nil).makeFunction(
-        name: "fragmentMain")
+      let vertex = library.makeFunction(name: "vertexMain"),
+      let fragment = library.makeFunction(name: "fragmentMain")
     else { throw DisplayMesh.Invalid() }
     self.device = device
     self.queue = queue
@@ -64,6 +65,14 @@ struct CADCamera {
       throw DisplayMesh.Invalid()
     }
     self.depth = depth
+    descriptor.fragmentFunction = library.makeFunction(name: "edgeFragment")
+    edgePipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+    state.depthCompareFunction = .lessEqual
+    state.isDepthWriteEnabled = false
+    guard let edgeDepth = device.makeDepthStencilState(descriptor: state) else {
+      throw DisplayMesh.Invalid()
+    }
+    self.edgeDepth = edgeDepth
   }
   func setMesh(_ mesh: DisplayMesh) throws {
     let vertex = mesh.vertices.withUnsafeBytes {
@@ -73,9 +82,25 @@ struct CADCamera {
       device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
     }
     guard let vertex, let index else { throw DisplayMesh.Invalid() }
+    let edge =
+      mesh.edges.isEmpty
+      ? nil
+      : mesh.edges.withUnsafeBytes {
+        device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
+      }
+    guard mesh.edges.isEmpty || edge != nil else { throw DisplayMesh.Invalid() }
     vertices = vertex
     indices = index
     indexCount = mesh.indices.count / 4
+    edges = edge
+    edgeCount = mesh.edges.count / 4
+  }
+  func clearMesh() {
+    vertices = nil
+    indices = nil
+    edges = nil
+    indexCount = 0
+    edgeCount = 0
   }
   func encode(_ pass: MTLRenderPassDescriptor, aspect: Float, command: MTLCommandBuffer) {
     pass.colorAttachments[0].clearColor = MTLClearColor(
@@ -95,6 +120,14 @@ struct CADCamera {
       encoder.drawIndexedPrimitives(
         type: .triangle, indexCount: indexCount, indexType: .uint32,
         indexBuffer: indices, indexBufferOffset: 0)
+      if let edges, edgeCount > 0 {
+        encoder.setRenderPipelineState(edgePipeline)
+        encoder.setDepthStencilState(edgeDepth)
+        encoder.setDepthBias(-1, slopeScale: -1, clamp: 0)
+        encoder.drawIndexedPrimitives(
+          type: .line, indexCount: edgeCount, indexType: .uint32, indexBuffer: edges,
+          indexBufferOffset: 0)
+      }
     }
     encoder.endEncoding()
   }
@@ -129,5 +162,6 @@ struct CADCamera {
                          + 0.22 * max(dot(n, normalize(float3(-0.7,0.5,0.2))),0.0);
       return float4(float3(0.64,0.74,0.9) * light, 1);
     }
+    fragment float4 edgeFragment(Raster in [[stage_in]]) { return float4(0.08,0.12,0.18,1); }
     """
 }

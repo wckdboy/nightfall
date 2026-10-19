@@ -16,6 +16,9 @@ import MetalKit
     isPaused = true
     enableSetNeedsDisplay = true
     delegate = renderer
+    setAccessibilityElement(true)
+    setAccessibilityRole(.image)
+    setAccessibilityLabel("CAD viewport")
   }
   required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
   override var acceptsFirstResponder: Bool { true }

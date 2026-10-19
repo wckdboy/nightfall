@@ -48,6 +48,10 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#129](https://github.com/wckdboy/nightfall/issues/129) | Equal-distance chamfers on selected face-boundary edges | kernel | Implemented with immutable exact solids, complete history, recursive edge sets and atomic cache publication; local evidence below |
 | [#130](https://github.com/wckdboy/nightfall/issues/130) | Immutable indexed viewport meshes with current face associations | kernel | Implemented under RFCs 0003/0007 for Phase 2 native integration; mesh/ownership/reference regressions and local evidence below |
 | [#135](https://github.com/wckdboy/nightfall/issues/135) | Relocatable embedded XPC service and process recovery | kernel | Production service, headless host and real crash/hang/replay/relocation checks implemented; local evidence below |
+| [#137](https://github.com/wckdboy/nightfall/issues/137) | Bounded native app kernel client | app | Implemented with cancellation, recovery and real XPC replay; PR #139 CI green, review pending |
+| [#138](https://github.com/wckdboy/nightfall/issues/138) | Production Metal viewport | app | Twenty reference meshes render on Metal; PR #141 CI green, review pending |
+| [#142](https://github.com/wckdboy/nightfall/issues/142) | Editable native document model | app | Immutable parameter edits, revision ordering, undo/redo and last-valid geometry implemented; PR #143 review pending |
+| [#140](https://github.com/wckdboy/nightfall/issues/140) | First runnable native visual MVP | app | Development app built and visually tested with production XPC/OCCT; final local gate 743/743, evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1491,6 +1495,38 @@ strict Swift 6 concurrency/warnings and swift-format lint pass. Logs:
 `/tmp/nightfall-{140-preview,142-check}.log`. The native #140 window is already built and
 being visually checked: actual parameter/error/Undo interactions match these assertions.
 This document-only increment is not the MVP announcement; window packaging/QA follows.
+
+### #140 — first native visual MVP development preview (2026-10-19)
+
+`build/occt/app/Nightfall.app` now provides the SwiftUI window over the production XPC
+kernel/client and Metal viewport, under Accepted RFCs 0003/0007. It includes twenty example
+parts, native Open/Save copy, named expression edits, undo/redo, feature history, exact
+measurements and readable diagnostics. View presets and orbit/pan/zoom/fit expose the real
+solid. Face-boundary lines make cavities and holes readable without triangulation diagonals;
+they are transient display data derived off the main actor. A new document clears old GPU
+geometry, while an invalid edit retains explicitly marked last-valid geometry/measures.
+
+The actual window is opened and visually inspected, including the final outlined plate.
+Native controls verify thickness 4→8 mm changes exact volume 9147.61→18295.22 mm³; 0 mm
+reports the parameter bound while retaining geometry, and Undo restores the valid part.
+Save copy writes the edited 8 mm source, which the CLI exports as exact STEP. Native Open
+loads the enclosure (16788 mm³ / 11792 mm²); the Top preset changes the real viewport.
+Manual pointer dragging could not be driven by the UI automation server (noWindowsAvailable);
+camera preset/zoom pixel-change checks pass on Metal, without claiming a manual drag test.
+
+The app bundle contains the isolated service and 26 service-local OCCT dylibs, with ad-hoc
+signatures verified deeply/strictly. It targets arm64/macOS 15.0. The 17 MiB development ZIP
+`out/Nightfall-0.0.1-preview-arm64-macos.zip` extracts with valid signatures; it is not a tagged release.
+The missing app target and missing edge-buffer tests fail first; final focused GPU/document
+checks pass 2/2 (1.69 s). The complete `tools/check.sh --preset occt` passes 743/743 (154.44 s),
+202 schema cases, twenty reference schemas and license/layering/format checks. Strict Swift 6
+concurrency/warnings and swift-format lint pass. Logs: `/tmp/nightfall-140-{build,visual,check}.log`.
+The bundle/client/renderer PRs #136/#139/#141 have green remote CI; human review remains pending.
+
+This is the first runnable visual MVP for existing part programs and parameter variants.
+Interactive sketch/feature authoring, in-app AI tools, assemblies, collaboration, physics
+simulation and shared-memory transfer remain open. The full Phase 2 gate is not signed off;
+formal releases still require reviewed work on main and the distribution release process.
 
 ### Face-attached sketch rebuild evidence
 
