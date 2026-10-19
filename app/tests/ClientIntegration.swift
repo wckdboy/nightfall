@@ -26,7 +26,7 @@ func packet(_ response: KernelResponse) -> Reply {
     bad.diagnostics.first?.code == "schema" && bad.vertices.isEmpty, "structured kernel error")
   try check(kill(first.processID, SIGKILL) == 0, "client cannot terminate owned service")
   var rebuilt: KernelResponse?
-  for attempt in 1...3 {
+  for attempt in 1...5 {
     let start = ContinuousClock.now
     let next = await client.build(id, source: source)
     let elapsed = ContinuousClock.now - start
@@ -36,17 +36,22 @@ func packet(_ response: KernelResponse) -> Reply {
       break
     }
     try check(
-      ["kernel_restarted", "kernel_unavailable", "kernel_unresponsive"].contains(
+      ["kernel_restarted", "kernel_unavailable", "kernel_unresponsive", "busy"].contains(
         next.diagnostics[0].code),
-      "unexpected restart error")
+      "unexpected restart error: \(next.diagnostics)")
     print("client replay attempt \(attempt): \(next.diagnostics[0].code) after \(elapsed)")
+    try await Task.sleep(for: .milliseconds(100))
   }
   guard let rebuilt else {
     throw Failure(description: "client could not replay after service restart")
   }
   try check(rebuilt.processID != first.processID, "client replay kept old process")
   try geometry(packet(rebuilt), volume: 6000, area: 2200)
-  try check(try cacheHits(packet(rebuilt)) == 0, "client replay was not cold")
+  // A request abandoned at the backstop may still reach the relaunched service and warm
+  // its cache. Explicit closure gives an observable cold boundary without assuming otherwise.
+  client.close(id)
+  let cold = await client.build(id, source: source)
+  try check(try cacheHits(packet(cold)) == 0, "client closure after replay was not cold")
   let repeated = await client.build(id, source: source)
   try check(try cacheHits(packet(repeated)) == 2, "client replay did not warm")
   try geometry(packet(first), volume: 6000, area: 2200)

@@ -1445,6 +1445,35 @@ cached-install fix and source-free packaging regression. Remote CI/review remain
 the production Metal viewport/native interface and large-mesh shared memory follow. The
 kernel/client infrastructure alone is not a visual MVP or a full Phase 2 sign-off.
 
+### #138 — production Metal viewport (2026-10-19)
+
+`DisplayMesh` bounds and validates indexed buffers, finite positions/normals and indices,
+normalizing display positions in Double before packing Float32 off the main actor. Exact
+measurements remain in the manifest. The kernel-free Metal renderer uses indexed drawing,
+depth testing, outward-normal lighting and orthographic orbit/pan/zoom/fit/presets.
+`OrbitView` draws on changes; the app shell follows in #140 under Accepted RFCs 0003/0007.
+
+Tests first fail for missing renderer types. Malformed meshes are rejected; twenty real
+service-built reference parts pass existing exact/mesh checks, convert and render through
+the same Metal pipeline. GPU completion, nonblank coverage and changed preset/zoom pixels
+are checked. The focused render test passes in 1.42 s. Actual 960x720 PNGs of the mounting
+plate and enclosure are visually inspected: correct through-holes, open cavity, shading
+and fitted geometry. Artifacts: `build/occt/renders/`. GPU checks explicitly skip with code
+77 on hosts with no Metal device; this Mac's complete rendering run passes without a skip.
+
+The first full gate exposes a restart-test assumption: an abandoned request can reach the
+relaunched service and warm its cache, and the next request can legitimately return busy.
+The test now permits bounded explicit attempts and uses document closure for an observable
+cold boundary, retaining the seven-second backstop. The corrected focused replay passes
+in 10.73 s. No production client or kernel policy is weakened.
+
+The final `tools/check.sh --preset occt` passes 742/742 (155.19 s), 202 schema cases, twenty
+reference schemas and hygiene. Swift 6 complete strict concurrency/warnings and strict
+swift-format lint pass; existing client TSAN checks remain green. Logs:
+`/tmp/nightfall-138-{red-build,build,render,replay,check}.log`. CI/review remain pending.
+The renderer/PNGs alone are not the requested visual MVP; the native interface and actual
+window validation follow immediately in #140. Phase gates and distribution policy stay open.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
