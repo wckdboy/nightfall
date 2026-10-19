@@ -63,20 +63,52 @@ struct PreviewView: View {
             .horizontal)
           Text(model.program?.name ?? "No part open").font(.subheadline).foregroundStyle(.secondary)
             .padding(.horizontal)
-          List(Array((model.program?.features ?? []).enumerated()), id: \.offset) {
-            index, feature in
+          if let end = model.program?.historyEnd {
             HStack {
-              Image(systemName: feature.type == "sketch" ? "pencil.and.outline" : "cube")
-              VStack(alignment: .leading, spacing: 3) {
-                Text(feature.id).font(.system(size: 12, weight: .medium))
-                Text(feature.type.capitalized).font(.system(size: 10)).foregroundStyle(.secondary)
-              }
+              Text("Through \(end)").font(.caption).lineLimit(1)
               Spacer()
-              if model.errors.contains(where: { $0.featureIndex == index }) {
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+              Button("Restore") { model.endHistory(at: nil) }.disabled(model.busy)
+                .accessibilityLabel("Restore full history")
+            }.padding(.horizontal).foregroundStyle(.cyan)
+          }
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+              ForEach(Array((model.program?.features ?? []).enumerated()), id: \.offset) {
+                index, feature in
+                HStack(spacing: 8) {
+                  Image(systemName: feature.type == "sketch" ? "pencil.and.outline" : "cube")
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text(feature.id).font(.system(size: 12, weight: .medium)).strikethrough(
+                      feature.suppressed)
+                    Text(feature.type.capitalized).font(.system(size: 10)).foregroundStyle(
+                      .secondary)
+                  }
+                  Spacer()
+                  if model.errors.contains(where: { $0.featureIndex == index }) {
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                  }
+                  Button {
+                    model.endHistory(at: feature.id)
+                  } label: {
+                    Image(
+                      systemName: model.program?.historyEnd == feature.id
+                        ? "backward.end.fill" : "backward.end")
+                  }.help("Roll back through \(feature.id)")
+                    .accessibilityLabel("Roll back through \(feature.id)")
+                  Button {
+                    model.setSuppressed(feature.id, to: !feature.suppressed)
+                  } label: {
+                    Image(systemName: feature.suppressed ? "circle" : "checkmark.circle.fill")
+                  }.help(feature.suppressed ? "Enable \(feature.id)" : "Suppress \(feature.id)")
+                    .accessibilityLabel(
+                      feature.suppressed ? "Enable \(feature.id)" : "Suppress \(feature.id)")
+                }.accessibilityElement(children: .contain).buttonStyle(.borderless).disabled(
+                  model.busy
+                )
+                .opacity(feature.suppressed || feature.rolledBack ? 0.45 : 1).padding(.vertical, 5)
               }
-            }.padding(.vertical, 5)
-          }.listStyle(.sidebar).scrollContentBackground(.hidden)
+            }.padding(.horizontal, 16)
+          }
         }.padding(.top, 20).frame(width: 220)
         Divider()
         VStack(spacing: 0) {
@@ -96,9 +128,16 @@ struct PreviewView: View {
             CADViewport(mesh: model.mesh, pose: model.pose, fit: model.fit).accessibilityLabel(
               "CAD viewport")
             if model.mesh == nil {
-              ContentUnavailableView(
-                "Open a part", systemImage: "cube.transparent",
-                description: Text("Choose an example or open a Nightfall model."))
+              ContentUnavailableView {
+                Label(
+                  model.program == nil ? "Open a part" : "No solid bodies",
+                  systemImage: "cube.transparent")
+              } description: {
+                Text(
+                  model.program == nil
+                    ? "Choose an example or open a Nightfall model."
+                    : "Restore the history or enable a solid feature to see geometry.")
+              }
             }
             if model.stale {
               Label("Last valid geometry", systemImage: "exclamationmark.triangle").font(.caption)

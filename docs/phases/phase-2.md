@@ -52,6 +52,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#138](https://github.com/wckdboy/nightfall/issues/138) | Production Metal viewport | app | Twenty reference meshes render on Metal; PR #141 CI green, review pending |
 | [#142](https://github.com/wckdboy/nightfall/issues/142) | Editable native document model | app | Immutable parameter edits, revision ordering, undo/redo and last-valid geometry implemented; PR #143 review pending |
 | [#140](https://github.com/wckdboy/nightfall/issues/140) | First runnable native visual MVP | app | Development app built and visually tested with production XPC/OCCT; final local gate 743/743, evidence below |
+| [#145](https://github.com/wckdboy/nightfall/issues/145) | Native suppression and inclusive history rollback | app | History edits, undo/redo and valid empty construction states implemented; validation below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1527,6 +1528,40 @@ This is the first runnable visual MVP for existing part programs and parameter v
 Interactive sketch/feature authoring, in-app AI tools, assemblies, collaboration, physics
 simulation and shared-memory transfer remain open. The full Phase 2 gate is not signed off;
 formal releases still require reviewed work on main and the distribution release process.
+
+### #145 — native feature suppression and inclusive rollback (2026-10-19)
+
+The history now offers per-feature enable/suppression and rollback through a selected step,
+plus Restore for the complete history. Suppressed and deferred rows are marked. These are
+immutable edits to existing RFC 0005 fields, using the same revision-guarded rebuild,
+undo/redo and Save copy path as parameter edits. Accepted RFCs 0003/0007 cover integration.
+
+The real history test first fails because a valid no-solid construction state is returned
+as a kernel error. The C bridge required a live solid even when viewing construction history;
+removing that guard allows valid empty, sketch-only, suppressed and rolled-back documents
+to return their feature/cache manifest and empty buffers. The header documents this result.
+Feature/dependency failures still return diagnostics and zero geometry; solid operation
+validity rules are unchanged. The document model recognizes a successful empty result and
+clears old mesh/measures. Its window explains the empty state and exposes history actions
+as individual accessible buttons in a scrolling stack.
+
+Tests fail first on missing history APIs, then on actual XPC/C-ABI empty-state behavior.
+Focused bridge + native document checks pass 16/16 (2.04 s). Tests cover immutable edits,
+unknown IDs, inclusive endpoints/restoration, suppression, empty states, dependency-error
+retention, undo/redo, latest-only rapid toggles and unchanged input bytes. Local C-bridge
+ASan/UBSan checks pass 11 cases / 65,392 assertions, with no diagnostics; Nightfall is
+instrumented while pinned OCCT remains a Release shared-library build. The final complete
+gate passes 745/745 (154.00 s), 202 schema cases, twenty reference schemas and hygiene;
+strict Swift 6 concurrency/warnings and swift-format lint pass. Log: `/tmp/nightfall-145-check.log`.
+
+Actual native buttons verify suppression clears mesh/measures, Undo restores the plate,
+rollback through the sketch shows its marker and no solids, Restore returns 9147.61 mm³,
+and rollback through the extrusion includes it. Suppressing the required sketch reports
+its dependency error and retains marked geometry. Undo returns to the initial source/state.
+The final window and empty state are visually inspected. Development build 0.0.2 is packaged
+as `out/Nightfall-0.0.2-preview-arm64-macos.zip`; the original 0.0.1 archive is preserved.
+The preceding MVP PR #144 now has all three remote CI groups green. This increment's CI,
+all human reviews, formal distribution and full phase sign-off remain pending.
 
 ### Face-attached sketch rebuild evidence
 

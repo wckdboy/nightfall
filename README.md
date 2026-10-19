@@ -51,6 +51,9 @@ Edit a parameter expression, including its units, and press Return to rebuild. T
 shows feature history, exact volume/area and diagnostics; failed edits retain clearly marked
 last-valid geometry. Use Undo/Redo, Open and Save copy to try variants. Drag to orbit,
 Shift-drag or right-drag to pan, scroll/pinch to zoom, or use the view presets and Fit.
+History rows offer feature enable/suppression and inclusive rollback. **Restore** evaluates
+the full history again; these edits also support undo/redo and Save copy. A valid sketch-only
+or fully suppressed construction state clears the viewport and exact measures.
 
 This is an ad-hoc signed development preview for Apple Silicon/macOS 15+, without Developer
 ID signing or notarization. It supports existing part programs and named parameter edits;
@@ -105,6 +108,8 @@ Native service code can now use the [plain-C bridge](services/kernel/bridge/kern
 session, pass the complete v1 JSON to `nf_session_build`, inspect its immutable manifest and
 indexed buffers, then free the result and session. Results survive later builds and session
 teardown; any error returns zero geometry. Mesh budgets apply across all live bodies.
+Valid documents with no live solids return an empty successful manifest; check its errors
+to distinguish a sketch-only, suppressed or rolled-back state from a failed build.
 The signed active-feature index is safe to poll from a watchdog and is -1 outside feature
 evaluation. Serialize builds on the service worker. C17 linking and Swift 6 strict importing
 are tested. The [Swift worker](services/kernel/swift/KernelWorker.swift) now serializes native
