@@ -58,6 +58,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#153](https://github.com/wckdboy/nightfall/issues/153) | Retained asynchronous native Open/Save sheets | app | Save, reopen, cancellation and Keep editing verified; preview 0.0.4 and local gate below |
 | [#155](https://github.com/wckdboy/nightfall/issues/155) | Typed constant-radius fillets with complete immutable provenance | kernel | Exact OCCT rounds, complete topology-based ancestry and immutability implemented; evidence below |
 | [#157](https://github.com/wckdboy/nightfall/issues/157) | Execute v1 document fillets and native rounded-part preview | kernel | Evaluator, CLI and native edits/save/reopen implemented and visually verified; evidence below |
+| [#159](https://github.com/wckdboy/nightfall/issues/159) | Chained, concave and hole-adjacent fillet validation | kernel | Analytic combination/history regressions pass; no runtime change, evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1739,6 +1740,40 @@ Logs: `/tmp/nightfall-157-{red-test,focused,native,asan,cli-asan,check}.log`; fo
 11/11 result is recorded in the tool session. PRs #154 and #156 now have all remote CI groups
 green, including both-kernel/USD and SMLib checks. Human review, formal distribution,
 assemblies, collaboration, physics and full production/phase sign-off remain open.
+
+### #159 — chained, concave and hole-adjacent fillet validation (2026-10-19)
+
+Three additional production-kernel regressions exercise difficult combinations under Accepted
+RFC 0007. This is validation of the existing implementation; no runtime defect/fix, API,
+dependency, schema or process change is claimed. Every stage reuses complete output-oriented
+face/edge coverage and immutable input checks from #155, including all retained prior stages.
+
+Sequential r2 vertical corners and r1 top/bottom rims on a 10×20×30 mm prism match independent
+inner-parallel/Steiner formulas. For cross-section A = 200 - 4(4 - π) and perimeter P = 44 + 4π,
+each rim removes volume P(1 - π/4) - 2π(5/6 - π/4) and changes area by
+(π/2 - 2)P + 3π - π². The top stage measures 5885.15305696 mm³ / 2065.40053917 mm²;
+both rims measure 5873.31499549 mm³ / 2040.67721868 mm² with centroid (5,10,15) mm.
+The intermediate/final solids have 18/26 faces, with complete current ancestry at each step.
+
+A reflex corner in a 64 mm² L-profile adds area (1 - π/4)r² and has independently integrated
+centroid/first moments. Radii 0.125/1/2/4 mm pass; r1 at 10 mm extrusion measures
+642.14601837 mm³ / 524.13716694 mm². A holed 40×20×10 mm block, with a radius3 hole at
+(20,14.5), adapts the geometry of SolidCraft's
+[`issue_324_tests.rs` at 4c30d944](https://github.com/tangency-labs/solidcraft/blob/4c30d944f54113b75c3e2f06d343146a01118015/crates/kernel/src/issue_324_tests.rs)
+(MIT OR Apache-2.0), using original exact C++ oracles. Edge radii 1/2/2.4 mm preserve all four
+analytic hole-wall spans; the 2.4 mm case leaves 0.1 mm clearance and measures
+7667.81239802 mm³ / 2888.27112567 mm². Failed r100 preserves input and allows subsequent
+valid use. No automatic radius reduction, nearest/mesh naming or Rust dependency is added.
+
+Chained/toroidal and hole-adjacent mass tolerances are 1e-5 mm³/mm²; concave mass tolerance
+is 1e-6, centroid 1e-8 mm. The expanded focused suite passes nine cases / 6,871 assertions;
+Release CTest passes 9/9 (1.48 s). ASan/UBSan passes all nine cases / 6,871 assertions without
+diagnostics; Nightfall is instrumented while pinned OCCT shared libraries remain Release.
+The full gate passes 769/769 (169.82 s), 202 schema cases, twenty reference schemas and
+hygiene, including strict Swift/native/client concurrency tests. Preview0.0.5 remains
+preserved at source06a5cc4; this test-only branch does not replace its archive.
+Logs: `/tmp/nightfall-159-{ctest,focused,asan,check}.log`. CI, human review and full
+production/phase sign-off remain pending.
 
 ### Face-attached sketch rebuild evidence
 
