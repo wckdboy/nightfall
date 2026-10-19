@@ -1,0 +1,729 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Asterion 64 — radial cooling module",
+    "doc": "Exact multi-body capability showcase: 64 rounded fins, turned hub, drilled rounded mount, mirrored stands and chamfered fasteners. Separate solids are not an assembly or a thermal simulation."
+  },
+  "params": [
+    {
+      "name": "fin_count",
+      "value": 64,
+      "min": 1,
+      "max": 64
+    },
+    {
+      "name": "fin_height",
+      "value": "28 mm",
+      "min": "1 mm",
+      "max": "28 mm"
+    },
+    {
+      "name": "fin_radius",
+      "value": "0.5 mm",
+      "min": "0.01 mm",
+      "max": "0.59 mm"
+    },
+    {
+      "name": "module_count",
+      "value": 1,
+      "min": 1,
+      "max": 8
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "mount_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "blank",
+            "type": "rect",
+            "corner": [
+              -90,
+              -80
+            ],
+            "size": [
+              180,
+              160
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "mount_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "mount_outline"
+        },
+        "distance": 6,
+        "result": {
+          "new": "mount",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "mount_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "mount_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "mount_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "mount_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 12
+      }
+    },
+    {
+      "id": "drill_layout",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            -1
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 10
+          },
+          {
+            "id": "bolt_0",
+            "type": "circle",
+            "center": [
+              76,
+              66
+            ],
+            "radius": 4
+          },
+          {
+            "id": "bolt_1",
+            "type": "circle",
+            "center": [
+              -76,
+              66
+            ],
+            "radius": 4
+          },
+          {
+            "id": "bolt_2",
+            "type": "circle",
+            "center": [
+              -76,
+              -66
+            ],
+            "radius": 4
+          },
+          {
+            "id": "bolt_3",
+            "type": "circle",
+            "center": [
+              76,
+              -66
+            ],
+            "radius": 4
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "drills",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "drill_layout"
+        },
+        "distance": 8,
+        "result": {
+          "new": "drill_tools",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "mount_drilled",
+      "type": "boolean",
+      "inputs": {
+        "op": "subtract",
+        "target": "mount",
+        "tools": [
+          "drill_tools"
+        ]
+      }
+    },
+    {
+      "id": "spreader_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            6
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 68
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 10
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "spreader",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "spreader_outline"
+        },
+        "distance": 4,
+        "result": {
+          "new": "spreader",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "hub_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "zx"
+        },
+        "entities": [
+          {
+            "id": "section",
+            "type": "polygon",
+            "points": [
+              [
+                10,
+                10
+              ],
+              [
+                48,
+                10
+              ],
+              [
+                48,
+                13
+              ],
+              [
+                44,
+                17
+              ],
+              [
+                18,
+                23
+              ],
+              [
+                10,
+                23
+              ]
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "turned_hub",
+      "type": "revolve",
+      "inputs": {
+        "profile": {
+          "sketch": "hub_section"
+        },
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        },
+        "angle": "360 deg",
+        "result": {
+          "new": "hub",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "fin_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            10
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "fin",
+            "type": "rect",
+            "corner": [
+              24,
+              -0.6
+            ],
+            "size": [
+              40,
+              1.2
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "fin_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "fin_outline"
+        },
+        "distance": "fin_height",
+        "result": {
+          "new": "fins",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "fin_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "fin_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "fin_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "fin_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": "fin_radius"
+      }
+    },
+    {
+      "id": "radial_fins",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "fins"
+        ],
+        "count": "fin_count",
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        }
+      }
+    },
+    {
+      "id": "stand_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            6
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              76,
+              66
+            ],
+            "radius": 6
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              76,
+              66
+            ],
+            "radius": 4
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "stand",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "stand_outline"
+        },
+        "distance": 8,
+        "result": {
+          "new": "stands",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "stands_x",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "stands"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "x",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "stands_y",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "stands"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "tie_layout",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            10
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "tie_0",
+            "type": "circle",
+            "center": [
+              67,
+              0
+            ],
+            "radius": 1.5
+          },
+          {
+            "id": "tie_1",
+            "type": "circle",
+            "center": [
+              0,
+              67
+            ],
+            "radius": 1.5
+          },
+          {
+            "id": "tie_2",
+            "type": "circle",
+            "center": [
+              -67,
+              0
+            ],
+            "radius": 1.5
+          },
+          {
+            "id": "tie_3",
+            "type": "circle",
+            "center": [
+              0,
+              -67
+            ],
+            "radius": 1.5
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "ties",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "tie_layout"
+        },
+        "distance": 29,
+        "result": {
+          "new": "ties",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "guard_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            39
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 70
+          },
+          {
+            "id": "inner",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 64
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "guard_ring",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "guard_outline"
+        },
+        "distance": 3,
+        "result": {
+          "new": "guard",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "fastener_outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            14
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              76,
+              66
+            ],
+            "radius": 6
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              76,
+              66
+            ],
+            "radius": 4
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "fastener",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "fastener_outline"
+        },
+        "distance": 4,
+        "result": {
+          "new": "fasteners",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "fastener_bevel",
+      "type": "chamfer",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "fastener",
+            "role": "cap_end",
+            "expect": "one"
+          }
+        },
+        "distance": 0.5
+      }
+    },
+    {
+      "id": "fasteners_x",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "fasteners"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "x",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "fasteners_y",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "fasteners"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "module_array",
+      "type": "pattern_linear",
+      "inputs": {
+        "bodies": [
+          "mount",
+          "spreader",
+          "hub",
+          "fins",
+          "stands",
+          "ties",
+          "guard",
+          "fasteners"
+        ],
+        "count": "module_count",
+        "direction": "x",
+        "spacing": 200
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

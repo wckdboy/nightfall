@@ -4,6 +4,8 @@ Twenty editable v1 `.nightfall` documents for the Phase 2 reference suite (#95).
 complete parametric inputs for the production headless evaluator and `nf build` CLI (#94).
 The native app opens these parts through its Examples menu. Nightfall Script remains pending.
 Additional operation examples live in [modeling](../modeling/) without changing these baselines.
+The [Asterion showcase](../modeling/README.md) exercises 64 rounded fins, turned parts,
+boolean cuts, mirrors and body patterns in one editable cooling module.
 
 The [Filleted mounting plate](../modeling/rounded_plate.nightfall) adds editable exact corner
 rounds, with `thickness = 8 mm` and `corner_radius = 6 mm`. Its default volume is 18048 mm³
