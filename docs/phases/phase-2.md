@@ -162,6 +162,37 @@ An additional oblique-cylinder volume-integration stall is tracked separately in
 [#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
 This surface-area change does not resolve that existing volume path.
 
+## Planar path sweep kernel (#178)
+
+Accepted RFCs 0005/0007 cover the typed v1 sweep boundary. `IKernel::sweep` accepts a
+closed profile and an open planar path. A fixed path-plane binormal preserves authored
+profile roll, including through inflections; the profile origin/normal must match the
+path start/forward tangent. There is no automatic contact placement, frame correction,
+corner transition, scaling or mesh fallback. Construction errors above the configured
+linear tolerance are rejected. The backend identity records the new frame semantics.
+
+Initial limits are one profile without holes (128 curves / 1024 spans), 32 path curves /
+64 spans, connected G1 joins, and strict control-pole progress along every exact Bezier
+span's chord. Positive rational weights make this a conservative regularity certificate,
+not a sampled cusp test. Closed paths, spatial paths, guide rails, corners and uncertified
+spans are explicitly unsupported. Input path/profile and output solids receive validity
+and self-interference checks. Every output face and authored profile curve must have
+complete cap/side provenance before the immutable snapshot is published.
+
+Nine tests / 1982 assertions pass in Release and ASan/UBSan: independent straight mass
+(240 mm³ / 376 mm²), rectangular bend (80π mm³ / 16+120π mm²), rational circular tube,
+nonrational spline profile, quadratic and inflected cubic paths, tangent line/arc joins,
+reversed traversal, authored profile roll, million-millimetre placement, cap orientation,
+all-face coverage, STEP round trip, display mesh, retained readers and atomic rejection.
+Spline-path mass oracles use independent positive arc-length quadrature (absolute 1e-4);
+analytic bend mass/area tolerance is 1e-5. The first bound fixture accidentally aliased a
+vector element during reallocation; ASan identified the test-only use-after-free, and the
+fixture now retains a value copy before resizing. No sanitizer suppression is used.
+The complete local gate passes 810/810 in 178.57 s; the full kernel ASan/UBSan suite
+passes 123 cases / 158518 assertions with halt-on-error and zero diagnostics.
+This backend slice does not yet connect v1 sweep documents or the native client; the
+0.0.8 archive remains the previously validated loft development preview.
+
 ## Solid loft kernel (#172)
 
 Accepted RFCs 0005/0007 cover a typed solid loft under the existing v1 operation.

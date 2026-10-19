@@ -88,6 +88,10 @@ class QueryKernel final : public kernel::IKernel {
       const kernel::Loft& input) override {
     return backend.loft(input);
   }
+  std::expected<kernel::OperationResult, kernel::KernelError> sweep(
+      const kernel::Sweep& input) override {
+    return backend.sweep(input);
+  }
   std::expected<kernel::Mesh, kernel::KernelError> tessellate(
       const kernel::ShapePtr& shape, const kernel::MeshingOptions& options) override {
     return backend.tessellate(shape, options);

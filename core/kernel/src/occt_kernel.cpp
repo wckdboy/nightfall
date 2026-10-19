@@ -17,6 +17,7 @@
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -170,6 +171,7 @@ class OcctKernel final : public IKernel {
     identity << "occt/" << OCC_VERSION_COMPLETE << ";build=" << NF_OCCT_BUILD_ID
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=separated-copy-unified-v2;revolve=1;loft=parallel-cubic-history-v1;"
+                "sweep=planar-binormal-monotone-v1;"
                 "face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
                 "fillet=copy-contour-vertex-boundaries-v1;"
@@ -184,7 +186,7 @@ class OcctKernel final : public IKernel {
   }
   std::string_view identity() const noexcept override { return identity_; }
   Capabilities capabilities() const noexcept override {
-    return {true, true, true, true, true, true, true, true};
+    return {true, true, true, true, true, true, true, true, true};
   }
   std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>& inputs) override {
@@ -681,6 +683,117 @@ class OcctKernel final : public IKernel {
     });
   }
 
+  std::expected<OperationResult, KernelError> sweep(const Sweep& input) override {
+    return guarded([&] {
+      validate_plane(input.plane);
+      validate_plane(input.path_plane);
+      if (input.path.empty() || input.path.size() > 32 || !input.region.holes.empty() ||
+          input.region.outer.curves.empty() || input.region.outer.curves.size() > 128)
+        fail("sweep requires 1..32 path curves and one profile loop of 1..128 curves, no holes");
+      auto bounded_spans = [&](const auto& curves, std::size_t maximum) {
+        std::size_t count = 0;
+        for (const auto& curve : curves) {
+          const auto knots = curve.knots().knots();
+          for (std::size_t i = 1; i < knots.size(); ++i)
+            if (knots[i] > knots[i - 1] && ++count > maximum)
+              fail("sweep exceeds its path/profile span bound");
+        }
+      };
+      bounded_spans(input.path, 64);
+      bounded_spans(input.region.outer.curves, 1024);
+      const auto y = math::cross(input.path_plane.normal, input.path_plane.x_axis);
+      const auto to_world = [&](math::Vec2 p) {
+        return input.path_plane.origin + input.path_plane.x_axis * p.x + y * p.y;
+      };
+      math::Vec2 previous_end, previous_tangent, initial_tangent;
+      bool first = true;
+      for (const auto& curve : input.path)
+        for (const auto& span : math::decompose(curve)) {
+          const auto poles = span.points();
+          const auto chord = math::normalized(poles.back() - poles.front(), tolerance_);
+          if (!chord) fail("sweep path span has no regular chord");
+          // Positive weights and strictly increasing scalar Bezier poles certify a
+          // strictly positive directional derivative throughout each complete span.
+          for (std::size_t i = 1; i < poles.size(); ++i) {
+            const double projection = math::dot(poles[i] - poles[i - 1], *chord);
+            if (!std::isfinite(projection) || !(projection > tolerance_.linear))
+              fail("sweep path span lacks the monotone-pole regularity certificate");
+          }
+          const auto start = math::normalized(poles[1] - poles.front(), tolerance_);
+          const auto end = math::normalized(poles.back() - poles[poles.size() - 2], tolerance_);
+          if (!start || !end) fail("sweep path has a degenerate tangent");
+          if (!first && (!math::near(previous_end, poles.front(), tolerance_) ||
+                         math::length(previous_tangent - *start) > tolerance_.angular))
+            fail("sweep path must be connected and tangent-continuous without corners");
+          if (first) initial_tangent = *start;
+          first = false;
+          previous_end = poles.back();
+          previous_tangent = *end;
+        }
+      const auto start = input.path.front().point(input.path.front().domain_start());
+      if (math::near(start, previous_end, tolerance_)) fail("closed sweep paths are unsupported");
+      if (!math::near(input.plane.origin, to_world(start), tolerance_) ||
+          math::length(input.plane.normal - input.path_plane.x_axis * initial_tangent.x -
+                       y * initial_tangent.y) > tolerance_.angular)
+        fail("sweep profile origin/normal must match the path start/forward tangent");
+      std::vector<EdgeSource> path_edges, profile_edges;
+      const auto spine = wire({input.path}, input.path_plane, 0, 0, path_edges, false);
+      const auto profile = profile_face(input.region, input.plane, 0, profile_edges);
+      BRepAlgoAPI_Check path_check(spine, true, true), profile_check(profile, true, true);
+      if (!path_check.IsValid() || path_check.HasErrors() || !profile_check.IsValid() ||
+          profile_check.HasErrors())
+        fail("sweep path or profile is invalid or self-intersecting");
+      for (std::size_t c = 0; c < input.region.outer.curves.size(); ++c)
+        if (std::ranges::none_of(profile_edges,
+                                 [&](const auto& edge) { return edge.from.curve == c; }))
+          fail("sweep profile curve collapses at kernel precision");
+      BRepOffsetAPI_MakePipeShell operation(spine);
+      operation.SetMode(direction(input.path_plane.normal));
+      operation.SetTolerance(tolerance_.linear, tolerance_.linear, tolerance_.angular);
+      operation.SetMaxDegree(9);
+      operation.SetMaxSegments(64);
+      operation.SetForceApproxC1(false);
+      TopoDS_Vertex first_vertex, last_vertex;
+      TopExp::Vertices(spine, first_vertex, last_vertex);
+      if (first_vertex.IsNull() || last_vertex.IsNull()) fail("sweep path is not open");
+      operation.Add(BRepTools::OuterWire(profile), first_vertex, false, false);
+      operation.Build();
+      if (!operation.IsDone() || !operation.MakeSolid() || operation.Shape().IsNull())
+        fail("solid sweep failed");
+      const double error = operation.ErrorOnSurface();
+      if (!std::isfinite(error) || error < 0 || error > tolerance_.linear)
+        fail("sweep surface construction exceeds the requested linear tolerance");
+      BRepAlgoAPI_Check solid_check(operation.Shape(), true, true);
+      if (!solid_check.IsValid() || solid_check.HasErrors())
+        fail("sweep result is invalid or self-intersecting");
+      TopTools_IndexedMapOfShape faces;
+      TopExp::MapShapes(operation.Shape(), TopAbs_FACE, faces);
+      const auto cap_start = operation.FirstShape(), cap_end = operation.LastShape();
+      if (cap_start.IsNull() || cap_end.IsNull() || !faces.Contains(cap_start) ||
+          !faces.Contains(cap_end))
+        fail("sweep has incomplete cap provenance");
+      std::vector<LocalRole> roles{{"cap_start", cap_start, {}}, {"cap_end", cap_end, {}}};
+      TopTools_MapOfShape covered;
+      covered.Add(cap_start);
+      covered.Add(cap_end);
+      for (const auto& source : profile_edges) {
+        bool found = false;
+        for (const auto& generated : operation.Generated(source.edge)) {
+          if (generated.ShapeType() != TopAbs_FACE) continue;
+          if (!faces.Contains(generated) || generated.IsSame(cap_start) ||
+              generated.IsSame(cap_end))
+            fail("sweep has inconsistent side provenance");
+          roles.push_back({"side", generated, source.from});
+          covered.Add(generated);
+          found = true;
+        }
+        if (!found) fail("sweep profile edge has no generated side");
+      }
+      if (covered.Extent() != faces.Extent()) fail("sweep output face has no provenance");
+      return generated_result(operation.Shape(), roles);
+    });
+  }
+
   std::expected<OperationResult, KernelError> transform(const ShapePtr& input,
                                                         const RigidTransform& t) override {
     return guarded([&] {
@@ -927,14 +1040,15 @@ class OcctKernel final : public IKernel {
     return face.Face();
   }
   TopoDS_Wire wire(const math::Loop& loop, const Plane& p, std::size_t region, std::size_t index,
-                   std::vector<EdgeSource>& edges) const {
+                   std::vector<EdgeSource>& edges, bool closed = true) const {
     if (loop.curves.empty()) fail("region boundary is empty");
     BRepBuilderAPI_MakeWire builder;
     const auto y = math::cross(p.normal, p.x_axis);
     for (std::size_t c = 0; c < loop.curves.size(); ++c) {
       const auto& curve = loop.curves[c];
       const auto& next = loop.curves[(c + 1) % loop.curves.size()];
-      if (!math::near(curve.point(curve.domain_end()), next.point(next.domain_start()), tolerance_))
+      if ((closed || c + 1 < loop.curves.size()) &&
+          !math::near(curve.point(curve.domain_end()), next.point(next.domain_start()), tolerance_))
         fail("region boundary is not closed");
       // Exact knot-span decomposition also prevents OCCT's surface-area quadrature from
       // integrating across unrecognized knots in a surface of linear extrusion.
