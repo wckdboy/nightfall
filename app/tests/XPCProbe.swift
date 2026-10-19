@@ -138,11 +138,62 @@ func restart(_ mode: String) throws {
   let ms = (ContinuousClock.now - start) / .milliseconds(1)
   print("\(mode): pid \(first.pid) → \(rebuilt.pid), complete IR replay in \(ms) ms")
 }
+/// Private developer measurement; timings are observations, never CI latency assertions.
+func nativeBenchmark(_ path: String, samples: Int) throws {
+  try check((1...10).contains(samples), "benchmark samples must be 1...10")
+  let source = try Data(contentsOf: URL(fileURLWithPath: path))
+  let host = Host()
+  let ready = try host.request(id: UUID().uuidString)
+  func emit(_ value: [String: Any]) throws {
+    var line = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+    line.append(10)
+    FileHandle.standardOutput.write(line)
+  }
+  try emit(["kind": "ready", "service_pid": ready.pid, "host_pid": getpid()])
+  for sample in 0..<samples {
+    let start = ContinuousClock.now
+    do {
+      let reply = try host.request(source)
+      let received = ContinuousClock.now
+      let value = try object(reply)
+      let errors = value["errors"] as? [[String: Any]] ?? []
+      let converted: ContinuousClock.Instant
+      if errors.isEmpty {
+        _ = try DisplayMesh(
+          KernelResponse(
+            manifest: reply.manifest, vertices: reply.vertices, indices: reply.indices,
+            faces: reply.faces))
+        converted = .now
+      } else {
+        converted = received
+      }
+      try emit([
+        "kind": "sample", "sample": sample, "service_pid": reply.pid,
+        "roundtrip_ms": (received - start) / .milliseconds(1),
+        "display_ms": (converted - received) / .milliseconds(1),
+        "triangles": reply.indices.count / 12, "manifest_bytes": reply.manifest.count,
+        "mesh_bytes": reply.vertices.count + reply.indices.count + reply.faces.count,
+        "cache": value["cache"] ?? [:], "errors": errors,
+      ])
+      if !errors.isEmpty { break }
+    } catch {
+      try emit([
+        "kind": "failure", "sample": sample,
+        "roundtrip_ms": (ContinuousClock.now - start) / .milliseconds(1),
+        "error": String(describing: error),
+      ])
+      throw error
+    }
+  }
+}
 @main enum XPCProbe {
   @MainActor static func main() async {
     do {
       let mode = CommandLine.arguments.dropFirst().first ?? "smoke"
       switch mode {
+      case "benchmark":
+        try nativeBenchmark(
+          CommandLine.arguments[2], samples: Int(CommandLine.arguments[3]) ?? 0)
       case "smoke": try smoke()
       case "client": try await clientIntegration()
       case "preview": try await previewIntegration(CommandLine.arguments[2])
@@ -152,6 +203,8 @@ func restart(_ mode: String) throws {
       case "fillets": try await filletIntegration(CommandLine.arguments[2])
       case "visibility":
         try await visibilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
+      case "scalability":
+        try await scalabilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "render":
         try await rendererIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "references": try references(CommandLine.arguments[2])

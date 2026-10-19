@@ -98,6 +98,61 @@ Final #163 gate, including strict complete-body face coverage: **774/774 passed 
 171.81 seconds**, schema and hygiene green. Native mesh fixtures use the real body/face
 transport; missing tables, unrepresented bodies and overlapping ranges fail closed.
 
+## Native rebuild latency and surface integration (#167)
+
+The private XPC benchmark separates the service round trip from manifest/display
+conversion. On a quiet local arm64 Release build, the pre-change eight-module run took
+3879.886 ms cold and 3462.816 / 3458.069 ms warm; conversion took 44–45 ms. A three-second
+worker profile placed 1275/2444 worker samples in exact surface-area integration inside
+snapshot validation. IPC or client conversion did not dominate that sampled interval.
+
+Plane/cylinder faces bounded by analytic line/circle/ellipse pcurves now use Green's
+theorem with a constant surface Jacobian. Forward-face orientation is used consistently
+for periodic seam lookup; a failing mirrored, offset annulus regression and all Asterion
+component mass checks protect inward bores. Rectangular linear-extrusion faces use a
+positive 1D adaptive metric integral, fixing the independently checked elliptic annulus
+area (the former generic calculation returned 313.373047 mm² versus 311.718533 mm²).
+All other areas keep adaptive boundary integration at the requested 1e-9 relative accuracy.
+Closed-solid validation, volume integration, geometry, provenance and mesh limits remain.
+The backend identity changes with the integration algorithm.
+
+The 1024-fin analytic regression initially took 3.086 s and failed its broad runtime
+guard; the corrected integration took about 1.01 s locally. Four new surface cases pass
+52 assertions, including placed/scaled sectors, elliptic holes, and mirrored/unified
+periodic surfaces. The independent showcase checks pass 9375 assertions with unchanged
+component volume/area expectations at 1e-5 absolute tolerance.
+
+Native `bundle.scalability` exercises three eight-module parameter rebuilds through the
+actual client/service/Metal path, compares exact component mass scaling, renders the full
+row and isolated fins, and undoes to byte-identical clean source. The existing visibility
+and reference render cases also pass. Native deadlines remain five seconds in the service
+and seven seconds in the client; these are measured cases, not a universal size or latency
+guarantee. The full local gate passes **779/779 in 169.67 seconds**, including schema,
+hygiene and actual recovery/render/client cases. Strict Swift format also passes. ASan/
+UBSan passes 104 kernel cases / 152450 assertions, 12 bridge cases / 65400 assertions,
+and two showcase cases / 9375 assertions, without diagnostics; OCCT stays a Release dylib.
+The 2.5-second fin timing assertion applies only to uninstrumented Release; all geometry
+assertions also run in Debug/sanitizer builds (the initial instrumented run took 2.963 s).
+
+The actual native Metal array renders are retained as
+[`asterion-array.png`](../images/asterion-array.png) and
+[`asterion-array-fins.png`](../images/asterion-array-fins.png), and visually inspected.
+Dark boundary pixels count as foreground, including fins narrower than a pixel in this
+fully framed eight-module row. No shading or geometry is synthesized for these images.
+
+Final corrected three-sample eight-module median cold/warm rebuild is 1180.683 /
+1010.736 ms, with median mesh 834.780 ms. Cold/warm C bridge is 2396.644 / 2218.284 ms
+(one each). The final real XPC run is 2562.285 ms cold and 2378.819 / 2340.042 ms warm,
+plus 42–52 ms for manifest/display conversion. Exact V = 2879597.261067266 mm³ and
+A = 2124423.392761792 mm², 640 solids / 5768 faces / 217142 triangles remain unchanged.
+The oversized last cache entry remains unadmitted (27 hits / 77 warm kernel calls).
+Logs: `/tmp/nightfall-167-{bench-corrected,xpc-final}.jsonl`,
+`/tmp/nightfall-167-check.log` and `/tmp/nightfall-167-asan-*.log`.
+
+An additional oblique-cylinder volume-integration stall is tracked separately in
+[#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
+This surface-area change does not resolve that existing volume path.
+
 ## Work items (build order)
 
 Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy/nightfall/milestone/3).

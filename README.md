@@ -46,7 +46,8 @@ cmake --build --preset occt --target Nightfall
 open build/occt/app/Nightfall.app
 ```
 
-The app starts with a mounting plate and includes twenty reference parts in **Examples**.
+The app starts with the Asterion multi-body showcase and includes twenty reference parts
+plus two modeling showcases in **Examples**.
 Edit a parameter expression, including its units, and press Return to rebuild. The window
 shows feature history, exact volume/area and diagnostics; failed edits retain clearly marked
 last-valid geometry. Use Undo/Redo, Open and Save copy to try variants. Drag to orbit,

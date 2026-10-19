@@ -35,6 +35,9 @@ struct Subshape final : Entity {
 /// Checks all descendants belong to closed solids and computes finite measurements.
 /// Planar faces with analytic line pcurves use exact polynomial Gaussian quadrature;
 /// other faces retain adaptive Gauss–Kronrod integration at kMassRelativeAccuracy.
+/// Areas on planes/cylinders with line/circle/ellipse pcurves use analytic UV integrals;
+/// rectangular linear-extrusion faces use 1D adaptive metric integration. All other
+/// surface areas retain adaptive boundary integration at the same accuracy.
 std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry);
 /// Validate a direct rigid relocation of an already validated immutable snapshot. Unchanged
 /// topology/orientation plus a finite isometry preserve solid validity and mass properties.

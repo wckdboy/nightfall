@@ -34,7 +34,9 @@ func meshValidation() throws {
     } catch is DisplayMesh.Invalid {}
   }
 }
-@MainActor func renderPNG(_ renderer: MetalRenderer, to url: URL, allowEmpty: Bool = false) throws
+@MainActor func renderPNG(
+  _ renderer: MetalRenderer, to url: URL, allowEmpty: Bool = false, minimumCoverage: Double = 0.01
+) throws
   -> [UInt8]
 {
   let width = 960
@@ -63,10 +65,13 @@ func meshValidation() throws {
   c.getBytes(
     &bytes, bytesPerRow: width * 4,
     from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
-  let lit = stride(from: 0, to: bytes.count, by: 4).filter { bytes[$0 + 2] > 50 }.count
+  let lit = stride(from: 0, to: bytes.count, by: 4).filter {
+    bytes[$0] != bytes[0] || bytes[$0 + 1] != bytes[1] || bytes[$0 + 2] != bytes[2]
+  }.count
   try check(
-    (allowEmpty || lit > width * height / 100) && lit < width * height * 4 / 5,
-    "blank or clipped render")
+    (allowEmpty || Double(lit) > Double(width * height) * minimumCoverage)
+      && lit < width * height * 4 / 5,
+    "blank or clipped render: \(lit)/\(width * height) foreground pixels")
   let info = CGBitmapInfo(
     rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
   )
