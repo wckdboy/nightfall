@@ -14,6 +14,7 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
+#include <TColStd_Array1OfReal.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
@@ -107,10 +108,19 @@ std::optional<double> constant_metric_area(const TopoDS_Face& input) {
   if (!(area > 0) || !std::isfinite(area)) return {};
   return area;
 }
-std::optional<double> extrusion_area(const TopoDS_Face& input) {
+double bounded_integral(math_Function& function, double first, double last, double accuracy) {
+  math_KronrodSingleIntegration integral(function, first, last, 15, accuracy, 100);
+  if (!integral.IsDone() || !std::isfinite(integral.Value()) ||
+      !std::isfinite(integral.ErrorReached()) || integral.ErrorReached() > accuracy)
+    throw Standard_Failure("rectangular surface-area integration did not converge");
+  return integral.Value();
+}
+std::optional<double> rectangular_area(const TopoDS_Face& input) {
   const auto face = TopoDS::Face(input.Oriented(TopAbs_FORWARD));
   const BRepAdaptor_Surface surface(face);
-  if (surface.GetType() != GeomAbs_SurfaceOfExtrusion) return {};
+  if (surface.GetType() != GeomAbs_SurfaceOfExtrusion &&
+      surface.GetType() != GeomAbs_BSplineSurface && surface.GetType() != GeomAbs_BezierSurface)
+    return {};
   std::array<std::pair<gp_XY, gp_XY>, 4> edges;
   std::size_t count = 0;
   for (BRepGProp_Domain boundary(face); boundary.More(); boundary.Next()) {
@@ -143,16 +153,16 @@ std::optional<double> extrusion_area(const TopoDS_Face& input) {
     sides |= side;
   }
   if (sides != 15) return {};
-  // The four exact UV sides prove an unperforated rectangle. A linear extrusion's
-  // Jacobian is independent of v; integrate its positive u metric directly. This
-  // avoids cancellation in the generic boundary integral for elliptic side walls.
+  // The four exact UV sides prove an unperforated rectangle. Integrate the positive
+  // surface metric directly, avoiding cancellation in the generic boundary integral.
   class Metric final : public math_Function {
    public:
     explicit Metric(const BRepAdaptor_Surface& s) : surface(s) {}
+    double v = 0;
     Standard_Boolean Value(Standard_Real u, Standard_Real& value) override {
       gp_Pnt p;
       gp_Vec du, dv;
-      surface.D1(u, 0, p, du, dv);
+      surface.D1(u, v, p, du, dv);
       value = du.Crossed(dv).Magnitude();
       return value >= 0 && std::isfinite(value);
     }
@@ -160,11 +170,41 @@ std::optional<double> extrusion_area(const TopoDS_Face& input) {
    private:
     const BRepAdaptor_Surface& surface;
   } metric(surface);
-  math_KronrodSingleIntegration integral(metric, u1, u2, 15, kMassRelativeAccuracy, 100);
-  if (!integral.IsDone() || !std::isfinite(integral.ErrorReached()) ||
-      integral.ErrorReached() > kMassRelativeAccuracy)
-    return {};
-  const double area = integral.Value() * (v2 - v1);
+  double area = 0;
+  if (surface.GetType() == GeomAbs_SurfaceOfExtrusion) {
+    // A linear extrusion's metric is independent of v.
+    metric.v = v1;
+    area = bounded_integral(metric, u1, u2, kMassRelativeAccuracy) * (v2 - v1);
+  } else {
+    // Split at all surface knots so each nested quadrature sees a smooth patch.
+    TColStd_Array1OfReal us(1, surface.NbUIntervals(GeomAbs_CN) + 1),
+        vs(1, surface.NbVIntervals(GeomAbs_CN) + 1);
+    surface.UIntervals(us, GeomAbs_CN);
+    surface.VIntervals(vs, GeomAbs_CN);
+    class Strip final : public math_Function {
+     public:
+      Strip(Metric& m, const TColStd_Array1OfReal& intervals, double first, double last)
+          : metric(m), us(intervals), u1(first), u2(last) {}
+      Standard_Boolean Value(Standard_Real v, Standard_Real& value) override {
+        metric.v = v;
+        value = 0;
+        for (int i = us.Lower(); i < us.Upper(); ++i) {
+          const double a = std::max(u1, us(i)), b = std::min(u2, us(i + 1));
+          if (b > a) value += bounded_integral(metric, a, b, kMassRelativeAccuracy / 10);
+        }
+        return value >= 0 && std::isfinite(value);
+      }
+
+     private:
+      Metric& metric;
+      const TColStd_Array1OfReal& us;
+      double u1, u2;
+    } strip(metric, us, u1, u2);
+    for (int i = vs.Lower(); i < vs.Upper(); ++i) {
+      const double a = std::max(v1, vs(i)), b = std::min(v2, vs(i + 1));
+      if (b > a) area += bounded_integral(strip, a, b, kMassRelativeAccuracy / 10);
+    }
+  }
   if (!(area > 0) || !std::isfinite(area)) return {};
   return area;
 }
@@ -178,7 +218,7 @@ bool surface_properties(const TopoDS_Shape& shape, Measures& measured) {
       measured.area += *area;
       continue;
     }
-    if (const auto area = extrusion_area(face)) {
+    if (const auto area = rectangular_area(face)) {
       measured.area += *area;
       continue;
     }

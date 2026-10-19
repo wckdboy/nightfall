@@ -96,6 +96,18 @@ struct Revolution {
   math::Vec3 axis_origin, axis_direction{0, 1, 0};
   double angle = 0;
 };
+struct LoftSection {
+  Plane plane;
+  math::Region region;
+};
+/// Ordered closed sections. Two sections interpolate linearly; three or more interpolate
+/// smoothly with uniform section parameters and maximum longitudinal degree three.
+/// No ruled fallback. Initially supports 2..32 parallel, strictly ordered planes, one outer
+/// loop per section, at most 128 curves per loop and 1024 total decomposed profile edges.
+/// Holes, rails, point sections and nonparallel planes are unsupported.
+struct Loft {
+  std::vector<LoftSection> sections;
+};
 /// Rotate about an axis, then translate. Angle is radians; axis direction need not be unit.
 struct RigidTransform {
   math::Vec3 translation, axis_origin, axis_direction{0, 0, 1};
@@ -104,6 +116,7 @@ struct RigidTransform {
 enum class BooleanOp { kUnion, kSubtract, kIntersect };
 struct ProfileEdge {
   std::size_t region, loop, curve;  // loop 0 = outer; subsequent loops are holes
+  std::size_t section = 0;          // loft section; zero for single-profile operations
 };
 struct Generated {
   std::string role;  // operation-local semantic role; never a feature ID
@@ -130,7 +143,7 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer, fillet;
+    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer, fillet, loft;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   /// Encode all supplied closed-solid snapshots as exact STEP AP242 B-rep text in millimetres.
@@ -183,6 +196,10 @@ class IKernel {
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
+  /// Validated solid through compatible sections; cap_start/cap_end and side ancestry from
+  /// every section's authored curves. A face can have several Generated records. Reject
+  /// incomplete history, self-interference or unsupported sections; preserve all inputs.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> loft(const Loft&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> transform(
       const ShapePtr&, const RigidTransform&) = 0;
   /// Reflect exact geometry across a finite orthonormal plane, preserving solid orientation.

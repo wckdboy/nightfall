@@ -4,6 +4,7 @@
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
+#include <BRepAlgoAPI_Check.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -16,8 +17,10 @@
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
@@ -164,24 +167,24 @@ class OcctKernel final : public IKernel {
   explicit OcctKernel(math::Tolerance tolerance) : tolerance_(tolerance) {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
-    identity
-        << "occt/" << OCC_VERSION_COMPLETE
-        << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
-           "boolean=separated-copy-unified-v2;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
-           "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
-           "fillet=copy-contour-vertex-boundaries-v1;"
-           "mesh=indexed-faces-copy-v1;"
-           "face-distance=trimmed-v1;step=ap242-mm-v1;"
-           "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
-           "mass-integrator=planar-gauss-v1;area-integrator=analytic-uv-extrusion-gk-v1;mass="
-        << detail::kMassRelativeAccuracy
-        << std::setprecision(std::numeric_limits<double>::max_digits10)
-        << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
+    identity << "occt/" << OCC_VERSION_COMPLETE
+             << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
+                "boolean=separated-copy-unified-v2;revolve=1;loft=parallel-cubic-history-v1;"
+                "face-plane=uv-outward-v1;faces=analytic-v2;"
+                "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
+                "fillet=copy-contour-vertex-boundaries-v1;"
+                "mesh=indexed-faces-copy-v1;"
+                "face-distance=trimmed-v1;step=ap242-mm-v1;"
+                "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
+                "mass-integrator=planar-gauss-v1;area-integrator=analytic-uv-rectangle-gk-v2;mass="
+             << detail::kMassRelativeAccuracy
+             << std::setprecision(std::numeric_limits<double>::max_digits10)
+             << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
   Capabilities capabilities() const noexcept override {
-    return {true, true, true, true, true, true, true};
+    return {true, true, true, true, true, true, true, true};
   }
   std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>& inputs) override {
@@ -591,6 +594,90 @@ class OcctKernel final : public IKernel {
             if (shape.ShapeType() == TopAbs_FACE) roles.push_back({"side", shape, source.from});
       }
       return generated_result(compound, roles);
+    });
+  }
+
+  std::expected<OperationResult, KernelError> loft(const Loft& input) override {
+    return guarded([&] {
+      if (input.sections.size() < 2 || input.sections.size() > 32)
+        fail("loft requires 2..32 sections");
+      const auto& first = input.sections.front().plane;
+      BRepOffsetAPI_ThruSections operation(true, false, tolerance_.linear);
+      operation.SetMutableInput(false);
+      operation.SetParType(Approx_IsoParametric);
+      operation.SetMaxDegree(3);
+      operation.CheckCompatibility(true);
+      std::vector<EdgeSource> edges;
+      double previous = 0, order = 0;
+      for (std::size_t s = 0; s < input.sections.size(); ++s) {
+        const auto& section = input.sections[s];
+        validate_plane(section.plane);
+        if (math::length(math::cross(section.plane.normal, first.normal)) > tolerance_.angular)
+          fail("loft currently requires parallel section planes");
+        const double position = math::dot(section.plane.origin - first.origin, first.normal);
+        if (!std::isfinite(position)) fail("loft section spacing must be finite");
+        if (s) {
+          const double delta = position - previous;
+          if (s == 1) order = delta > 0 ? 1 : -1;
+          if (!std::isfinite(delta) || !(order * delta > tolerance_.linear))
+            fail("loft section planes must be distinct and strictly ordered");
+        }
+        previous = position;
+        if (!section.region.holes.empty() || section.region.outer.curves.empty() ||
+            section.region.outer.curves.size() > 128)
+          fail("loft requires one outer loop of 1..128 curves per section, without holes");
+        std::size_t spans = edges.size();
+        for (const auto& curve : section.region.outer.curves) {
+          const auto knots = curve.knots().knots();
+          for (std::size_t i = 1; i < knots.size(); ++i)
+            if (knots[i] > knots[i - 1] && ++spans > 1024)
+              fail("loft exceeds the 1024 profile-edge bound");
+        }
+        std::vector<EdgeSource> section_edges;
+        const auto face = profile_face(section.region, section.plane, 0, section_edges);
+        BRepAlgoAPI_Check profile_check(face, true, true);
+        if (profile_check.HasErrors() || !profile_check.IsValid())
+          fail("loft section is invalid or self-intersecting");
+        if (section_edges.empty() || edges.size() + section_edges.size() > 1024)
+          fail("loft exceeds the 1024 profile-edge bound");
+        for (std::size_t c = 0; c < section.region.outer.curves.size(); ++c)
+          if (std::ranges::none_of(section_edges,
+                                   [&](const auto& edge) { return edge.from.curve == c; }))
+            fail("loft profile curve collapses at kernel precision");
+        operation.AddWire(BRepTools::OuterWire(face));
+        for (auto& edge : section_edges) {
+          edge.from.section = s;
+          edges.push_back(std::move(edge));
+        }
+      }
+      operation.Build();
+      if (!operation.IsDone() || operation.Shape().IsNull()) fail("solid loft failed");
+      BRepAlgoAPI_Check solid_check(operation.Shape(), true, true);
+      if (solid_check.HasErrors() || !solid_check.IsValid())
+        fail("loft result is invalid or self-intersecting");
+      const auto start = operation.FirstShape(), end = operation.LastShape();
+      TopTools_IndexedMapOfShape faces;
+      TopExp::MapShapes(operation.Shape(), TopAbs_FACE, faces);
+      if (start.IsNull() || end.IsNull() || !faces.Contains(start) || !faces.Contains(end))
+        fail("loft has incomplete cap provenance");
+      std::vector<LocalRole> roles{{"cap_start", start, {}}, {"cap_end", end, {}}};
+      TopTools_MapOfShape covered;
+      covered.Add(start);
+      covered.Add(end);
+      for (const auto& source : edges) {
+        bool found = false;
+        for (const auto& generated : operation.Generated(source.edge)) {
+          if (generated.ShapeType() != TopAbs_FACE) continue;
+          if (!faces.Contains(generated) || generated.IsSame(start) || generated.IsSame(end))
+            fail("loft has inconsistent side provenance");
+          roles.push_back({"side", generated, source.from});
+          covered.Add(generated);
+          found = true;
+        }
+        if (!found) fail("loft profile edge has no generated side");
+      }
+      if (covered.Extent() != faces.Extent()) fail("loft output face has no provenance");
+      return generated_result(operation.Shape(), roles);
     });
   }
 
