@@ -42,7 +42,7 @@ struct Evaluation {
 };
 
 /// Per-document, serialized service evaluator (RFC 0007). The borrowed kernel must outlive it.
-/// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions/revolutions
+/// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions/revolutions/lofts
 /// (new/join/cut/intersect), rigid transforms, linear/circular body patterns, mirrors and booleans.
 /// Patterns/mirrors union translated/rotated/reflected copies into each seed body. Counts include
 /// seeds; mirrors add one reflection per seed. Copied faces retain inherited names and gain
@@ -70,6 +70,9 @@ struct Evaluation {
 /// The ray must travel forward with separation >1e-6 mm and |direction dot normal| >1e-9.
 /// Cap control hulls must stay within 1e-6 mm of the plane; symmetric to/nonzero draft fail.
 /// All described/selected plane frames are validated as finite and orthonormal before reuse.
+/// Lofts bind 2..32 ordered profile sketches, each selecting one filled region without holes.
+/// Parallel section planes and backend work bounds apply; rails are unsupported. Side ancestry
+/// retains every section's current sketch/entity IDs. Flat NURBS sides are not fitted to planes.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.

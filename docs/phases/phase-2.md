@@ -193,10 +193,10 @@ that collapses between positive sections, reversed plane normals, cap placement 
 near-coincident planes. A final red regression catches an authored zero-length curve
 silently skipped by wire construction; loft now rejects such collapsed curves to preserve
 complete ancestry. The final full Release gate passes 789/789 in 189.87 s, with schema,
-hygiene and format checks. This backend is pushed in draft PR #175 (c6fb64c). ASan/UBSan aborts in
+hygiene and format checks. This backend is pushed in draft PR #175 (c6fb64c). Initial ASan/UBSan runs aborted in
 OCCT's incremental allocator during the existing sphere mesher and loft preservation
 mesh. Mixed-size allocation alignment is tracked as the release blocker
-[#174](https://github.com/wckdboy/nightfall/issues/174); no sanitizer pass is claimed.
+[#174](https://github.com/wckdboy/nightfall/issues/174); the following patch clears that local blocker.
 Evaluator/cache/selector integration and a native editable example follow in
 [#173](https://github.com/wckdboy/nightfall/issues/173); this backend increment alone
 does not expose loft in the client.
@@ -223,9 +223,58 @@ The previously failing ASan/UBSan sphere test now passes 94895 assertions agains
 patched Release dylib, with the same instrumented binary and no suppression. Full kernel
 sanitizers pass 114 cases / 156536 assertions, including all ten loft cases; the C bridge
 passes 12 / 65400, showcase 2 / 9375 and allocator 2 / 6539. Nightfall and header callbacks
-are instrumented; the external OCCT dylib remains Release. The full application gate is
-being checked before release clearance. The unchanged build script reuses the matching
+are instrumented; the external OCCT dylib remains Release. The final full application gate
+passes 791/791 in 178.87 s, including schema/hygiene/format and actual XPC/Metal/scalability
+checks. Pushed in draft PR #176 (4bac72c / 3dcf4aa); remote CI/review remain pending.
+The unchanged build script reuses the matching
 receipt without recompilation. Logs: `/tmp/nightfall-174-{allocator-red,allocator,asan-*}.log`.
+
+## Loft documents and native example (#173)
+
+The evaluator prepares every ordered v1 loft profile through existing exact region/fill
+selection and binds each section's sketch dependency. New/join/cut/intersect results use
+the existing atomic publication and current history path. Cached sources retain section-
+local addresses and authored entity IDs; publication binds current feature/sketch IDs.
+Cache identity changes with the added operation and naming scheme, and accounting includes
+every section's retained source map. Referenced ID edits conservatively miss, as permitted
+by RFC 0007; renaming the current loft producer reuses geometry and rebinds names.
+
+Nine evaluator cases pass 639 assertions, covering each section's edits, warm reuse,
+eviction/retained readers, source selectors, region picks, result modes, rollback,
+suppression, failure recovery, unsupported modes and precise profile diagnostics.
+`lofted_link.nightfall` adds a ten-feature three-ellipse housing, flange and five holes.
+Independent polynomial section integration and positive surface-metric quadrature give
+V = 160612.8772172270 mm³, A = 35752.4962832179 mm² and centroid z = 59.6972498598 mm.
+Mass checks use 1e-5 absolute tolerance, centroid 1e-7 and derived mesh mass within 1%.
+STEP reload is measured with Nightfall's validated snapshot integrator; generic OCCT
+boundary quadrature returned volume 0.000677 mm³ low at a requested 1e-9 relative accuracy.
+
+The real `bundle.lofts` test passes in 1.94 s through XPC/client/Metal, exercising batch
+height/waist edits, clean byte-identical Undo, loft suppression, failure/last-valid recovery
+and unchanged example bytes. Its actual render is retained in `docs/images/lofted-link.png`
+and visually inspected. Live CUA inspection opens **Examples → Lofted Link**, fits the
+model, changes waist_scale 1→1.1 and undoes to the clean original: 8934 triangles, with
+correct measures and no errors. Preview version is 0.0.8 with 23 embedded examples.
+The final full gate passes **801/801 in 177.82 s**, with 202 schema cases, twenty reference
+schemas, hygiene/format, actual XPC recovery, Metal and scalability checks. ASan/UBSan
+passes all 360 evaluator cases / 444046 assertions and twelve bridge cases / 65400,
+without diagnostics. Strict Swift format is clean. Logs: `/tmp/nightfall-173-check.log`,
+`/tmp/nightfall-173-asan-{evaluator,bridge}.log` and `/tmp/nightfall-173-native.log`.
+
+The final archive is byte-identical to the validated app bundle, passes strict/deep signatures,
+arm64/macOS 15.0/RPATH/dependency closure checks, and contains 26 OCCT dylibs / 23 examples.
+Actual CUA inspection from the extracted archive opens Lofted Link, changes waist_scale
+1→1.1 (8886 triangles / updated exact measures), and undoes to the clean 8934-triangle model.
+It is left open for visual testing. This is an ad-hoc development preview; no formal
+main-branch release, notarization or complete CAD/robotics MVP is claimed.
+
+Parent PR #176's primary OCCT CI (including C/C++ sanitizers and Swift TSAN), standard CI,
+SMLib and hygiene pass. Its optional dual-kernel/USD run fails only `bundle.scalability`
+(798/799 passed): the first eight-module rebuild disconnects after 5.70 s with
+`kernel_restarted`. This is recorded in #171 with the log/run link; no precise cause,
+universal eight-module capacity or full remote-green result is claimed. Native deadlines
+remain unchanged. Sweeps, guide rails, nonparallel lofts and interactive spline authoring
+remain unsupported.
 
 ## Work items (build order)
 

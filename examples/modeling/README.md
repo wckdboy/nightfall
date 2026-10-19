@@ -54,6 +54,36 @@ Exact volume and area checks use an absolute tolerance of 1e-5 in mm units. The 
 
 [Rounded Plate](rounded_plate.nightfall) is a smaller example for exact corner fillets.
 
+## Lofted actuator link
+
+![Lofted link rendered by Nightfall's native Metal viewport](../../docs/images/lofted-link.png)
+
+Preview 0.0.8 includes **Examples → Lofted Link**, from
+[lofted_link.nightfall](lofted_link.nightfall). Three exact elliptic sections form a smooth
+housing joined to a mounting flange, with a central bore and four through mounting holes.
+Edit `height`, `waist_scale`, `bore_radius` or `flange_thickness`; the native client supports
+batch rebuild, Undo, suppression and marked last-valid display on failure. This is geometry
+for exploring the robotic-arm milestone, without motion, strength or actuator validation.
+
+Default independent values are V = 160612.8772172270 mm³, A = 35752.4962832179 mm² and
+centroid z = 59.6972498598 mm. The actual native display has 8934 triangles. Analytic
+quadratic-section integration and independent surface-metric quadrature check mass within
+1e-5 absolute tolerance; STEP reload and the indexed mesh are also checked. The screenshot
+comes from the real XPC/client/Metal test and has been visually inspected.
+
+```sh
+build/occt/tools/cli/nf build examples/modeling/lofted_link.nightfall --out out/lofted-link.step
+build/occt/tools/cli/nf build examples/modeling/lofted_link.nightfall --set waist_scale=1.1 --out out/lofted-link-wide.step
+ctest --preset occt -R '^bundle.lofts$' -V
+```
+
+The initial loft supports 2..32 closed sections on parallel, strictly ordered planes, one
+filled region without holes per section. Two sections interpolate linearly; additional
+sections interpolate smoothly with uniform section parameters and maximum longitudinal
+degree three. Guide rails, point sections and nonparallel planes report errors. Flat sides
+represented as NURBS remain NURBS; plane selectors require analytic planes. Sweeps and
+interactive spline control-point editing are separate follow-ups.
+
 Measured on local arm64 builds, 2026-10-19: the native client displayed eight modules
 (640 solids / 512 fins / 217,142 triangles). The headless evaluator and indexed mesher
 completed a 6×6 grid (2,880 solids / 976,966 triangles); cold rebuild took 18.130 s and

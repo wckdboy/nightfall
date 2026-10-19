@@ -66,6 +66,12 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(
     const ir::json::Value& inputs, const Sketch& sketch, const Sketch* axis_sketch = nullptr,
     ProfileSources* sources = nullptr, const kernel::Axis* selected_axis = nullptr);
+/// Ordered profiles use existing fill/region selection; exactly one region without holes
+/// per section. Rails are unsupported. Sources retain local addresses per section, without
+/// producer IDs; errors identify the corresponding /inputs/profiles entry.
+std::expected<kernel::Loft, ir::Error> prepare_loft(const ir::json::Value& inputs,
+                                                    const std::vector<const Sketch*>& sketches,
+                                                    std::vector<ProfileSources>* sources = nullptr);
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const ir::json::Value& inputs, const Sketch* axis_sketch = nullptr,
     const kernel::Axis* selected_axis = nullptr);
