@@ -1474,6 +1474,24 @@ swift-format lint pass; existing client TSAN checks remain green. Logs:
 The renderer/PNGs alone are not the requested visual MVP; the native interface and actual
 window validation follow immediately in #140. Phase gates and distribution policy stay open.
 
+### #142 — editable native document model (2026-10-19)
+
+Split from #140 at the document/window boundary to keep both PRs below 400 non-test lines.
+The kernel-free model preserves authored source through immutable named-expression edits,
+undo/redo and explicit Save As. Opening another document warns before discarding edits.
+Revision tokens and ordered cancellation prevent older rebuilds from replacing newer edits;
+a busy service gets one bounded retry. Failed builds retain clearly marked last-valid
+geometry and exact measures. Duplicate malformed parameter names do not trap the UI.
+
+Actual XPC tests verify 4→8 mm doubles plate volume within 1e-5, 0 mm errors retain the
+same mesh, undo/redo restore geometry, rapid 6→10 mm edits publish only the newest state,
+edited source round-trips and the input file stays byte-identical. Focused check: 0.60 s.
+`tools/check.sh --preset occt` passes 743/743 (163.57 s), schema and hygiene included;
+strict Swift 6 concurrency/warnings and swift-format lint pass. Logs:
+`/tmp/nightfall-{140-preview,142-check}.log`. The native #140 window is already built and
+being visually checked: actual parameter/error/Undo interactions match these assertions.
+This document-only increment is not the MVP announcement; window packaging/QA follows.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
