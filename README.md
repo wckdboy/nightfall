@@ -91,10 +91,24 @@ are tested. The [Swift worker](services/kernel/swift/KernelWorker.swift) now ser
 access, admits one rebuild, retains four document caches by LRU, and returns owned buffers
 through the [shared XPC protocol](services/kernel/swift/KernelProtocol.swift). Its watchdog
 claims a single timeout reply with the active feature, then terminates the service.
-`nf_native_worker_tests` covers the real XPC codec with an anonymous listener and watchdog
-termination in child processes. Portable service/app bundles, launchd restart/replay, the
-app-side timeout/retry, shared-memory transfer and Metal viewer still follow under RFC 0003.
-No production visual-testing app exists yet.
+`nf_native_worker_tests` covers the codec and watchdog ownership. The `occt` preset also
+builds the production `NightfallKernel.xpc` inside a headless test host, with only the
+required OCCT dylibs in the service's Frameworks folder. The build removes machine-specific
+runtime search paths and ad-hoc signs nested code. Real XPC tests check all twenty parts,
+cache ownership and restart/replay after process exit, including a separate test-only
+hang/crash service and relocation to a path with spaces:
+
+```sh
+cmake --preset occt
+cmake --build --preset occt --target nf_xpc_probe nf_xpc_fault_probe
+ctest --preset occt -R '^bundle\.' --output-on-failure
+```
+
+Tests require launchd access; restricted process sandboxes can reject the service lookup.
+The test host imports only the Foundation protocol and links no kernel library. Set
+`NF_BUILD_XPC_BUNDLE=OFF` for a standalone Swift sanitizer build. App-side timeout/retry,
+shared-memory transfer and Metal UI still follow under RFC 0003. The headless host is a
+development test artifact; no production visual-testing app or notarized release exists yet.
 
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 

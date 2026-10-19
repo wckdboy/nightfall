@@ -47,6 +47,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#128](https://github.com/wckdboy/nightfall/issues/128) | Extrusions terminating on selected parallel supporting planes | kernel | Implemented with supporting-plane resolution, exact displacement, result/cache/failure regressions and local evidence below |
 | [#129](https://github.com/wckdboy/nightfall/issues/129) | Equal-distance chamfers on selected face-boundary edges | kernel | Implemented with immutable exact solids, complete history, recursive edge sets and atomic cache publication; local evidence below |
 | [#130](https://github.com/wckdboy/nightfall/issues/130) | Immutable indexed viewport meshes with current face associations | kernel | Implemented under RFCs 0003/0007 for Phase 2 native integration; mesh/ownership/reference regressions and local evidence below |
+| [#135](https://github.com/wckdboy/nightfall/issues/135) | Relocatable embedded XPC service and process recovery | kernel | Production service, headless host and real crash/hang/replay/relocation checks implemented; local evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1400,6 +1401,13 @@ parsing, schema/parameter/input evaluation, references, hashing, geometry, valid
 naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
 Phase 2 sign-off remain pending.
 
+The first remote #135 build exposed a cached-install regression: the packager read OCCT
+notices from the untracked source checkout, absent when CI restores only the install.
+It now reads the notices already installed in `share/doc/opencascade`. A source-free
+packager regression fails first with the same missing-file error, then repackages and
+executes both relocated hosts successfully. An isolated checkout using the cached OCCT
+install passes the full gate again: 724/724 (133.97 s), schema and hygiene included.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.
@@ -1952,3 +1960,42 @@ app-side backstop/retry, shared memory and Metal UI remain separate work before 
 No production visual-testing .app is produced here. Remote CI/human review and full Phase 2
 sign-off remain pending. The preceding bridge PR #132 now has all five remote CI checks green;
 its human review is still pending.
+
+### #135 — embedded service bundle and real process recovery (2026-10-19)
+
+The production worker/listener now runs in an Application-lifetime `NightfallKernel.xpc`
+inside a headless Foundation-only test host. Accepted RFCs 0003/0007 cover this integration.
+The host compiles only the shared protocol and has no native kernel linkage. A reusable
+development packager collects the 26 required OCCT dylibs in the service's Frameworks,
+copies their LGPL/exception notices, rewrites install names/runtime paths and ad-hoc signs
+libraries, service and outer app. Swift dependency metadata is removed from code-only
+MacOS folders. The resulting host bundle occupies 46 MiB on disk. Distribution signing,
+notarization and release obligations remain separate; this is a test/development artifact.
+
+Tests first fail for the missing bundle target. Six focused bundle checks pass (65.25 s):
+real process separation, complete IR/XPC transport, cache isolation/closure/recovery,
+owned result retention, all twenty reference meshes, service termination/replay, controlled
+crash and watchdog hang, and copied-bundle execution from a path containing spaces. The
+relocation check independently verifies every dependency, runtime path, macOS 15.0 target
+and ad-hoc signature. Kernel dylibs occur only in the embedded service. Mesh volume/area
+remain within 1% of exact values; analytic plate quantities are 6000 mm³ / 2200 mm² within
+1e-7. Indexed ranges, normals and winding are checked after transport.
+
+Hang/crash controls exist only in a separate test service/protocol. A real injected blocked
+engine produces a feature-7 timeout reply at a 300 ms test deadline, exits, and is replaced
+by a fresh service that rebuilds complete IR with cold then warm caches. Production keeps
+its default five-second watchdog and has no test operation or persisted fault feature.
+Forced-exit/replay takes roughly 10.2–10.6 s on this host, including observed service
+relaunch delay; this is not kernel execution latency. The app client must surface failures
+and enforce RFC 0003's seven-second backstop rather than assume immediate relaunch.
+
+`tools/check.sh --preset occt` passes 724/724 (123.59 s), 202 schema corpus cases and twenty
+reference schemas, with license/layering/format checks and no new warnings. Swift 6 complete
+strict concurrency, warnings as errors and strict swift-format lint pass. The first sandboxed
+XPC lookup is rejected (error 159); real process tests and the complete gate pass with
+launchd access. Logs: `/tmp/nightfall-135-{red-build,build,bundle,check}.log`. The existing
+worker PR #134 now has all three remote CI checks green, including Swift TSAN and C/C++
+sanitizers; its human review remains pending. No C/C++ ownership or worker algorithm changes
+are made here. App-side timeout/suppression retry, shared memory and Metal UI remain next;
+there is still no production visual-testing app. This increment's CI/review and the full
+Phase 2 sign-off remain pending.
