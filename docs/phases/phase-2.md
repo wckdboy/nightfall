@@ -53,7 +53,8 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#142](https://github.com/wckdboy/nightfall/issues/142) | Editable native document model | app | Immutable parameter edits, revision ordering, undo/redo and last-valid geometry implemented; PR #143 review pending |
 | [#140](https://github.com/wckdboy/nightfall/issues/140) | First runnable native visual MVP | app | Development app built and visually tested with production XPC/OCCT; final local gate 743/743, evidence below |
 | [#145](https://github.com/wckdboy/nightfall/issues/145) | Native suppression and inclusive history rollback | app | History edits, undo/redo and valid empty construction states implemented; validation below |
-| [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
+| [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script | RFC 0006 proposed in #147; API/runtime implementation awaits acceptance and isolation evidence |
+| [#147](https://github.com/wckdboy/nightfall/issues/147) | RFC 0006: bounded Script recipe API | script | Review proposal; source-of-truth IR, atomic candidates, runtime resource/isolation and diagnostics decisions |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
 | [#74](https://github.com/wckdboy/nightfall/issues/74) | Coincident edges in planar arrangements (from Phase 1) | math | Straight spans in #106 and certified curved spans in #109; other parameterizations remain open |
@@ -1562,6 +1563,25 @@ The final window and empty state are visually inspected. Development build 0.0.2
 as `out/Nightfall-0.0.2-preview-arm64-macos.zip`; the original 0.0.1 archive is preserved.
 The preceding MVP PR #144 now has all three remote CI groups green. This increment's CI,
 all human reviews, formal distribution and full phase sign-off remain pending.
+
+### #147 — Nightfall Script API proposal (2026-10-19)
+
+RFC 0006 now proposes a versioned JavaScriptCore recipe builder producing ordinary v1 IR,
+isolated from the UI/kernel and published through one validated document transaction.
+It incorporates SolidCraft's documented discover/inspect/edit/measure/view workflow as a
+product reference while retaining Nightfall's own schemas and semantic geometry contract.
+The proposal covers explicit units, immutable edits, undo/failure state, source diagnostics,
+resource budgets and tests. Installed public SDK headers expose no per-context time/heap
+limit; the proposal explicitly requires watchdog/isolation/memory evidence and avoids private
+JSC APIs. This is Review, not Accepted: #93 remains open, no runtime or dependency is added,
+embedded script features/TypeScript and later MCP/provider decisions remain separate, and
+the existing phase gate is unchanged. The native development preview remains usable today.
+Docs-only `tools/check.sh --preset dev` passes 234/234 (52.13 s), including hygiene.
+Its optional Python schema cross-check is skipped without the system jsonschema package;
+the preceding unchanged runtime gate passed 745/745 plus 202 schema cases/twenty references.
+Review follow-up: the builder accepts complete v1 metadata, preserving `meta.doc` and
+extensions so full canonical comparisons can reproduce all twenty reference descriptions.
+The follow-up gate passes 234/234 (55.80 s), 202 schema cases and twenty reference parts.
 
 ### Face-attached sketch rebuild evidence
 
