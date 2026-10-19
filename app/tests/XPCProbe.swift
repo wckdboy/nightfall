@@ -145,6 +145,8 @@ func restart(_ mode: String) throws {
       switch mode {
       case "smoke": try smoke()
       case "client": try await clientIntegration()
+      case "render":
+        try await rendererIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "references": try references(CommandLine.arguments[2])
       case "restart", "crash", "hang": try restart(mode)
       default: throw Failure(description: "unknown mode")

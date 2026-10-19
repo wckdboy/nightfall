@@ -119,6 +119,13 @@ Reply bounds/layout/diagnostics are checked off the main actor. Controlled tests
 under Swift ThreadSanitizer; the real embedded-service test exercises cache closure and
 complete-IR replay through the client after a crash, including bounded relaunch failures.
 
+The [Metal viewport](app/MetalRenderer.swift) consumes finite, bounded Float32 display
+data derived off the main actor from the service's indexed meshes. It supports depth-tested
+normal lighting and fitted orthographic orbit/pan/zoom/presets. `bundle.render` exercises all
+twenty real reference parts and saves inspected PNGs in `build/occt/renders`; it requires a
+physical Metal device (GPU-only checks skip with code 77 when none is available). This
+renderer is being connected to the native preview shell; a render alone is not the MVP.
+
 Build a `.nightfall` part into exact STEP AP242 solids (millimetres):
 
 ```sh
