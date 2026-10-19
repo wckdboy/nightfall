@@ -41,13 +41,17 @@ Requirements: macOS 15+ on Apple Silicon, Xcode 26+, CMake 3.28+, Ninja.
 Build the native visual preview with the production, dynamically linked OCCT kernel:
 
 ```sh
+third_party/build-occt.sh --jobs 4
 cmake --preset occt
 cmake --build --preset occt --target Nightfall
 open build/occt/app/Nightfall.app
 ```
 
 The app starts with the Asterion multi-body showcase and includes twenty reference parts
-plus two modeling showcases in **Examples**.
+plus three modeling showcases in **Examples**. Choose **Lofted Link** for a smooth
+three-section elliptic housing with a flange and five drilled holes; change `waist_scale`
+or `height` to explore its shape.
+Quit older Nightfall copies before opening a newer development build.
 Edit a parameter expression, including its units, and press Return to rebuild. The window
 shows feature history, exact volume/area and diagnostics; failed edits retain clearly marked
 last-valid geometry. Use Undo/Redo, Open and Save copy to try variants. Drag to orbit,
@@ -87,13 +91,17 @@ See [the expression API](core/ir/include/nf/ir/expression.hpp) and
 [parameter evaluation](core/ir/include/nf/ir/parameters.hpp).
 
 The service's [document evaluator](services/kernel/src/evaluator.hpp) executes sketches,
-B-rep extrusions/revolutions, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
+B-rep extrusions, revolutions and lofts, rigid transforms and solid booleans using dynamically linked OCCT 7.9.3.
 It supports rectangles, circles, signed arcs, rotated ellipses, NURBS splines, polygons and mixed
 closed profiles, holes, interior-point selection, datum/explicit planes and symmetric extrusion.
 Content hashes and a bounded cache preserve unchanged geometry. Rollback, suppression and
 failures have explicit states; unsupported
 constraints, selectors and modeling operations report errors. This headless kernel path
 also powers the native preview; the remaining v1 operations are still in progress.
+Lofts support 2..32 ordered closed profiles on parallel planes, with smooth interpolation
+through intermediate sections and provenance from every section. Holes within loft sections,
+guide rails and nonparallel planes are unsupported. Sweeps and interactive spline authoring
+remain in progress; exact NURBS spline profiles already work through the shared IR/kernel.
 
 Viewport consumers can call `IKernel::tessellate(shape, {0.1, 0.2})` for an indexed display
 mesh (absolute mm/radian deflections). Positions are world-space doubles; normals point

@@ -22,7 +22,7 @@ struct Output {
   std::vector<kernel::OperationResult> operations;
   std::vector<std::vector<kernel::OperationResult>> copies;  // private per-body pattern history
   std::vector<kernel::ShapePtr> bindings;
-  ProfileSources sources;
+  std::vector<ProfileSources> sources{ProfileSources{}};
   std::size_t bytes = sizeof(Output);
 };
 using Cache = GeometryCache<Output>;
@@ -160,8 +160,8 @@ std::vector<std::string> targets(const ir::Feature& feature, const Targets& prev
 }
 std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
                                const kernel::OperationResult& operation, const std::string& feature,
-                               const ProfileSources* sources = nullptr,
-                               std::string_view sketch = {}) {
+                               const std::vector<ProfileSources>* sources = nullptr,
+                               const std::vector<std::string>& sketches = {}) {
   std::vector<NamedEntity> result;
   // A history entry can only match names from the same immutable input snapshot.
   // Nested patterns otherwise scan every copy's history for every inherited name.
@@ -196,11 +196,14 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
   for (const auto& generated : operation.generated) {
     if (sources && generated.from) {
       const auto& edge = *generated.from;
-      const auto found = sources->find({edge.region, edge.loop, edge.curve});
-      if (found == sources->end()) fail("kernel", "invalid profile edge provenance", "/inputs");
+      if (edge.section >= sources->size() || edge.section >= sketches.size())
+        fail("kernel", "invalid profile section provenance", "/inputs");
+      const auto& section = (*sources)[edge.section];
+      const auto found = section.find({edge.region, edge.loop, edge.curve});
+      if (found == section.end()) fail("kernel", "invalid profile edge provenance", "/inputs");
       if (!found->second.empty()) {
         for (const auto& id : found->second)
-          append(feature, generated.role, generated.entity, std::string(sketch) + "/" + id);
+          append(feature, generated.role, generated.entity, sketches[edge.section] + "/" + id);
         continue;
       }
     }
@@ -258,7 +261,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/27;roles/5;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/28;roles/6;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -267,7 +270,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   bool rolled_back = false;
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
-    const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
+    const bool profile_feature =
+        feature.type == "extrude" || feature.type == "revolve" || feature.type == "loft";
     const bool pattern_feature = feature.type == "pattern_linear" ||
                                  feature.type == "pattern_circular" || feature.type == "mirror";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
@@ -311,6 +315,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         return sketches.at(id);
       };
       std::shared_ptr<const Output> sketch, axis_sketch;
+      std::vector<std::shared_ptr<const Output>> loft_sketches;
+      std::vector<std::string> source_sketches;
       std::optional<BodyPattern> pattern;
       std::optional<kernel::Plane> mirror;
       std::optional<kernel::Plane> selected_plane;
@@ -320,8 +326,21 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
       const bool edge_blend = chamfer || feature.type == "fillet";
       std::string result_mode;
       if (profile_feature) {
-        const auto& id = string(*inputs.find("profile")->find("sketch"));
-        sketch = bind_sketch(id, "/inputs/profile/sketch");
+        if (feature.type == "loft") {
+          const auto& profiles = *inputs.find("profiles")->if_array();
+          if (profiles.size() > 32)
+            fail("kernel", "loft supports at most 32 sections", "/inputs/profiles");
+          for (std::size_t s = 0; s < profiles.size(); ++s) {
+            const auto& id = string(*profiles[s].find("sketch"));
+            source_sketches.push_back(id);
+            loft_sketches.push_back(
+                bind_sketch(id, "/inputs/profiles/" + std::to_string(s) + "/sketch"));
+          }
+        } else {
+          const auto& id = string(*inputs.find("profile")->find("sketch"));
+          source_sketches.push_back(id);
+          sketch = bind_sketch(id, "/inputs/profile/sketch");
+        }
         for (const auto* mode : {"join", "cut", "intersect"}) {
           if (!inputs.find("result")->find(mode)) continue;
           result_mode = mode;
@@ -595,15 +614,22 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           built->bytes += sketch_bytes(*built->sketch);
         } else if (profile_feature) {
           auto solid = [&] {
+            if (feature.type == "loft") {
+              std::vector<const Sketch*> sections;
+              for (const auto& section : loft_sketches) sections.push_back(&*section->sketch);
+              const auto operation = take(prepare_loft(inputs, sections, &built->sources));
+              ++result.kernel_calls;
+              return take(state_->kernel.loft(operation));
+            }
             if (feature.type == "extrude") {
               const auto operation =
-                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources,
+                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources.front(),
                                          selected_plane ? &*selected_plane : nullptr));
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }
             const auto operation = take(prepare_revolution(inputs, *sketch->sketch, axis_input,
-                                                           &built->sources, resolved_axis));
+                                                           &built->sources.front(), resolved_axis));
             ++result.kernel_calls;
             return take(state_->kernel.revolve(operation));
           }();
@@ -677,15 +703,15 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           }
         }
         for (const auto& operation : built->operations) built->bytes += operation.estimated_bytes;
-        for (const auto& [edge, ids] : built->sources) {
-          built->bytes += sizeof(edge) + sizeof(ids) + 64;
-          for (const auto& id : ids) built->bytes += sizeof(id) + id.size();
-        }
+        built->bytes += built->sources.size() * sizeof(ProfileSources);
+        for (const auto& section : built->sources)
+          for (const auto& [edge, ids] : section) {
+            built->bytes += sizeof(edge) + sizeof(ids) + 64;
+            for (const auto& id : ids) built->bytes += sizeof(id) + id.size();
+          }
         output = std::move(built);
       }
       std::vector<BodyState> published;
-      const auto source_sketch =
-          profile_feature ? string(*inputs.find("profile")->find("sketch")) : std::string{};
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
@@ -700,13 +726,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         for (const auto& copy : copied) named_inputs.push_back(&copy);
         BodyState temporary;
         if (output->tool) {
-          temporary.names = names({}, *output->tool, feature.id, &output->sources, source_sketch);
+          temporary.names = names({}, *output->tool, feature.id, &output->sources, source_sketches);
           named_inputs.push_back(&temporary);
         }
         published.push_back({operation.shape,
                              ir::body_hash(input ? input->hash : std::nullopt, key),
                              names(named_inputs, operation, feature.id,
-                                   profile_feature ? &output->sources : nullptr, source_sketch),
+                                   profile_feature ? &output->sources : nullptr, source_sketches),
                              {}});
       }
       // Publish complete geometry and naming together, after every operation/history succeeds.

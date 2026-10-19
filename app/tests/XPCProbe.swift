@@ -201,6 +201,8 @@ func nativeBenchmark(_ path: String, samples: Int) throws {
       case "drafts": try await draftsIntegration(CommandLine.arguments[2])
       case "sheets": try sheetLifecycle()
       case "fillets": try await filletIntegration(CommandLine.arguments[2])
+      case "lofts":
+        try await loftIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "visibility":
         try await visibilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "scalability":

@@ -515,14 +515,14 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
 }
 
 namespace {
-std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value& inputs,
-                                                                    const Sketch& sketch,
-                                                                    ProfileSources* sources) {
+std::expected<std::vector<math::Region>, ir::Error> prepare_regions(
+    const Value& inputs, const Sketch& sketch, ProfileSources* sources,
+    const Value* profile_override = nullptr) {
   return guarded([&] {
     const auto& result = field(inputs, "result");
     if (result.find("new") && *field(result, "body_type").if_string() != "brep")
       fail("/result/body_type", "only B-rep bodies are implemented", "unsupported_body_type");
-    const auto& profile = field(inputs, "profile");
+    const auto& profile = profile_override ? *profile_override : field(inputs, "profile");
     auto rule = math::FillRule::kEvenOdd;
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
       rule = math::FillRule::kNonZero;
@@ -669,6 +669,35 @@ std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inp
         prepare_axis(field(inputs, "axis"), axis_sketch, "/axis", selected_axis);
     return kernel::Revolution{sketch.plane, std::move(*regions), origin, direction,
                               number(field(inputs, "angle"))};
+  });
+}
+
+std::expected<kernel::Loft, ir::Error> prepare_loft(const Value& inputs,
+                                                    const std::vector<const Sketch*>& sketches,
+                                                    std::vector<ProfileSources>* sources) {
+  return guarded([&] {
+    if (inputs.find("rails")) fail("/rails", "guided loft rails are not implemented");
+    const auto& profiles = *field(inputs, "profiles").if_array();
+    if (profiles.size() < 2 || profiles.size() > 32 || sketches.size() != profiles.size())
+      fail("/profiles", "loft requires 2..32 resolved profile sketches");
+    if (sources) sources->assign(profiles.size(), {});
+    kernel::Loft loft;
+    for (std::size_t s = 0; s < profiles.size(); ++s) {
+      const auto pointer = "/profiles/" + std::to_string(s);
+      if (!sketches[s]) fail(pointer, "loft profile sketch is unavailable");
+      auto regions =
+          prepare_regions(inputs, *sketches[s], sources ? &(*sources)[s] : nullptr, &profiles[s]);
+      if (!regions) {
+        auto error = regions.error();
+        if (error.pointer.starts_with("/inputs/profile"))
+          error.pointer.replace(0, std::string_view("/inputs/profile").size(), "/inputs" + pointer);
+        throw error;
+      }
+      if (regions->size() != 1 || !regions->front().holes.empty())
+        fail(pointer, "loft requires one filled region without holes per section");
+      loft.sections.push_back({sketches[s]->plane, std::move(regions->front())});
+    }
+    return loft;
   });
 }
 
