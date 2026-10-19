@@ -12,6 +12,7 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
@@ -164,6 +165,7 @@ class OcctKernel final : public IKernel {
              << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
                 "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
+                "fillet=copy-contour-vertex-boundaries-v1;"
                 "mesh=indexed-faces-copy-v1;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
@@ -175,7 +177,7 @@ class OcctKernel final : public IKernel {
   }
   std::string_view identity() const noexcept override { return identity_; }
   Capabilities capabilities() const noexcept override {
-    return {true, true, true, true, true, true};
+    return {true, true, true, true, true, true, true};
   }
   std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>& inputs) override {
@@ -370,6 +372,102 @@ class OcctKernel final : public IKernel {
             !generated.Contains(members(i)))
           fail("chamfer output face has no generated provenance");
       if (result.generated.empty()) fail("chamfer has no generated-face provenance");
+      result.estimated_bytes +=
+          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
+      return result;
+    });
+  }
+  std::expected<OperationResult, KernelError> fillet(const ShapePtr& input,
+                                                     const std::vector<EntityPtr>& edges,
+                                                     double radius) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || edges.empty() || !std::isfinite(radius) || radius <= tolerance_.linear)
+        fail("fillet requires a solid, edges and radius above linear tolerance");
+      BRepBuilderAPI_Copy copy(source->geometry, true, false);
+      if (!copy.IsDone()) fail("fillet input copy failed");
+      BRepFilletAPI_MakeFillet operation(copy.Shape());
+      TopTools_IndexedMapOfShape originals;
+      TopExp::MapShapes(source->geometry, TopAbs_EDGE, originals);
+      TopTools_MapOfShape selected;
+      for (const auto& edge : edges) {
+        const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(edge);
+        if (!entity || entity->owner() != input || entity->kind() != EntityKind::kEdge ||
+            !originals.Contains(entity->geometry))
+          fail("fillet edge is absent from its target snapshot");
+        const auto e = TopoDS::Edge(copy.ModifiedShape(entity->geometry));
+        if (selected.Add(e)) operation.Add(radius, e);
+        if (!operation.Contour(e)) fail("fillet cannot use the selected edge");
+      }
+      operation.Build();
+      if (!operation.IsDone()) fail("solid fillet failed");
+      auto shape = checked(operation.Shape());
+      OperationResult result{shape, {}, {}, source->estimated_bytes() + shape->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      auto member = [&](const TopoDS_Shape& geometry) {
+        const auto index = members.FindIndex(geometry);
+        if (!index) fail("incomplete fillet history");
+        return detail::entity(shape, members(index));
+      };
+      TopTools_MapOfShape generated, inherited, covered;
+      for (const auto& before : detail::entities(source)) {
+        const auto geometry =
+            copy.ModifiedShape(static_cast<const detail::Subshape&>(*before).geometry);
+        History h{before, {}, {}, false};
+        for (const auto& after : operation.Modified(geometry)) h.modified.push_back(member(after));
+        if (h.modified.empty() && members.Contains(geometry))
+          h.modified.push_back(member(geometry));
+        h.deleted = h.modified.empty();
+        if (h.deleted &&
+            (before->kind() == EntityKind::kEdge ? !operation.Contour(TopoDS::Edge(geometry))
+                                                 : !operation.IsDeleted(geometry)))
+          fail("fillet input has no surviving or deleted provenance");
+        for (const auto& after : h.modified)
+          inherited.Add(static_cast<const detail::Subshape&>(*after).geometry);
+        TopTools_MapOfShape local_generated;
+        auto append_faces = [&](const TopoDS_Shape& ancestor) {
+          for (const auto& after : operation.Generated(ancestor)) {
+            if (after.ShapeType() != TopAbs_FACE) fail("unexpected fillet generated shape");
+            if (local_generated.Add(after)) h.generated.push_back(member(after));
+            if (generated.Add(after)) result.generated.push_back({"fillet", member(after), {}});
+          }
+        };
+        append_faces(geometry);
+        // OCCT reports corner patches from vertices, not the edges meeting there. Bind each
+        // patch to every incident contour edge using exact input topology, never a mesh match.
+        if (before->kind() == EntityKind::kEdge && operation.Contour(TopoDS::Edge(geometry))) {
+          TopTools_IndexedMapOfShape vertices;
+          TopExp::MapShapes(geometry, TopAbs_VERTEX, vertices);
+          for (int i = 1; i <= vertices.Extent(); ++i) append_faces(vertices(i));
+        }
+        result.history.push_back(std::move(h));
+      }
+      for (auto& h : result.history) {
+        const auto faces = h.generated;
+        TopTools_MapOfShape local_edges;
+        // New rails and junction edges descend from their generated blend faces. Existing
+        // edges keep OCCT's explicit modified/surviving history. Uncovered output is an error.
+        for (const auto& face : faces) {
+          TopTools_IndexedMapOfShape boundary;
+          TopExp::MapShapes(static_cast<const detail::Subshape&>(*face).geometry, TopAbs_EDGE,
+                            boundary);
+          for (int i = 1; i <= boundary.Extent(); ++i)
+            if (!inherited.Contains(boundary(i)) && local_edges.Add(boundary(i)))
+              h.generated.push_back(member(boundary(i)));
+        }
+        for (const auto& list : {h.modified, h.generated})
+          for (const auto& after : list)
+            covered.Add(static_cast<const detail::Subshape&>(*after).geometry);
+        result.estimated_bytes +=
+            sizeof(History) + sizeof(detail::Subshape) + 64 +
+            (h.modified.size() + h.generated.size()) * (sizeof(detail::Subshape) + 64);
+      }
+      for (int i = 1; i <= members.Extent(); ++i)
+        if ((members(i).ShapeType() == TopAbs_FACE || members(i).ShapeType() == TopAbs_EDGE) &&
+            !covered.Contains(members(i)))
+          fail("fillet output face or edge has no provenance");
+      if (result.generated.empty()) fail("fillet has no generated-face provenance");
       result.estimated_bytes +=
           result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
       return result;

@@ -130,7 +130,7 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer;
+    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer, fillet;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   /// Encode all supplied closed-solid snapshots as exact STEP AP242 B-rep text in millimetres.
@@ -162,6 +162,14 @@ class IKernel {
   /// Fail on unsupported geometry/history; preserve inputs even on failure.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> chamfer(
       const ShapePtr& target, const std::vector<EntityPtr>& edges, double distance) = 0;
+  /// Constant rolling-ball radius in mm, with tangent-contour propagation. Require nonempty
+  /// target-owned edges and finite radius > linear tolerance; deduplicate selections.
+  /// Return validated solids and complete face/edge history, with new faces tagged "fillet".
+  /// Junction faces descend from incident contour edges through their shared input vertices;
+  /// new blend-boundary edges inherit those faces' ancestry. Never infer names by proximity.
+  /// Fail on unsupported geometry/history; preserve all input snapshots even on failure.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> fillet(
+      const ShapePtr& target, const std::vector<EntityPtr>& edges, double radius) = 0;
   /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
   /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
   /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.

@@ -87,6 +87,11 @@ class QueryKernel final : public kernel::IKernel {
       const kernel::EntityPtr& face) override {
     return real.edges(face);
   }
+  std::expected<kernel::OperationResult, kernel::KernelError> fillet(
+      const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
+      double radius) override {
+    return real.fillet(shape, edges, radius);
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> chamfer(
       const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
       double distance) override {

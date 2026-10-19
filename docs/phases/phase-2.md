@@ -56,6 +56,7 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#149](https://github.com/wckdboy/nightfall/issues/149) | Atomic pending parameter application and saving | app | Implemented and packaged in preview 0.0.3; native sheet validation completed by #153 below |
 | [#151](https://github.com/wckdboy/nightfall/issues/151) | Seeded direct-engine edit/failure/replay validation | kernel | Analytic, immutable ownership and exact STEP/mesh checks pass; evidence below |
 | [#153](https://github.com/wckdboy/nightfall/issues/153) | Retained asynchronous native Open/Save sheets | app | Save, reopen, cancellation and Keep editing verified; preview 0.0.4 and local gate below |
+| [#155](https://github.com/wckdboy/nightfall/issues/155) | Typed constant-radius fillets with complete immutable provenance | kernel | Exact OCCT rounds, complete topology-based ancestry and immutability implemented; evidence below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1654,6 +1655,45 @@ swift-format lint and client ThreadSanitizer checks pass. Logs:
 `/tmp/nightfall-153-{focused,check}.log`, `/tmp/nightfall-153-save-open-sample.txt`.
 The app version advances to development preview 0.0.4; prior previews remain preserved.
 Remote CI, human review, formal distribution and the full Phase 2 sign-off remain pending.
+
+### #155 — production constant-radius fillet backend (2026-10-19)
+
+Accepted RFC 0007's remaining v1 operation coverage now supplies typed `IKernel::fillet`,
+its capability and naming/configuration identity. The OCCT backend deep-copies input geometry,
+deduplicates target-owned edges, propagates tangent contours and validates complete closed
+solids. Invalid radii/handles, failed construction and incomplete provenance return errors.
+There is no radius reduction, partial result or mesh approximation. The service evaluator's
+v1 fillet execution remains a separate follow-up; this increment exposes the engine operation.
+
+OCCT's generated blend faces and shared input vertices establish ancestry for spherical
+junctions. Each junction descends from its incident contour edges; new boundary rails inherit
+those generated faces' ancestry. Explicit modified history and exact surviving subshape
+identity preserve existing edges. Every output face and edge must be covered. An unblended
+input edge that disappears without modified history is rejected conservatively. There is
+no nearest-point name assignment. SolidCraft's
+[`blend.rs`](https://github.com/tangency-labs/solidcraft/blob/4c30d944f54113b75c3e2f06d343146a01118015/crates/kernel/src/blend.rs)
+and [`provenance.rs`](https://github.com/tangency-labs/solidcraft/blob/4c30d944f54113b75c3e2f06d343146a01118015/crates/kernel/src/provenance.rs)
+inform the blend/origin contract; this is original OCCT integration, with no Rust source port
+or dependency. The reference's mesh-nearest blend attribution is not used for Nightfall names.
+
+Tests first fail for the missing typed API. Six focused cases pass (0.94 s): single/four/all
+box edges, radii 0.125/1/2/4 mm, rigid placement, complete generated/modified/deleted ownership,
+partial annular-rim picks propagating to whole tangent contours, invalid/forged handles,
+failed-operation immutability and retention/export after facade/source teardown. Volume/area
+tolerances are 1e-6 mm³/mm² (1e-5 for spherical/toroidal cases), centroid tolerance 1e-8 mm.
+The single r2 box measures 5974.24777961 mm³ / 2172.53096491 mm²; four r2 rounds measure
+5896.99111843 mm³ / 2090.12385966 mm². The all-edge r1 box measures 5949.83479350 mm³ /
+2095.85837720 mm², with 26 faces, 48 ordinary and eight degenerate spherical-pole edges.
+The initial 48-total-edge test oracle is corrected by explicitly counting those pole edges;
+no geometry failure or relaxed mass tolerance is claimed. Each spherical patch has exactly
+three incident input-edge ancestors. Annular rims measure 7048.35772398 mm³ / 3258.22079307 mm².
+ASan/UBSan passes six cases / 3,943 assertions without diagnostics; Nightfall code is
+instrumented while the pinned OCCT libraries remain Release. The full gate passes 755/755
+(170.70 s), 202 schema corpus cases, twenty reference schemas and hygiene. Strict Swift
+concurrency/warnings and existing native worker/client concurrency tests also pass.
+Logs: `/tmp/nightfall-155-{red-build,initial-focused,focused,asan,check}.log`.
+Remote CI, human review, full production/phase sign-off and evaluator/UI integration remain
+open; the packaged 0.0.4 preview remains preserved at its original source commit.
 
 ### Face-attached sketch rebuild evidence
 
