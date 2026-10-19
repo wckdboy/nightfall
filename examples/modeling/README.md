@@ -2,7 +2,7 @@
 
 ![Asterion rendered by Nightfall's native Metal viewport](../../docs/images/asterion.png)
 
-Preview 0.0.6 opens Asterion by default; choose **Examples → Asterion** to reopen it.
+Preview 0.0.7 opens Asterion by default; choose **Examples → Asterion** to reopen it.
 Use each body's eye button to hide/show it, the viewfinder to isolate it, and **Show all
 bodies** to restore the complete model. Visibility affects the viewport only and resets
 when another document opens; source, mass measurements and Undo history stay unchanged.
@@ -16,6 +16,12 @@ single module is the default for visual inspection. Larger arrays deliberately s
 the current engine and can exceed the native service's five-second deadline.
 An eight-module variant (640 solids / 217,142 triangles) was successfully displayed in
 the native client after #162; this is a measured case, not a guaranteed maximum.
+After #167's surface-area integration improvement, three actual XPC/client/Metal rebuilds
+complete locally in about 2.4 seconds each, including rendering and clean Undo validation.
+The watchdog remains five seconds; machine load and geometry still affect success.
+The extracted 0.0.7 app displayed 1→8 and 8→4 edits, but a subsequent 4→8 edit hit the
+watchdog and kept marked last-valid geometry. Undo restored the clean original. Reliable
+GUI variant sequences remain follow-up [#171](https://github.com/wckdboy/nightfall/issues/171).
 
 ```sh
 build/occt/tools/cli/nf build examples/modeling/asterion.nightfall --out out/asterion.step
@@ -28,6 +34,18 @@ and C-bridge times. It uses the same 96-entry / 64 MiB estimated geometry cache 
 0.1 mm / 0.2 rad display settings as the service. It does not include XPC, client decoding,
 GPU upload or rendering; C-bridge measurements include rebuild, meshing and manifest encoding.
 Run it on a quiet machine, retain the output and distinguish medians from worst cases.
+
+The private native probe also measures actual service round trips and manifest/display
+conversion separately (first request is model-cold after service startup):
+
+```sh
+build/occt/app/tests/nf_xpc_probe.app/Contents/MacOS/nf_xpc_probe benchmark out/Nightfall-Asterion-8-modules.nightfall 3
+ctest --preset occt -R '^bundle.scalability$' -V
+```
+
+The stress input under `out/` is a local copy with `module_count` set to eight. The native
+integration test generates its edit from the checked-in example and renders all eight
+modules and isolated fins, checks exact component mass scaling, then undoes to the original.
 
 Regression tests integrate each component's primitive/frustum mass independently, exercise
 parameter edits and cache reuse, reload exported STEP, and compare mesh volume within 1%.

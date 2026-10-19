@@ -173,7 +173,7 @@ class OcctKernel final : public IKernel {
            "mesh=indexed-faces-copy-v1;"
            "face-distance=trimmed-v1;step=ap242-mm-v1;"
            "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
-           "mass-integrator=planar-gauss-v1;mass="
+           "mass-integrator=planar-gauss-v1;area-integrator=analytic-uv-extrusion-gk-v1;mass="
         << detail::kMassRelativeAccuracy
         << std::setprecision(std::numeric_limits<double>::max_digits10)
         << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;

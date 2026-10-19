@@ -53,6 +53,7 @@ double verify(const Evaluation& result, double count = 64, double height = 28, d
   std::size_t live = 0;
   for (const auto& [id, body] : result.bodies) {
     if (!body.shape) continue;
+    CAPTURE(id);
     ++live;
     const auto& [volume, area] = expected.at(id);
     const auto& m = body.shape->measures();
