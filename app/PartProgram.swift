@@ -41,10 +41,19 @@ struct PartProgram {
     }
   }
   func setting(_ name: String, to expression: String) throws -> Self {
-    guard var params = object["params"] as? [[String: Any]],
-      let index = params.firstIndex(where: { $0["name"] as? String == name })
-    else { throw CocoaError(.validationMissingMandatoryProperty) }
-    params[index]["value"] = expression
+    try setting([name: expression])
+  }
+  func setting(_ expressions: [String: String]) throws -> Self {
+    guard !expressions.isEmpty else { return self }
+    guard var params = object["params"] as? [[String: Any]] else {
+      throw CocoaError(.validationMissingMandatoryProperty)
+    }
+    for (name, expression) in expressions {
+      guard let index = params.firstIndex(where: { $0["name"] as? String == name }) else {
+        throw CocoaError(.validationMissingMandatoryProperty)
+      }
+      params[index]["value"] = expression
+    }
     return try replacing("params", with: params)
   }
   func suppressing(_ id: String, _ suppressed: Bool) throws -> Self {

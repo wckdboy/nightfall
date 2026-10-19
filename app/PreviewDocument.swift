@@ -26,6 +26,15 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   private var documentID = UUID()
   private var revision = UUID()
   private var savedSource: Data?
+  private var pendingParameters: [String: String] {
+    let values = Dictionary(
+      uniqueKeysWithValues: (program?.parameters ?? []).map { ($0.id, $0.value) })
+    return drafts.filter { values[$0.key] != $0.value }
+  }
+  var hasPendingParameters: Bool { !pendingParameters.isEmpty }
+  var hasUnsavedChanges: Bool {
+    hasPendingParameters || (program.map { $0.source != savedSource } ?? false)
+  }
   var examples: [URL] {
     let folder = Bundle.main.resourceURL?.appendingPathComponent("Examples")
     return
@@ -43,7 +52,7 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     }
   }
   func load(_ url: URL) {
-    if let program, program.source != savedSource {
+    if hasUnsavedChanges {
       let alert = NSAlert()
       alert.messageText = "Discard unsaved changes?"
       alert.informativeText = "Choose Keep editing to save a copy first."
@@ -64,19 +73,21 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
       replace(part)
     } catch { notice = error.localizedDescription }
   }
-  func edit(_ name: String) {
-    guard let program else { return }
-    do {
-      commit(try program.setting(name, to: drafts[name] ?? ""))
-    } catch { notice = error.localizedDescription }
+  private func applyingDrafts() throws -> PartProgram {
+    guard let program else { throw CocoaError(.fileReadCorruptFile) }
+    return try program.setting(pendingParameters)
   }
   func setSuppressed(_ id: String, to value: Bool) {
-    guard let program else { return }
-    do { commit(try program.suppressing(id, value)) } catch { notice = error.localizedDescription }
+    guard program != nil else { return }
+    do { commit(try applyingDrafts().suppressing(id, value)) } catch {
+      notice = error.localizedDescription
+    }
   }
   func endHistory(at id: String?) {
-    guard let program else { return }
-    do { commit(try program.endingHistory(at: id)) } catch { notice = error.localizedDescription }
+    guard program != nil else { return }
+    do { commit(try applyingDrafts().endingHistory(at: id)) } catch {
+      notice = error.localizedDescription
+    }
   }
   private func commit(_ next: PartProgram) {
     guard let program, next.source != program.source else { return }
@@ -85,18 +96,31 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     replace(next)
   }
   func undo() {
+    do {
+      if hasPendingParameters { commit(try applyingDrafts()) }
+    } catch {
+      notice = error.localizedDescription
+      return
+    }
     if let previous = past.popLast(), let program {
       future.append(program)
       replace(previous)
     }
   }
   func redo() {
+    guard !hasPendingParameters else { return }
     if let next = future.popLast(), let program {
       past.append(program)
       replace(next)
     }
   }
-  func rebuild() { if let program { replace(program) } }
+  func rebuild() {
+    guard let program else { return }
+    do {
+      let next = try applyingDrafts()
+      if next.source == program.source { replace(next) } else { commit(next) }
+    } catch { notice = error.localizedDescription }
+  }
   func shutdown() {
     revision = UUID()
     task?.cancel()
@@ -109,15 +133,25 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     if panel.runModal() == .OK, let url = panel.url { load(url) }
   }
   func saveCopy() {
-    guard let program else { return }
+    guard program != nil else { return }
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Part.nightfall"
     if panel.runModal() == .OK, let url = panel.url {
-      do {
-        try program.source.write(to: url, options: .atomic)
-        savedSource = program.source
-        notice = "Saved \(url.lastPathComponent)"
-      } catch { notice = error.localizedDescription }
+      saveCopy(to: url)
+    }
+  }
+  @discardableResult func saveCopy(to url: URL) -> Bool {
+    guard program != nil else { return false }
+    do {
+      let next = try applyingDrafts()
+      try next.source.write(to: url, options: .atomic)
+      commit(next)
+      savedSource = next.source
+      notice = "Saved \(url.lastPathComponent)"
+      return true
+    } catch {
+      notice = error.localizedDescription
+      return false
     }
   }
   private func replace(_ next: PartProgram) {
