@@ -1,0 +1,50 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {"length": "mm", "angle": "deg"},
+  "meta": {
+    "name": "Filleted mounting plate",
+    "doc": "60 x 40 mm four-hole plate with exact constant-radius corner fillets."
+  },
+  "params": [
+    {"name": "thickness", "value": "8 mm", "min": "0.5 mm", "max": "100 mm"},
+    {"name": "corner_radius", "value": "6 mm", "min": "0.125 mm", "max": "8 mm"}
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline", "type": "sketch",
+      "inputs": {
+        "plane": {"datum": "xy"},
+        "entities": [
+          {"id": "blank", "type": "rect", "corner": [-30, -20], "size": [60, 40]},
+          {"id": "hole_0", "type": "circle", "center": [-20, -10], "radius": 3},
+          {"id": "hole_1", "type": "circle", "center": [20, -10], "radius": 3},
+          {"id": "hole_2", "type": "circle", "center": [20, 10], "radius": 3},
+          {"id": "hole_3", "type": "circle", "center": [-20, 10], "radius": 3}
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "plate", "type": "extrude",
+      "inputs": {"profile": {"sketch": "outline"}, "distance": "thickness",
+        "result": {"new": "part", "body_type": "brep"}}
+    },
+    {
+      "id": "round_corners", "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {"created_by": "plate", "role": "side", "from": "outline/blank"},
+          "except": {"edges_of": {"any": [
+            {"created_by": "plate", "role": "cap_start"},
+            {"created_by": "plate", "role": "cap_end"}
+          ]}}
+        },
+        "radius": "corner_radius"
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

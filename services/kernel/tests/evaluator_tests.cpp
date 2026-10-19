@@ -318,10 +318,11 @@ TEST_CASE("unsupported modifiers invalidate their intended current bodies") {
   auto document = part();
   document.features.insert(
       document.features.begin() + 2,
-      feature("round", "fillet", R"({"edges":{"created_by":"base"},"radius":1})"));
+      feature("hollow", "shell",
+              R"({"body":"plate","faces":{"created_by":"base"},"thickness":1})"));
   auto result = evaluator.evaluate(source(document)).value();
   CHECK_FALSE(result.ok());
-  CHECK(result.features[2].errors.front().message == "feature is not implemented: fillet");
+  CHECK(result.features[2].errors.front().message == "feature is not implemented: shell");
   CHECK(result.features[3].errors.front().code == "input_failed");
   CHECK_FALSE(result.bodies.at("plate").shape);
 }

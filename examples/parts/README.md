@@ -2,7 +2,16 @@
 
 Twenty editable v1 `.nightfall` documents for the Phase 2 reference suite (#95). These are
 complete parametric inputs for the production headless evaluator and `nf build` CLI (#94).
-Native app opening and Nightfall Script remain pending.
+The native app opens these parts through its Examples menu. Nightfall Script remains pending.
+Additional operation examples live in [modeling](../modeling/) without changing these baselines.
+
+The [Filleted mounting plate](../modeling/rounded_plate.nightfall) adds editable exact corner
+rounds, with `thickness = 8 mm` and `corner_radius = 6 mm`. Its default volume is 18048 mm³
+and its area is `5728 + 288π` mm². Choose it in the native Examples menu, or export a variant:
+
+```sh
+build/occt/tools/cli/nf build examples/modeling/rounded_plate.nightfall --set "corner_radius=3 mm" --out out/rounded-plate.step
+```
 
 Each file has a descriptive feature history and a named, bounded parameter in millimetres.
 Edit its `params[0].value` to change the model. All inputs are self-contained and use the
