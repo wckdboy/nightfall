@@ -53,6 +53,9 @@ Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy
 | [#142](https://github.com/wckdboy/nightfall/issues/142) | Editable native document model | app | Immutable parameter edits, revision ordering, undo/redo and last-valid geometry implemented; PR #143 review pending |
 | [#140](https://github.com/wckdboy/nightfall/issues/140) | First runnable native visual MVP | app | Development app built and visually tested with production XPC/OCCT; final local gate 743/743, evidence below |
 | [#145](https://github.com/wckdboy/nightfall/issues/145) | Native suppression and inclusive history rollback | app | History edits, undo/redo and valid empty construction states implemented; validation below |
+| [#149](https://github.com/wckdboy/nightfall/issues/149) | Atomic pending parameter application and saving | app | Implemented and packaged in preview 0.0.3; native sheet validation completed by #153 below |
+| [#151](https://github.com/wckdboy/nightfall/issues/151) | Seeded direct-engine edit/failure/replay validation | kernel | Analytic, immutable ownership and exact STEP/mesh checks pass; evidence below |
+| [#153](https://github.com/wckdboy/nightfall/issues/153) | Retained asynchronous native Open/Save sheets | app | Save, reopen, cancellation and Keep editing verified; preview 0.0.4 and local gate below |
 | [#93](https://github.com/wckdboy/nightfall/issues/93) | 2.4 Nightfall Script: JavaScriptCore host and nf API bindings | script |  |
 | [#94](https://github.com/wckdboy/nightfall/issues/94) | 2.5 CLI: `nf build part.nightfall --out part.step` | cli | Implemented with exact AP242 export, bounded input, structured errors and atomic output; all twenty reference exports reload locally, CI/review pending |
 | [#95](https://github.com/wckdboy/nightfall/issues/95) | 2.6 20 reference parts and the Phase 2 gate | evals | Twenty editable reference documents and headless regressions added; CI confirmation and full gate sign-off pending |
@@ -1622,6 +1625,35 @@ twenty reference schemas and hygiene. Remote CI/human review remain pending.
 Logs: `/tmp/nightfall-151-{focused,asan,check}.log`. This adds production-engine validation;
 production readiness, SMLib #15 deferral, USD interchange work and phase sign-off remain open.
 The visual preview 0.0.3 archive/source is preserved unchanged.
+
+### #153 — retained native document sheets (2026-10-19)
+
+Open, Save copy and unsaved-change confirmation now use asynchronous sheets attached to
+the visible document window. The document retains its sheet until completion; a token and
+document ID reject duplicate, replaced-document and late callbacks. Shutdown clears that
+state before cancelling the owned sheet, including reentrant completion. File actions are
+disabled during presentation. The window is activated before presenting, including actions
+invoked through accessibility while no main window is registered. No nested runModal loop
+remains. Existing atomic file writing, authored source and kernel boundaries are unchanged.
+
+The old host sample shows NSSavePanel.runModal nested inside a SwiftUI accessibility action.
+Initially disabled Save/New Folder indications also reproduce in stock TextEdit, so that
+observation alone does not establish a Nightfall-specific file-writing failure. Final native
+checks in the new app successfully save an unsubmitted 8 mm expression to a 1960-byte
+`.nightfall` file, return to a clean window, and reopen it with exact volume 18295.22 mm³
+and area 6776.99 mm². The original example remains 4 mm. A subsequent raw 10 mm edit survives
+Save cancellation and the unsaved-change sheet's Keep editing action; applied 8 mm geometry
+remains unchanged. Undo then restores the clean saved baseline. Native screenshots are
+visually inspected in the computer-use session.
+
+Focused sheet/draft/preview/history checks pass 4/4 (1.03 s), including stale/duplicate
+completion, document replacement, reentrant cancellation and idempotent shutdown. The full
+gate passes 749/749 (164.50 s), 202 schema corpus cases, twenty reference schemas and
+license/layering/format checks. Strict Swift 6 concurrency, warnings as errors, strict
+swift-format lint and client ThreadSanitizer checks pass. Logs:
+`/tmp/nightfall-153-{focused,check}.log`, `/tmp/nightfall-153-save-open-sample.txt`.
+The app version advances to development preview 0.0.4; prior previews remain preserved.
+Remote CI, human review, formal distribution and the full Phase 2 sign-off remain pending.
 
 ### Face-attached sketch rebuild evidence
 

@@ -22,6 +22,7 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   var past: [PartProgram] = []
   var future: [PartProgram] = []
   @ObservationIgnored private let client = KernelClient()
+  private let sheet = DocumentSheet()
   @ObservationIgnored private var task: Task<Void, Never>?
   private var documentID = UUID()
   private var revision = UUID()
@@ -34,6 +35,13 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   var hasPendingParameters: Bool { !pendingParameters.isEmpty }
   var hasUnsavedChanges: Bool {
     hasPendingParameters || (program.map { $0.source != savedSource } ?? false)
+  }
+  var presentingSheet: Bool { sheet.active != nil }
+  private var documentWindow: NSWindow? {
+    NSApp.mainWindow
+      ?? NSApp.windows.first {
+        $0.canBecomeMain && $0.isVisible && !($0 is NSPanel)
+      }
   }
   var examples: [URL] {
     let folder = Bundle.main.resourceURL?.appendingPathComponent("Examples")
@@ -52,14 +60,33 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     }
   }
   func load(_ url: URL) {
+    guard !presentingSheet else { return }
     if hasUnsavedChanges {
+      guard let window = documentWindow else { return }
       let alert = NSAlert()
       alert.messageText = "Discard unsaved changes?"
       alert.informativeText = "Choose Keep editing to save a copy first."
       alert.addButton(withTitle: "Keep editing")
       alert.addButton(withTitle: "Discard")
-      guard alert.runModal() == .alertSecondButtonReturn else { return }
+      guard
+        let id = sheet.begin(
+          for: documentID,
+          cancel: { [weak window] in
+            window?.endSheet(alert.window, returnCode: .cancel)
+          })
+      else { return }
+      NSApp.activate()
+      window.makeKeyAndOrderFront(nil)
+      alert.beginSheetModal(for: window) { [weak self, weak alert] response in
+        alert?.window.orderOut(nil)
+        guard let self, self.sheet.complete(id, for: self.documentID) else { return }
+        if response == .alertSecondButtonReturn { self.read(url) }
+      }
+    } else {
+      read(url)
     }
+  }
+  private func read(_ url: URL) {
     do {
       let part = try PartProgram(Data(contentsOf: url, options: .mappedIfSafe))
       client.close(documentID)
@@ -122,6 +149,7 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     } catch { notice = error.localizedDescription }
   }
   func shutdown() {
+    sheet.cancel()
     revision = UUID()
     task?.cancel()
     client.shutdown()
@@ -130,14 +158,25 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   func open() {
     let panel = NSOpenPanel()
     panel.allowedContentTypes = [UTType(filenameExtension: "nightfall") ?? .json, .json]
-    if panel.runModal() == .OK, let url = panel.url { load(url) }
+    present(panel) { [weak self] in self?.load($0) }
   }
   func saveCopy() {
     guard program != nil else { return }
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Part.nightfall"
-    if panel.runModal() == .OK, let url = panel.url {
-      saveCopy(to: url)
+    present(panel) { [weak self] in self?.saveCopy(to: $0) }
+  }
+  private func present(_ panel: NSSavePanel, selected: @escaping (URL) -> Void) {
+    guard let window = documentWindow,
+      let id = sheet.begin(for: documentID, cancel: { panel.cancel(nil) })
+    else { return }
+    NSApp.activate()
+    window.makeKeyAndOrderFront(nil)
+    panel.beginSheetModal(for: window) { [weak self, weak panel] response in
+      guard let panel else { return }
+      panel.orderOut(nil)
+      guard let self, self.sheet.complete(id, for: self.documentID) else { return }
+      if response == .OK, let url = panel.url { selected(url) }
     }
   }
   @discardableResult func saveCopy(to url: URL) -> Bool {
