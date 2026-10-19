@@ -108,6 +108,20 @@ struct LoftSection {
 struct Loft {
   std::vector<LoftSection> sections;
 };
+/// One closed profile without holes, swept along an open planar, tangent-continuous path.
+/// The profile origin must equal the path start; its normal follows the initial tangent.
+/// The path plane normal is a fixed binormal: profile roll is preserved, including through
+/// inflections. No contact translation, automatic profile rotation, corner transition or
+/// scaling. Each exact Bezier path span must have strictly increasing control-pole
+/// projections along its chord (a conservative regularity certificate). Initially bounded
+/// to 32 path curves / 64 spans and 128 profile curves / 1024 spans. Closed paths, holes,
+/// rails, spatial paths and uncertified spans fail rather than changing the authored path.
+struct Sweep {
+  Plane plane;
+  math::Region region;
+  Plane path_plane;
+  std::vector<math::NurbsCurve2> path;
+};
 /// Rotate about an axis, then translate. Angle is radians; axis direction need not be unit.
 struct RigidTransform {
   math::Vec3 translation, axis_origin, axis_direction{0, 0, 1};
@@ -143,7 +157,7 @@ class IKernel {
   /// Changes with backend version, tolerance, options and naming semantics; included in keys.
   [[nodiscard]] virtual std::string_view identity() const noexcept = 0;
   struct Capabilities {
-    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer, fillet, loft;
+    bool extrude, rigid_transform, booleans, revolve, mirror, chamfer, fillet, loft, sweep;
   };
   [[nodiscard]] virtual Capabilities capabilities() const noexcept = 0;
   /// Encode all supplied closed-solid snapshots as exact STEP AP242 B-rep text in millimetres.
@@ -200,6 +214,10 @@ class IKernel {
   /// every section's authored curves. A face can have several Generated records. Reject
   /// incomplete history, self-interference or unsupported sections; preserve all inputs.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> loft(const Loft&) = 0;
+  /// Solid sweep with fixed planar binormal and exact profile/path curves. Generated faces
+  /// have cap_start/cap_end or side roles; every profile curve and output face is covered.
+  /// Validate regularity, alignment, closure and self-intersections before publication.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> sweep(const Sweep&) = 0;
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> transform(
       const ShapePtr&, const RigidTransform&) = 0;
   /// Reflect exact geometry across a finite orthonormal plane, preserving solid orientation.
