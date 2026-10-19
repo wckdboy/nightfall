@@ -92,7 +92,7 @@ def embed(app, service, occt):
     resources = destination / "Contents/Resources"
     resources.mkdir(exist_ok=True)
     for name in ("LICENSE_LGPL_21.txt", "OCCT_LGPL_EXCEPTION.txt"):
-        shutil.copy2(Path(__file__).resolve().parents[1] / "third_party/src/occt" / name, resources / name)
+        shutil.copy2(occt / "share/doc/opencascade" / name, resources / name)
     clean_rpaths(binary, "@executable_path/../Frameworks")
     clean_rpaths(host, "/usr/lib/swift")
     run("/usr/bin/codesign", "--force", "--sign", "-", destination)

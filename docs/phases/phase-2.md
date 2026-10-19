@@ -1401,6 +1401,13 @@ parsing, schema/parameter/input evaluation, references, hashing, geometry, valid
 naming; serialization, IPC and tessellation remain excluded. Remote CI/review and full
 Phase 2 sign-off remain pending.
 
+The first remote #135 build exposed a cached-install regression: the packager read OCCT
+notices from the untracked source checkout, absent when CI restores only the install.
+It now reads the notices already installed in `share/doc/opencascade`. A source-free
+packager regression fails first with the same missing-file error, then repackages and
+executes both relocated hosts successfully. An isolated checkout using the cached OCCT
+install passes the full gate again: 724/724 (133.97 s), schema and hygiene included.
+
 ### Face-attached sketch rebuild evidence
 
 2026-10-18, Apple M3 Pro / 12 cores / 36 GiB, Release OCCT 7.9.3, 30 samples per mode.

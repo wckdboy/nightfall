@@ -11,8 +11,12 @@ from pathlib import Path
 
 
 def run(*args):
-    return subprocess.check_output([str(arg) for arg in args], text=True, stderr=subprocess.STDOUT,
-                                   timeout=30)
+    try:
+        return subprocess.check_output([str(arg) for arg in args], text=True, stderr=subprocess.STDOUT,
+                                       timeout=30)
+    except subprocess.CalledProcessError as error:
+        print(error.output)
+        raise
 
 
 def binary(bundle):
@@ -52,10 +56,16 @@ def verify(app):
 
 
 with tempfile.TemporaryDirectory(prefix="nightfall bundle with spaces ") as directory:
+    packager = Path(directory) / "tools/embed_service.py"
+    packager.parent.mkdir()
+    shutil.copy2(Path(__file__).resolve().parents[2] / "tools/embed_service.py", packager)
     for source, modes in [(Path(sys.argv[1]), ["smoke", "references", "restart"]),
                           (Path(sys.argv[2]), ["crash", "hang"])]:
         app = Path(directory) / source.name
         shutil.copytree(source, app)
+        # Reproduce a cached CI install: the packager's source tree contains no OCCT checkout.
+        print(run(sys.executable, packager, app,
+                  source / "Contents/XPCServices/NightfallKernel.xpc", sys.argv[4]), end="")
         count = verify(app)
         print(f"{app.name}: verified {count} service-local dylibs and relocated signatures")
         for mode in modes:
