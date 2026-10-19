@@ -11,8 +11,9 @@ func meshValidation() throws {
   let indices: [UInt32] = [0, 1, 2]
   func response(_ v: [Double], _ i: [UInt32]) -> KernelResponse {
     KernelResponse(
-      manifest: Data("{\"errors\":[]}".utf8),
-      vertices: v.withUnsafeBytes { Data($0) }, indices: i.withUnsafeBytes { Data($0) })
+      manifest: Data("{\"errors\":[],\"bodies\":[{\"id\":\"part\"}]}".utf8),
+      vertices: v.withUnsafeBytes { Data($0) }, indices: i.withUnsafeBytes { Data($0) },
+      faces: [UInt32(0), 0, UInt32(i.count)].withUnsafeBytes { Data($0) })
   }
   let mesh = try DisplayMesh(response(vertices, indices))
   try check(mesh.triangleCount == 1 && mesh.vertices.count == 18 * 4, "display vertex/index layout")
@@ -33,7 +34,9 @@ func meshValidation() throws {
     } catch is DisplayMesh.Invalid {}
   }
 }
-@MainActor func renderPNG(_ renderer: MetalRenderer, to url: URL) throws -> [UInt8] {
+@MainActor func renderPNG(_ renderer: MetalRenderer, to url: URL, allowEmpty: Bool = false) throws
+  -> [UInt8]
+{
   let width = 960
   let height = 720
   let color = MTLTextureDescriptor.texture2DDescriptor(
@@ -61,7 +64,9 @@ func meshValidation() throws {
     &bytes, bytesPerRow: width * 4,
     from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
   let lit = stride(from: 0, to: bytes.count, by: 4).filter { bytes[$0 + 2] > 50 }.count
-  try check(lit > width * height / 100 && lit < width * height * 4 / 5, "blank or clipped render")
+  try check(
+    (allowEmpty || lit > width * height / 100) && lit < width * height * 4 / 5,
+    "blank or clipped render")
   let info = CGBitmapInfo(
     rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
   )

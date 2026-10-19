@@ -5,11 +5,16 @@ import simd
 
 /// Derived display data only. Convert off the main actor; exact measures stay in the manifest.
 struct DisplayMesh: Sendable {
+  struct Draw: Sendable {
+    let body: String
+    let triangles: Range<Int>, edges: Range<Int>  // UInt32 index ranges, not byte offsets
+  }
   struct Invalid: Error, LocalizedError {
     var errorDescription: String? { "The kernel returned an invalid display mesh." }
   }
   let id = UUID()
   let vertices: Data, indices: Data, edges: Data
+  let draws: [Draw]
   var triangleCount: Int { indices.count / 12 }
   init(_ response: KernelResponse) throws {
     let data = response.vertices
@@ -65,21 +70,37 @@ struct DisplayMesh: Sendable {
       }
     }
     guard response.faces.count % 12 == 0 else { throw Invalid() }
-    let ranges = try response.faces.withUnsafeBytes { raw -> [Range<Int>] in
-      if raw.isEmpty { return [0..<values.count] }
-      return try stride(from: 0, to: raw.count, by: 12).map { offset in
+    struct Body: Decodable { let id: String }
+    struct Bodies: Decodable { let bodies: [Body] }
+    guard let bodies = (try? JSONDecoder().decode(Bodies.self, from: response.manifest))?.bodies,
+      !bodies.isEmpty, bodies.allSatisfy({ !$0.id.isEmpty }),
+      Set(bodies.map(\.id)).count == bodies.count, !response.faces.isEmpty
+    else { throw Invalid() }
+    let ranges = try response.faces.withUnsafeBytes { raw -> [Draw] in
+      var next = 0
+      let ranges = try stride(from: 0, to: raw.count, by: 12).map { offset in
+        let body = Int(raw.loadUnaligned(fromByteOffset: offset, as: UInt32.self))
         let first = Int(raw.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self))
         let length = Int(raw.loadUnaligned(fromByteOffset: offset + 8, as: UInt32.self))
-        guard first % 3 == 0, length % 3 == 0, first + length <= values.count else {
+        guard bodies.indices.contains(body), first == next, length > 0,
+          first % 3 == 0, length % 3 == 0, first + length <= values.count
+        else {
           throw Invalid()
         }
-        return first..<(first + length)
+        next = first + length
+        return Draw(body: bodies[body].id, triangles: first..<next, edges: 0..<0)
       }
+      guard next == values.count, Set(ranges.map(\.body)) == Set(bodies.map(\.id)) else {
+        throw Invalid()
+      }
+      return ranges
     }
     var lines: [UInt32] = []
+    var grouped: [Draw] = []
     for range in ranges {
+      let firstEdge = lines.count
       var uses: [UInt64: Int] = [:]
-      for i in stride(from: range.lowerBound, to: range.upperBound, by: 3) {
+      for i in stride(from: range.triangles.lowerBound, to: range.triangles.upperBound, by: 3) {
         for (a, b) in [
           (values[i], values[i + 1]), (values[i + 1], values[i + 2]), (values[i + 2], values[i]),
         ] {
@@ -90,7 +111,18 @@ struct DisplayMesh: Sendable {
       for (key, count) in uses where count == 1 {
         lines += [UInt32(key >> 32), UInt32(truncatingIfNeeded: key)]
       }
+      if let previous = grouped.last, previous.body == range.body,
+        previous.triangles.upperBound == range.triangles.lowerBound
+      {
+        grouped[grouped.count - 1] = Draw(
+          body: range.body, triangles: previous.triangles.lowerBound..<range.triangles.upperBound,
+          edges: previous.edges.lowerBound..<lines.count)
+      } else {
+        grouped.append(
+          Draw(body: range.body, triangles: range.triangles, edges: firstEdge..<lines.count))
+      }
     }
     edges = lines.withUnsafeBytes { Data($0) }
+    draws = grouped
   }
 }

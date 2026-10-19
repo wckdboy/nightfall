@@ -12,6 +12,19 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   var program: PartProgram?
   var mesh: DisplayMesh?
   var bodies: [BodyMeasure] = []
+  var hiddenBodies: Set<String> = []
+  var allBodiesHidden: Bool {
+    !bodies.isEmpty && bodies.allSatisfy { hiddenBodies.contains($0.id) }
+  }
+  func setBodyVisible(_ id: String, to visible: Bool) {
+    guard bodies.contains(where: { $0.id == id }) else { return }
+    if visible { hiddenBodies.remove(id) } else { hiddenBodies.insert(id) }
+  }
+  func isolateBody(_ id: String) {
+    guard bodies.contains(where: { $0.id == id }) else { return }
+    hiddenBodies = Set(bodies.map(\.id).filter { $0 != id })
+  }
+  func showAllBodies() { hiddenBodies.removeAll() }
   var errors: [KernelDiagnostic] = []
   var drafts: [String: String] = [:]
   var notice = ""
@@ -54,7 +67,8 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
   }
   func start() {
     if program == nil,
-      let part = examples.first(where: { $0.lastPathComponent == "mounting_plate.nightfall" })
+      let part = examples.first(where: { $0.lastPathComponent == "asterion.nightfall" })
+        ?? examples.first(where: { $0.lastPathComponent == "mounting_plate.nightfall" })
     {
       load(part)
     }
@@ -93,6 +107,7 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
       documentID = UUID()
       savedSource = part.source
       bodies = []
+      hiddenBodies = []
       past = []
       future = []
       mesh = nil
@@ -232,6 +247,7 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
           guard self.revision == token, !Task.isCancelled else { return }
           self.mesh = result.0
           self.bodies = result.1
+          self.hiddenBodies.formIntersection(Set(result.1.map(\.id)))
           self.stale = false
         } catch {
           self.notice = error.localizedDescription

@@ -1,6 +1,11 @@
 # Modeling showcases
 
-Choose **Examples → Asterion** in the macOS client to build the radial cooling module.
+![Asterion rendered by Nightfall's native Metal viewport](../../docs/images/asterion.png)
+
+Preview 0.0.6 opens Asterion by default; choose **Examples → Asterion** to reopen it.
+Use each body's eye button to hide/show it, the viewfinder to isolate it, and **Show all
+bodies** to restore the complete model. Visibility affects the viewport only and resets
+when another document opens; source, mass measurements and Undo history stay unchanged.
 The source is [asterion.nightfall](asterion.nightfall): 28 features, eight live bodies and
 80 closed solids, including 64 individually rounded fins, a turned hub, a drilled rounded
 mount, mirrored stands, a guard ring and chamfered fasteners. These are exact B-rep solids;
@@ -9,6 +14,8 @@ the model has no assembly joints, materials, thermal analysis or simulation resu
 Edit `fin_count`, `fin_height`, `fin_radius` or `module_count`, then press Return. The
 single module is the default for visual inspection. Larger arrays deliberately stress
 the current engine and can exceed the native service's five-second deadline.
+An eight-module variant (640 solids / 217,142 triangles) was successfully displayed in
+the native client after #162; this is a measured case, not a guaranteed maximum.
 
 ```sh
 build/occt/tools/cli/nf build examples/modeling/asterion.nightfall --out out/asterion.step
@@ -28,3 +35,12 @@ Exact volume and area checks use an absolute tolerance of 1e-5 in mm units. The 
 20 reference-part baselines remain unchanged.
 
 [Rounded Plate](rounded_plate.nightfall) is a smaller example for exact corner fillets.
+
+Measured on local arm64 builds, 2026-10-19: the native client displayed eight modules
+(640 solids / 512 fins / 217,142 triangles). The headless evaluator and indexed mesher
+completed a 6×6 grid (2,880 solids / 976,966 triangles); cold rebuild took 18.130 s and
+meshing 4.936 s in one sample. Its benchmark exceeded the 45 s total timeout before
+completing C-bridge measurement. A 7×6 grid reaches the one-million-triangle display
+budget. These are tested cases, not a universal maximum, guaranteed latency or FPS claim.
+Larger headless source inputs are retained as `out/Nightfall-Asterion-6x6.nightfall` and
+`out/Nightfall-Asterion-7x6.nightfall`; use the CLI for models beyond the native deadline.

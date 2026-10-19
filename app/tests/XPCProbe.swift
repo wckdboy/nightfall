@@ -150,6 +150,8 @@ func restart(_ mode: String) throws {
       case "drafts": try await draftsIntegration(CommandLine.arguments[2])
       case "sheets": try sheetLifecycle()
       case "fillets": try await filletIntegration(CommandLine.arguments[2])
+      case "visibility":
+        try await visibilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "render":
         try await rendererIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "references": try references(CommandLine.arguments[2])

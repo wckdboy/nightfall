@@ -60,6 +60,44 @@ rejects the oversized final entry. SolidCraft `compound_disjoint_extrusions` in 
 at 4c30d944 informed the separated-tool approach; this is an independent OCCT implementation
 using exact bounds and copied-input history, with no new dependency or mesh-derived proof.
 
+Final #162 local gate after naming optimization: **773/773 passed in 167.08 seconds**,
+schema and hygiene green. The updated native client subsequently displayed eight modules
+(640 solids / 512 fins / 217,142 triangles), with successful live isolation/show-all and
+Undo to the original one-module geometry. The earlier four/eight disconnections remain
+recorded as pre-change observations under load, not a universal native-size limit.
+
+Additional bounded headless stress: 4×4 builds through the C bridge (1,280 solids /
+434,246 triangles). For 6×6, evaluator and indexed mesher succeed with 2,880 solids /
+25,956 faces / 976,966 triangles; V = 12958187.67480281 mm³. One sample measured cold
+18.130 s, mesh 4.936 s and warm 17.686 s. The benchmark's 45-second total timeout fired
+before a C-bridge result, so no bridge or native success is claimed for that grid. The
+7×6 input is rejected by the total mesh triangle/vertex budget. Inputs and JSONL logs
+remain under `out/Nightfall-Asterion-*` and `/tmp/nightfall-162-grid-*` respectively.
+
+## Native body inspection (#163)
+
+Preview 0.0.6 opens the Asterion showcase by default. Each body offers hide/show and
+isolate; show-all also recovers an entirely hidden viewport. Derived meshes coalesce
+triangle and boundary-edge draw ranges by request-local body ID. Invalid IDs, duplicate
+IDs and gaps/overlaps in face coverage are rejected before upload. Visibility changes
+neither IR nor dirty/Undo state, survives parameter rebuild for current IDs, stays coherent
+with last-valid geometry after failure, and resets when another document opens.
+
+The actual XPC/Metal `bundle.visibility` test verifies eight-body coverage, isolated
+pixels, fully hidden surfaces AND edges, byte-identical show-all rendering, unchanged IR,
+parameter/failure/Undo recovery and document switching. Focused native render/preview/
+fillet/visibility checks: **4/4 passed in 3.92 seconds**; strict Swift 6 format is clean.
+Rendered default and isolated-fin PNGs were opened and visually inspected, and live
+macOS screenshots of full and isolated eight-module models were inspected through CUA.
+The 6×6 model also exported successfully through the production CLI as exact STEP AP242:
+`out/Nightfall-Asterion-6x6.step` (90,628,475 bytes), independently of the native deadline.
+SolidCraft `ui.hide` / `ui.isolate` / `ui.showAll` at 4c30d944 informed the interaction;
+this implementation uses SwiftUI/Metal and existing transport, with no persisted change.
+
+Final #163 gate, including strict complete-body face coverage: **774/774 passed in
+171.81 seconds**, schema and hygiene green. Native mesh fixtures use the real body/face
+transport; missing tables, unrepresented bodies and overlapping ranges fail closed.
+
 ## Work items (build order)
 
 Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy/nightfall/milestone/3).
