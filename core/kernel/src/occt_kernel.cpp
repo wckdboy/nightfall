@@ -4,6 +4,7 @@
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
+#include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -19,11 +20,13 @@
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <Bnd_Box.hxx>
 #include <DESTEP_Parameters.hxx>
 #include <Message_Messenger.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
 #include <STEPControl_Writer.hxx>
+#include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Version.hxx>
 #include <StepData_StepModel.hxx>
 #include <TopExp.hxx>
@@ -161,18 +164,19 @@ class OcctKernel final : public IKernel {
   explicit OcctKernel(math::Tolerance tolerance) : tolerance_(tolerance) {
     std::ostringstream identity;
     identity.imbue(std::locale::classic());
-    identity << "occt/" << OCC_VERSION_COMPLETE
-             << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
-                "boolean=unified-tools-v1;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
-                "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
-                "fillet=copy-contour-vertex-boundaries-v1;"
-                "mesh=indexed-faces-copy-v1;"
-                "face-distance=trimmed-v1;step=ap242-mm-v1;"
-                "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
-                "mass-integrator=planar-gauss-v1;mass="
-             << detail::kMassRelativeAccuracy
-             << std::setprecision(std::numeric_limits<double>::max_digits10)
-             << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
+    identity
+        << "occt/" << OCC_VERSION_COMPLETE
+        << ";solid-v1;rigid=located-invariants-v1;mirror=oriented-copy-v1;"
+           "boolean=separated-copy-unified-v2;revolve=1;face-plane=uv-outward-v1;faces=analytic-v2;"
+           "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
+           "fillet=copy-contour-vertex-boundaries-v1;"
+           "mesh=indexed-faces-copy-v1;"
+           "face-distance=trimmed-v1;step=ap242-mm-v1;"
+           "profile=exact-lines-arcs-v3;names=2;mass-reference=shell-corner-v1;"
+           "mass-integrator=planar-gauss-v1;mass="
+        << detail::kMassRelativeAccuracy
+        << std::setprecision(std::numeric_limits<double>::max_digits10)
+        << ";linear=" << tolerance.linear << ";angular=" << tolerance.angular;
     identity_ = identity.str();
   }
   std::string_view identity() const noexcept override { return identity_; }
@@ -679,11 +683,19 @@ class OcctKernel final : public IKernel {
           fail("unknown boolean operation");
       }
       std::vector<detail::SnapshotPtr> sources;
+      std::vector<std::unique_ptr<BRepBuilderAPI_Copy>> copies;
       auto operand = [&](const ShapePtr& input) {
         const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
         if (!source) fail("boolean shape belongs to an incompatible backend");
-        if (std::ranges::find(sources, source) == sources.end()) sources.push_back(source);
-        return source->geometry;
+        auto found = std::ranges::find(sources, source);
+        if (found == sources.end()) {
+          auto copy = std::make_unique<BRepBuilderAPI_Copy>(source->geometry, true, false);
+          if (!copy->IsDone()) fail("boolean input copy failed");
+          sources.push_back(source);
+          copies.push_back(std::move(copy));
+          return copies.back()->Shape();
+        }
+        return copies[static_cast<std::size_t>(found - sources.begin())]->Shape();
       };
       TopTools_ListOfShape arguments, operands;
       arguments.Append(operand(target));
@@ -694,15 +706,50 @@ class OcctKernel final : public IKernel {
       operation.SetRunParallel(false);
       operation.SetToFillHistory(true);
       operation.SetFuzzyValue(tolerance_.linear);
-      operation.Build();
-      if (!operation.IsDone() || operation.HasErrors()) {
-        std::ostringstream errors;
-        operation.DumpErrors(errors);
-        fail("solid boolean failed: " + errors.str());
+      // Exact tolerance-enlarged boxes prove separation; overlapping boxes prove nothing.
+      // The compound path avoids intersection work but retains boolean seam unification.
+      bool separated = op == BooleanOp::kUnion;
+      std::vector<Bnd_Box> bounds;
+      if (separated)
+        for (const auto& source : sources) {
+          Bnd_Box box;
+          BRepBndLib::AddOptimal(source->geometry, box, false, true);
+          box.Enlarge(tolerance_.linear);
+          if (box.IsVoid() || box.IsOpen()) separated = false;
+          for (const auto& previous : bounds)
+            if (!box.IsOut(previous)) separated = false;
+          bounds.push_back(box);
+          if (!separated) break;
+        }
+      Handle(BRepTools_History) simplification;
+      TopoDS_Shape output_geometry;
+      if (separated) {
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+        // Adding a child clears its Free flag, so even compound construction uses copies.
+        for (const auto& copy : copies) builder.Add(compound, copy->Shape());
+        ShapeUpgrade_UnifySameDomain unifier(compound, true, true, true);
+        unifier.SetLinearTolerance(tolerance_.linear);
+        unifier.SetAngularTolerance(tolerance_.angular);
+        unifier.SetSafeInputMode(true);
+        unifier.AllowInternalEdges(false);
+        unifier.Build();
+        output_geometry = unifier.Shape();
+        simplification = unifier.History();
+        if (simplification.IsNull()) fail("separated union has no unification history");
+      } else {
+        operation.Build();
+        if (!operation.IsDone() || operation.HasErrors()) {
+          std::ostringstream errors;
+          operation.DumpErrors(errors);
+          fail("solid boolean failed: " + errors.str());
+        }
+        // Safe-input unification merges its own history into the boolean's history.
+        operation.SimplifyResult(true, true, tolerance_.angular);
+        output_geometry = operation.Shape();
       }
-      // Safe-input unification merges its own history into the boolean's history.
-      operation.SimplifyResult(true, true, tolerance_.angular);
-      auto shape = checked(operation.Shape());
+      auto shape = checked(std::move(output_geometry));
       OperationResult result{shape, {}, {}, shape->estimated_bytes()};
       TopTools_IndexedMapOfShape members;
       TopExp::MapShapes(shape->geometry, members);
@@ -713,15 +760,23 @@ class OcctKernel final : public IKernel {
         return detail::entity(shape, members(index));
       };
       TopTools_MapOfShape generated;
-      for (const auto& source : sources) {
+      for (std::size_t s = 0; s < sources.size(); ++s) {
+        const auto& source = sources[s];
         result.estimated_bytes += source->estimated_bytes();
         for (const auto& before : detail::entities(source)) {
-          const auto& geometry = static_cast<const detail::Subshape&>(*before).geometry;
-          History h{before, {}, {}, operation.IsDeleted(geometry)};
-          for (const auto& after : operation.Modified(geometry))
+          const auto& original = static_cast<const detail::Subshape&>(*before).geometry;
+          const auto recorded = copies[s]->ModifiedShape(original);
+          History h{
+              before,
+              {},
+              {},
+              separated ? simplification->IsRemoved(recorded) : operation.IsDeleted(recorded)};
+          for (const auto& after :
+               separated ? simplification->Modified(recorded) : operation.Modified(recorded))
             h.modified.push_back(member(after));
-          if (!h.deleted && h.modified.empty()) h.modified.push_back(member(geometry));
-          for (const auto& after : operation.Generated(geometry)) {
+          if (!h.deleted && h.modified.empty()) h.modified.push_back(member(recorded));
+          for (const auto& after :
+               separated ? simplification->Generated(recorded) : operation.Generated(recorded)) {
             if (after.ShapeType() != TopAbs_EDGE && after.ShapeType() != TopAbs_FACE) continue;
             h.generated.push_back(member(after));
             if (generated.Add(after))

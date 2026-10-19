@@ -6,6 +6,7 @@
 #include <functional>
 #include <limits>
 #include <set>
+#include <tuple>
 
 #include "geometry_cache.hpp"
 #include "model_inputs.hpp"
@@ -162,26 +163,33 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
                                const ProfileSources* sources = nullptr,
                                std::string_view sketch = {}) {
   std::vector<NamedEntity> result;
+  // A history entry can only match names from the same immutable input snapshot.
+  // Nested patterns otherwise scan every copy's history for every inherited name.
+  std::map<const kernel::Shape*, std::vector<const kernel::History*>> histories;
+  for (const auto& h : operation.history)
+    if (h.before) histories[h.before->owner().get()].push_back(&h);
+  std::map<std::tuple<std::string, std::string, std::string>, std::vector<std::size_t>> named;
   auto append = [&](const std::string& producer, const std::string& role,
                     const kernel::EntityPtr& entity, const std::string& from = "") {
     if (!entity || entity->owner() != operation.shape)
       fail("kernel", "naming history belongs to a different snapshot", "/inputs");
-    if (std::ranges::none_of(result, [&](const auto& name) {
-          return name.feature == producer && name.role == role && name.from == from &&
-                 name.entity->same_as(*entity);
-        }))
+    auto& candidates = named[{producer, role, from}];
+    if (std::ranges::none_of(
+            candidates, [&](const auto index) { return result[index].entity->same_as(*entity); })) {
+      candidates.push_back(result.size());
       result.push_back({producer, role, entity, from});
+    }
   };
   for (const auto* input : inputs) {
     for (const auto& name : input->names) {
-      const auto found = std::ranges::find_if(operation.history, [&](const auto& h) {
-        return h.before && h.before->same_as(*name.entity);
-      });
-      if (found == operation.history.end()) fail("kernel", "incomplete naming history", "/inputs");
-      if (!found->deleted && found->modified.empty())
+      const auto& candidates = histories[name.entity->owner().get()];
+      const auto found = std::ranges::find_if(
+          candidates, [&](const auto* h) { return h->before->same_as(*name.entity); });
+      if (found == candidates.end()) fail("kernel", "incomplete naming history", "/inputs");
+      if (!(*found)->deleted && (*found)->modified.empty())
         fail("kernel", "history omitted a surviving entity", "/inputs");
-      if (!found->deleted)
-        for (const auto& entity : found->modified)
+      if (!(*found)->deleted)
+        for (const auto& entity : (*found)->modified)
           append(name.feature, name.role, entity, name.from);
     }
   }
