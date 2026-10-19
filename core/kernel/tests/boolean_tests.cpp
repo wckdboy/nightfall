@@ -170,3 +170,72 @@ TEST_CASE("solid booleans validate operands and snapshots outlive their producin
   CHECK_THAT(result.shape->measures().volume, WithinAbs(500, 1e-7));
   history(result, {target, tool});
 }
+
+TEST_CASE("separated unions retain exact multi-axis copies complete history and source bytes",
+          "[separated-union]") {
+  auto kernel = make_occt_kernel().value();
+  std::vector<ShapePtr> sources;
+  for (int i = 0; i < 64; ++i)
+    sources.push_back(box(*kernel, {20. * i, 30. * (i % 2), 40. * (i % 3)}));
+  const auto saved = serialized(sources.front());
+  auto tools = std::vector<ShapePtr>(sources.begin() + 1, sources.end());
+  tools.push_back(sources.front());  // repeated handles do not duplicate geometry/history
+  const auto result = kernel->boolean_operation(sources.front(), tools, BooleanOp::kUnion).value();
+  const auto& m = result.shape->measures();
+  CHECK(m.solids == 64);
+  CHECK(m.faces == 384);
+  CHECK(m.edges == 768);
+  CHECK_THAT(m.volume, WithinAbs(64000, 1e-6));
+  CHECK_THAT(m.area, WithinAbs(38400, 1e-6));
+  CHECK_THAT(m.centroid.x, WithinAbs(635, 1e-8));
+  history(result, sources);
+  CHECK(result.generated.empty());
+  CHECK(serialized(sources.front()) == saved);
+  RigidTransform placement;
+  placement.translation = {7, -3, 11};
+  const auto moved = kernel->transform(result.shape, placement).value();
+  CHECK_THAT(moved.shape->measures().volume, WithinAbs(64000, 1e-6));
+  CHECK_THAT(moved.shape->measures().centroid.x, WithinAbs(642, 1e-8));
+  const auto mesh = kernel->tessellate(result.shape, {}).value();
+  CHECK(mesh.faces.size() == 384);
+  CHECK(mesh.indices.size() == 64 * 36);
+  kernel.reset();
+  history(result, sources);
+  CHECK(serialized(sources.front()) == saved);
+}
+
+TEST_CASE(
+    "separated unions unify circular seams and conservatively handle nested bounds and contact",
+    "[separated-union]") {
+  auto kernel = make_occt_kernel().value();
+  const auto ring = [&](Vec3 origin) {
+    const std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 10)},
+                                                      {make_circle(Vec2{}, 8)}};
+    return kernel->extrude({{origin}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 2}})
+        .value()
+        .shape;
+  };
+  const auto a = ring({}), b = ring({30, 0, 0});
+  const auto saved_a = serialized(a), saved_b = serialized(b);
+  const auto united = kernel->boolean_operation(a, {b}, BooleanOp::kUnion).value();
+  CHECK(united.shape->measures().solids == 2);
+  CHECK(united.shape->measures().faces == 8);  // match boolean same-domain unification
+  CHECK_THAT(united.shape->measures().volume, WithinAbs(144 * std::numbers::pi, 1e-6));
+  CHECK_THAT(united.shape->measures().area, WithinAbs(288 * std::numbers::pi, 1e-6));
+  history(united, {a, b});
+  const auto nested = box(*kernel, {-1, -1, 0}, {2, 2, 2});
+  const auto inside_hole = kernel->boolean_operation(a, {nested}, BooleanOp::kUnion).value();
+  CHECK(inside_hole.shape->measures().solids == 2);
+  CHECK_THAT(inside_hole.shape->measures().volume, WithinAbs(72 * std::numbers::pi + 8, 1e-6));
+  history(inside_hole, {a, nested});
+  for (const double gap : {0., 1e-7, -1.}) {
+    const auto left = box(*kernel), right = box(*kernel, {10 + gap, 0, 0});
+    const auto result = kernel->boolean_operation(left, {right}, BooleanOp::kUnion).value();
+    CHECK(result.shape->measures().solids == 1);
+    CHECK(result.shape->measures().faces == 6);
+    CHECK_THAT(result.shape->measures().volume, WithinAbs(2000 + std::min(0., gap) * 100, 1e-3));
+    history(result, {left, right});
+  }
+  CHECK(serialized(a) == saved_a);
+  CHECK(serialized(b) == saved_b);
+}

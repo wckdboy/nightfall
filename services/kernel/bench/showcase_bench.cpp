@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
         require(triangles < settings.max_triangles, "total mesh budget exhausted");
         settings.max_triangles -= triangles;
         const auto mesh = backend->tessellate(body.shape, settings);
-        require(mesh.has_value(), id + ": meshing failed");
+        if (!mesh) throw std::runtime_error(id + ": " + mesh.error().message);
         require(mesh->faces.size() == m.faces, "incomplete mesh face coverage");
         const auto origin = mesh->vertices.front().position;
         for (std::size_t i = 0; i < mesh->indices.size(); i += 3) {

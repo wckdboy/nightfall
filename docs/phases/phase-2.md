@@ -35,6 +35,31 @@ the 64 MiB estimated admission budget: 27 rather than 28 cache hits, with repeat
 union work on warm builds. The private `nf_showcase_bench` makes these costs reproducible.
 Kernel performance and client inspection improvements will be tracked separately.
 
+## Separated-union correctness and publication cost (#162)
+
+New regressions exposed input-root `Free` flag changes in separated OCCT unions despite
+non-destructive mode (4 failures / 15,044 assertions before the change). Boolean operands
+are now copied before any builder can attach them. Unions with pairwise-separated exact
+bounds enlarged by shape and kernel tolerances avoid intersection work; touching, overlapping
+and nested bounds keep the general boolean path. Both paths retain same-domain seam
+unification, full closed-solid validation, mass integration and complete current history.
+The backend identity changes so old geometry cannot bypass the corrected behavior.
+
+Naming publication groups histories by immutable owner and deduplicates within semantic
+producer/role/source groups. Output order and matching semantics are unchanged. All 45
+focused evaluator cases pass (15,410 assertions); the two new kernel cases pass 15,044
+assertions, including circular seams, 64 inputs, duplicate handles, near contact, nesting,
+retained readers, downstream transforms and mesh coverage. ASan/UBSan checks also pass
+for the two kernel cases and showcase; the dynamically linked OCCT library is Release.
+
+Indicative three-sample eight-module median cold/warm rebuild changed from 3758.349 /
+3356.905 ms to 2724.110 / 2345.510 ms. Cold/warm C bridge changed from 4943.289 / 4738.721
+ms to 4045.950 / 3721.084 ms (one sample each). Measurements are local and subject to load;
+volume, area, 640 solids, 5,768 faces and 217,142 triangles remain identical. The cache still
+rejects the oversized final entry. SolidCraft `compound_disjoint_extrusions` in `ops.rs`
+at 4c30d944 informed the separated-tool approach; this is an independent OCCT implementation
+using exact bounds and copied-input history, with no new dependency or mesh-derived proof.
+
 ## Work items (build order)
 
 Tracked as GitHub issues in the [`Phase 2` milestone](https://github.com/wckdboy/nightfall/milestone/3).
