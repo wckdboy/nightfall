@@ -162,6 +162,39 @@ An additional oblique-cylinder volume-integration stall is tracked separately in
 [#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
 This surface-area change does not resolve that existing volume path.
 
+## Sweep document and native integration (#179)
+
+The existing v1 sweep operation now binds the current profile and named open sketch path,
+prepares exact curves through the shared adapter, and calls the typed kernel from #178.
+Path/profile hashes participate in dependency keys; current source IDs rebind on publication.
+The existing new/join/cut/intersect, suppression, rollback and bounded-cache paths apply.
+Selector paths and closed/point entities fail at their input pointers. The evaluator identity
+is `evaluator/29;roles/6`; there is no schema, dependency or public AI-tool expansion.
+
+`swept_conduit.nightfall` adds a five-feature cubic spline with an inflection, outer sweep
+and swept through-bore cut. The default independent arc length is 212.2747402664 mm,
+V=50016.0573422607 mm³ and A=33815.2771262122 mm². Positive independent centerline quadrature
+checks volume/area within 1e-3 at two reach/lift settings. Seven focused evaluator cases /
+255 assertions also cover straight/arc mass, current ancestry, cache eviction, path/profile
+edits and renames, planar cap selectors, all result modes, precise errors and recovery.
+The complete evaluator ASan/UBSan suite passes 367 cases / 444301 assertions; the bridge
+passes 12 cases / 65400 assertions, with halt-on-error and zero sanitizer diagnostics.
+
+The actual `bundle.sweeps` test passes in 5.82 s through XPC/client/Metal, rendering baseline
+and edited conduit, checking exact mass, clean Undo, bore suppression, invalid-edit
+last-valid recovery and unchanged example bytes. Its real render is retained at
+`docs/images/swept-conduit.png` and has been visually inspected. In-place GUI testing after
+switching among older app copies exposed two kernel-service disconnects without a returned
+hung-feature packet; no root cause or universal GUI reliability is inferred from probe
+success. The complete local gate passes 818/818 in 187.70 s (bundle.sweeps 5.44 s).
+The extracted 0.0.9 app successfully displays the conduit (23494 triangles), a batch
+reach/lift edit (26622 triangles) and clean Undo, then the loft/waist edit/clean Undo.
+Returning from loft to conduit later disconnects again; reliable document-switch sequences
+remain #171, rather than a claimed fix. The archive is byte-identical to the validated
+built app, with strict signatures/dependency closure, 26 OCCT dylibs and 24 examples.
+This is a visual development preview, not a production/MVP sign-off. Existing watchdog/
+deadline limits remain unchanged; no retry masking is introduced.
+
 ## Planar path sweep kernel (#178)
 
 Accepted RFCs 0005/0007 cover the typed v1 sweep boundary. `IKernel::sweep` accepts a

@@ -701,6 +701,26 @@ std::expected<kernel::Loft, ir::Error> prepare_loft(const Value& inputs,
   });
 }
 
+std::expected<kernel::Sweep, ir::Error> prepare_sweep(const Value& inputs, const Sketch& profile,
+                                                      const Sketch& path, ProfileSources* sources) {
+  return guarded([&] {
+    const auto& reference = field(inputs, "path");
+    if (!reference.find("sketch")) fail("/path", "selector sweep paths are not implemented");
+    const auto& id = *field(reference, "entity").if_string();
+    kernel::Sweep sweep{profile.plane, {}, path.plane, {}};
+    for (std::size_t i = 0; i < path.segment_entities.size(); ++i)
+      if (path.segment_entities[i] == id) sweep.path.push_back(path.segments.at(i));
+    if (sweep.path.size() != 1)
+      fail("/path/entity", "sweep path must name one whole open line, arc or spline entity");
+    auto regions = prepare_regions(inputs, profile, sources);
+    if (!regions) throw regions.error();
+    if (regions->size() != 1 || !regions->front().holes.empty())
+      fail("/profile", "sweep requires one filled region without holes");
+    sweep.region = std::move(regions->front());
+    return sweep;
+  });
+}
+
 std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
     const Value& inputs, const Sketch* axis_sketch, const kernel::Axis* selected_axis) {
   return guarded([&] {

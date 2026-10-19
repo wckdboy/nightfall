@@ -42,23 +42,22 @@ struct Evaluation {
 };
 
 /// Per-document, serialized service evaluator (RFC 0007). The borrowed kernel must outlive it.
-/// Parses/validates before kernel work; then evaluates sketches, B-rep extrusions/revolutions/lofts
-/// (new/join/cut/intersect), rigid transforms, linear/circular body patterns, mirrors and booleans.
-/// Patterns/mirrors union translated/rotated/reflected copies into each seed body. Counts include
-/// seeds; mirrors add one reflection per seed. Copied faces retain inherited names and gain
-/// the feature's local "instance" role. All target bodies publish atomically; private copy
-/// histories remain in bounded cache entries.
-/// Face-attached sketches and mirror planes require one analytic planar face, bind all current
-/// candidate bodies and query their oriented frame on cache hits too. Booleans transfer
-/// producer candidates to their surviving body, retaining tools as candidates when requested.
-/// Planar filters use signed normals; parallel/perpendicular describe the plane relative to
-/// a direction (sine tolerance 1e-9). Nonzero directions are normalized; curved faces do not
-/// match. All filter conditions must hold. A plane always requires exactly one match.
-/// near compares trimmed-face distances after other filters, across all candidate bodies.
-/// Faces within 1e-6 mm of the minimum all survive; ties remain selector_count. near alone
-/// does not imply a planar filter. Each distance is queried/counted before cache reuse.
-/// any unions by snapshot/entity identity; except subtracts before this node's filters.
-/// Every branch binds dependencies, including excluded/empty branches. Each node checks
+/// Parses/validates before kernel work; then evaluates sketches, B-rep
+/// extrusions/revolutions/lofts/sweeps (new/join/cut/intersect), rigid transforms, linear/circular
+/// body patterns, mirrors and booleans. Patterns/mirrors union translated/rotated/reflected copies
+/// into each seed body. Counts include seeds; mirrors add one reflection per seed. Copied faces
+/// retain inherited names and gain the feature's local "instance" role. All target bodies publish
+/// atomically; private copy histories remain in bounded cache entries. Face-attached sketches and
+/// mirror planes require one analytic planar face, bind all current candidate bodies and query
+/// their oriented frame on cache hits too. Booleans transfer producer candidates to their surviving
+/// body, retaining tools as candidates when requested. Planar filters use signed normals;
+/// parallel/perpendicular describe the plane relative to a direction (sine tolerance 1e-9). Nonzero
+/// directions are normalized; curved faces do not match. All filter conditions must hold. A plane
+/// always requires exactly one match. near compares trimmed-face distances after other filters,
+/// across all candidate bodies. Faces within 1e-6 mm of the minimum all survive; ties remain
+/// selector_count. near alone does not imply a planar filter. Each distance is queried/counted
+/// before cache reuse. any unions by snapshot/entity identity; except subtracts before this node's
+/// filters. Every branch binds dependencies, including excluded/empty branches. Each node checks
 /// one/some(default)/any after filtering; face descriptions are shared within a feature only.
 /// Transform/circular-pattern/revolution axes require one analytic cylindrical face. Its located
 /// parameter Z supplies the unit direction, independent of face orientation; coaxial patches
@@ -73,6 +72,9 @@ struct Evaluation {
 /// Lofts bind 2..32 ordered profile sketches, each selecting one filled region without holes.
 /// Parallel section planes and backend work bounds apply; rails are unsupported. Side ancestry
 /// retains every section's current sketch/entity IDs. Flat NURBS sides are not fitted to planes.
+/// Sweeps bind one selected filled region without holes and one open sketch line/arc/spline.
+/// Preserve the authored path direction and kernel's fixed planar binormal; selector paths,
+/// spatial paths, corners, closed paths and uncertified spans are explicit errors.
 /// Booleans retire tools unless
 /// keep_tools is true. Sketches verify line orientation, equal lengths/radii and radius
 /// constraints, point coincidence/distance, midpoint and symmetry without moving coordinates.

@@ -261,7 +261,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/28;roles/6;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/29;roles/6;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -270,8 +270,8 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   bool rolled_back = false;
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
-    const bool profile_feature =
-        feature.type == "extrude" || feature.type == "revolve" || feature.type == "loft";
+    const bool profile_feature = feature.type == "extrude" || feature.type == "revolve" ||
+                                 feature.type == "loft" || feature.type == "sweep";
     const bool pattern_feature = feature.type == "pattern_linear" ||
                                  feature.type == "pattern_circular" || feature.type == "mirror";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
@@ -314,7 +314,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         dependencies.emplace(pointer, *upstream.hash);
         return sketches.at(id);
       };
-      std::shared_ptr<const Output> sketch, axis_sketch;
+      std::shared_ptr<const Output> sketch, axis_sketch, path_sketch;
       std::vector<std::shared_ptr<const Output>> loft_sketches;
       std::vector<std::string> source_sketches;
       std::optional<BodyPattern> pattern;
@@ -340,6 +340,12 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           const auto& id = string(*inputs.find("profile")->find("sketch"));
           source_sketches.push_back(id);
           sketch = bind_sketch(id, "/inputs/profile/sketch");
+        }
+        if (feature.type == "sweep") {
+          const auto& path = *inputs.find("path");
+          if (!path.find("sketch"))
+            fail("kernel", "selector sweep paths are not implemented", "/inputs/path");
+          path_sketch = bind_sketch(string(*path.find("sketch")), "/inputs/path/sketch");
         }
         for (const auto* mode : {"join", "cut", "intersect"}) {
           if (!inputs.find("result")->find(mode)) continue;
@@ -620,6 +626,12 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
               const auto operation = take(prepare_loft(inputs, sections, &built->sources));
               ++result.kernel_calls;
               return take(state_->kernel.loft(operation));
+            }
+            if (feature.type == "sweep") {
+              const auto operation = take(prepare_sweep(
+                  inputs, *sketch->sketch, *path_sketch->sketch, &built->sources.front()));
+              ++result.kernel_calls;
+              return take(state_->kernel.sweep(operation));
             }
             if (feature.type == "extrude") {
               const auto operation =
