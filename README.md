@@ -36,7 +36,12 @@ Only directories with real content exist; the rest arrive with their phase.
 
 ## Building
 
-Requirements: macOS 15+ on Apple Silicon, Xcode 26+, CMake 3.28+, Ninja.
+Requirements: macOS 15+ on Apple Silicon, Xcode 26+, CMake 3.28+, Ninja, rustup.
+`rustup show` installs the exact Rust toolchain and components in `rust-toolchain.toml`.
+The std-only `nightfall-math` crate starts the [Rust migration](docs/rfcs/0008-rust-kernel.md)
+with checked B-spline basis/derivative evaluation. The production client still uses the
+existing C++ engine while parity gates are built. `tools/check.sh` checks both languages;
+Rust dependency resolution is locked/offline and artifacts go to `build/rust/`.
 
 Build the native visual preview with the production, dynamically linked OCCT kernel:
 

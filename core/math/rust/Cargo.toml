@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "nightfall-math"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[example]]
+name = "nf-rust-basis-probe"
+path = "tests/support/basis_probe.rs"
