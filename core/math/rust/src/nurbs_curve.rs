@@ -35,7 +35,7 @@ pub type NurbsCurve2 = NurbsCurve<2>;
 /// Three-dimensional NURBS curve.
 pub type NurbsCurve3 = NurbsCurve<3>;
 
-fn normalize(weights: &mut [f64]) -> Result<bool, MathError> {
+pub(crate) fn normalize(weights: &mut [f64]) -> Result<bool, MathError> {
     if weights.iter().any(|w| !w.is_finite() || *w <= 0.0) {
         return Err(MathError::InvalidWeight);
     }

@@ -48,6 +48,11 @@ if(NF_BUILD_TESTS)
       $<TARGET_FILE:nf_rust_curve_oracle> ${CMAKE_SOURCE_DIR})
   add_executable(nf_rust_curve_bench tests/rust_curve_bench.cpp)
   target_link_libraries(nf_rust_curve_bench PRIVATE nf::math nf::warnings)
+  add_executable(nf_rust_surface_oracle tests/rust_surface_oracle.cpp)
+  target_link_libraries(nf_rust_surface_oracle PRIVATE nf::math nf::warnings)
+  add_test(NAME math.rust-surface-differential
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/rust_surface_differential.py
+      $<TARGET_FILE:nf_rust_surface_oracle> ${CMAKE_SOURCE_DIR})
 endif()
 
 # Benchmark for the Phase 1 gate (cubic evaluation ≤ 50 ns); built, not run by ctest.
