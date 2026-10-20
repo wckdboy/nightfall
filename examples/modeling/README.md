@@ -1,5 +1,42 @@
 # Modeling showcases
 
+## Nocturne manipulator
+
+![Nocturne rendered by Nightfall's real XPC/Metal client](../../docs/images/nocturne.png)
+
+[nocturne.nightfall](nocturne.nightfall) combines 71 authored features into 21 live bodies
+and 106 closed solids: a turned/drilled pedestal, 32 rounded cooling fins, three drilled
+joint housings with 48 mirrored socket heads, twin elliptic upper-link lofts, a tapered
+forearm loft, two cubic-spline harness runs with mounting blocks, and a rounded, drilled
+gripper with two hooked jaws. Its seven parameters control link lengths, shoulder height,
+waist scale, jaw gap, fin count and cable radius. This is a posed multibody geometry model;
+assembly constraints, motion, collision, actuators and load/strength analysis are unverified.
+
+The authored shoulder/elbow/wrist centers are (0,0,110), (150,0,310) and (318,0,184) mm.
+Fixed orthogonal section frames set the pose; these placements are not solved robot joints.
+The summed component volume is 2408145.026752167 mm³ and area 390313.091946063 mm². The display
+has 201808 triangles. Every component family's volume has an independent primitive,
+frustum, quadratic-section or positive Bezier-length integral oracle, with 1e-5 mm³
+absolute tolerance (1e-3 for swept harnesses). The exact STEP round-trip retains all 106
+solids, and indexed-mesh volume differs by less than 1%.
+
+The actual native test builds the full model, changes `link_waist` to 0.95 and `jaw_gap`
+to 34 mm together, checks a changed render, then undoes to byte-identical clean source and
+original component measurements. The image above is the real Metal render. Current source
+builds include **Examples → Nocturne**; preview 0.0.10 can open the saved part with **Open…**.
+The local `out/Nightfall-Nocturne.json` companion has identical source bytes.
+
+```sh
+build/occt/tools/cli/nf build examples/modeling/nocturne.nightfall --out out/Nightfall-Nocturne.step
+ctest --preset occt -R 'Nocturne|^bundle.nocturne$' -V
+```
+
+This geometry-only showcase advances [#169](https://github.com/wckdboy/nightfall/issues/169);
+it does not complete the verified robotic-arm milestone. Review/evidence:
+[#183](https://github.com/wckdboy/nightfall/issues/183).
+
+## Asterion cooling module
+
 ![Asterion rendered by Nightfall's native Metal viewport](../../docs/images/asterion.png)
 
 Preview 0.0.7 opens Asterion by default; choose **Examples → Asterion** to reopen it.
