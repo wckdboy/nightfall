@@ -27,6 +27,28 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Native rigid transform and complete history boundary (#207)
+
+Accepted RFC 0008's next ownership operation is split under delivery #206. The private
+C adapter now rotates exact immutable solids about an explicit axis/origin, then translates,
+and exposes complete native before/modified/generated/deleted history. Results retain the
+backend and all history snapshots after source/context teardown. Foreign contexts reject
+before geometry access; null/misaligned records and invalid indices clear outputs. No
+native exception, C++ container or OCCT type crosses the ABI. Its macOS exports are the
+eleven declared C functions; native validation/tolerances and paired releases stay binding.
+
+Five of twenty-six checks fail against the stub. Implemented C17/C++/existing Rust checks
+pass **26/26**, including analytic/independent-reference offset-axis/nonunit/identity/repeated
+transforms, located measures, source immutability, all six faces/twelve edges, retained
+history readers and rejected-input cleanup. The exact box stays **6000 mm³ / 2200 mm²**;
+rotation followed by translation moves its centroid to **[-3, 5, 15] mm**, or **[2, 4, 19] mm**
+about the tested offset axis. Native ASan/UBSan passes **26/26 in 25.54 s**; Rust and installed
+OCCT remain uninstrumented. The full gate passes **855/855 in 239.76 s**, plus Rust math,
+native/kernel Debug/Release checks, schema and hygiene. Logs:
+`/tmp/nightfall-207-{red,focused,asan,check}.log`.
+Safe Rust transform/history decoding and typed Kernel policy are separate child slices.
+No production default/client/IR change, full Rust engine, MVP or #185/#195 fix is claimed.
+
 ## Typed Rust kernel extrusion policy (#204)
 
 The `nightfall-kernel` crate exposes the initial headless typed `Kernel` with unsafe code
