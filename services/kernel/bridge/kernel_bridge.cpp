@@ -3,7 +3,9 @@
 #include "kernel_bridge.h"
 #include "evaluator.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <unordered_map>
 
 using namespace nf;
 using namespace nf::kernel_service;
@@ -84,6 +86,18 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
       if (!mesh) fail(mesh.error().code, id + ": " + mesh.error().message);
       const auto base_vertex = static_cast<std::uint32_t>(result->vertices.size());
       const auto base_index = static_cast<std::uint32_t>(result->indices.size());
+      struct NameGroup {
+        const kernel::Entity* entity;
+        std::vector<std::size_t> names;
+      };
+      std::vector<NameGroup> groups;
+      std::unordered_map<const kernel::Entity*, std::size_t> group_indices;
+      for (std::size_t i = 0; i < body.names.size(); ++i) {
+        const auto* entity = body.names[i].entity.get();
+        auto [group, inserted] = group_indices.try_emplace(entity, groups.size());
+        if (inserted) groups.push_back({entity, {}});
+        groups[group->second].names.push_back(i);
+      }
       for (const auto& v : mesh->vertices)
         result->vertices.push_back(
             {{v.position.x, v.position.y, v.position.z}, {v.normal.x, v.normal.y, v.normal.z}});
@@ -91,9 +105,15 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
       for (const auto& face : mesh->faces) {
         result->faces.push_back({static_cast<std::uint32_t>(bodies.size()),
                                  base_index + face.first_index, face.index_count});
+        std::vector<std::size_t> matched;
+        for (const auto& group : groups)
+          if (group.entity->same_as(*face.face))
+            matched.insert(matched.end(), group.names.begin(), group.names.end());
+        // Distinct handles can name the same topology. Keep every alias in its original order.
+        std::ranges::sort(matched);
         Array names;
-        for (const auto& name : body.names) {
-          if (!name.entity->same_as(*face.face)) continue;
+        for (const auto index : matched) {
+          const auto& name = body.names[index];
           Object value{{"feature", name.feature}, {"role", name.role}};
           if (!name.from.empty()) value.push_back({"from", name.from});
           names.emplace_back(std::move(value));

@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <typeinfo>
 
 namespace nf::kernel::detail {
 namespace {
@@ -418,8 +419,12 @@ EntityKind Subshape::kind() const noexcept {
   return geometry.ShapeType() == TopAbs_FACE ? EntityKind::kFace : EntityKind::kEdge;
 }
 bool Subshape::same_as(const Entity& other) const noexcept {
-  const auto* rhs = dynamic_cast<const Subshape*>(&other);
-  return rhs && snapshot == rhs->snapshot && geometry.IsSame(rhs->geometry);
+  if (this == &other) return true;
+  // Subshape is final: an exact dynamic type check is equivalent to dynamic_cast,
+  // avoiding a hierarchy traversal in the large naming/history equality scans.
+  if (typeid(other) != typeid(Subshape)) return false;
+  const auto& rhs = static_cast<const Subshape&>(other);
+  return snapshot == rhs.snapshot && geometry.IsSame(rhs.geometry);
 }
 EntityPtr entity(SnapshotPtr owner, const TopoDS_Shape& geometry) {
   auto result = std::make_shared<Subshape>();

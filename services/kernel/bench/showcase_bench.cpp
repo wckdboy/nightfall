@@ -131,10 +131,21 @@ int main(int argc, char** argv) {
       std::size_t bytes = 0;
       const auto manifest = ir::json::parse(nf_result_json(result.get(), &bytes)).value();
       require(manifest.find("errors")->if_array()->empty(), "bridge returned errors");
+      std::size_t vertices = 0, indices = 0;
+      const auto* vertex_data = nf_result_vertices(result.get(), &vertices);
+      const auto* index_data = nf_result_indices(result.get(), &indices);
       emit({{"kind", "bridge"},
             {"mode", mode},
             {"ms", ms},
-            {"manifest_bytes", static_cast<double>(bytes)}});
+            {"manifest_bytes", static_cast<double>(bytes)},
+            {"face_names_sha256",
+             ir::sha256(ir::json::canonical(*manifest.find("face_names"))).hex()},
+            {"vertices_sha256", ir::sha256({reinterpret_cast<const char*>(vertex_data),
+                                            vertices * sizeof(*vertex_data)})
+                                    .hex()},
+            {"indices_sha256",
+             ir::sha256({reinterpret_cast<const char*>(index_data), indices * sizeof(*index_data)})
+                 .hex()}});
     }
   } catch (const std::exception& error) {
     std::fprintf(stderr, "showcase benchmark failed: %s\n", error.what());

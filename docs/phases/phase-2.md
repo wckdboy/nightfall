@@ -45,6 +45,30 @@ combined-backend CI fails the existing eight-module native deadline in `bundle.s
 ([run](https://github.com/wckdboy/nightfall/actions/runs/39487655639)); five/seven-second
 deadlines and the fixture stay unchanged. This failure is retained as evidence under #185.
 
+The updated candidate reproduces that deadline in combined-backend
+[run 39495582075](https://github.com/wckdboy/nightfall/actions/runs/39495582075), while the
+OCCT job passes. Sampling the unchanged eight-module fixture identifies repeated entity
+comparisons in naming/history and manifest alias matching. Private history lookup now
+groups by owner/kind and memoizes shared handles; final native Subshape equality uses an
+equivalent exact-type check. The bridge compares each shared handle once and restores
+original alias order. No interface, geometry, validation, integration accuracy, cache
+budget, deadline, retry or fixture changes are involved.
+
+Three quiet Release samples measure median cold/warm evaluation **1118.853/967.931 →
+1019.162/850.235 ms**; median mesh is unchanged (**472.861/463.880 ms**). Separate cold/warm
+bridge calls change **2040.265/1778.394 → 1534.798/1344.579 ms**. The complete vertex/index
+buffers and ordered face-name arrays have identical SHA-256 fingerprints before/after;
+all **640 solids / 5768 faces / 217142 triangles**, exact measures and cache counts match.
+The real XPC/Metal 1→8→4→8/Undo/document-switch regression and Nocturne pass **2/2 in
+12.51 s**. Eight-module edits take **1515.530/1596.870 ms**, four modules **717.298 ms**;
+Nocturne loads in **2106.901 ms** after Undo and **2143.286 ms** cold. These local timings
+do not establish CI or GUI reliability. Sanitizer/final checks and fresh CI remain merge
+gates; #185 remains open. Logs: `/tmp/nightfall-223-{eight.sample.txt,eight-before.jsonl,
+eight-grouped.jsonl,naming-native.log,naming-asan.log}`.
+The scoped final native ASan/UBSan kernel/evaluator/bridge/adapter gate passes
+**564/564 in 203.51 s**, including retained Rust callers. Nightfall code is instrumented;
+Rust/installed OCCT remain uninstrumented. The complete local gate is rerunning before merge.
+
 ## Rust kernel and engine migration decision (#188)
 
 The maintainer requests Rust for Nightfall's own kernel/engine implementation.

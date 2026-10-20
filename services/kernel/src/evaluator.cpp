@@ -7,6 +7,7 @@
 #include <limits>
 #include <set>
 #include <tuple>
+#include <unordered_map>
 
 #include "geometry_cache.hpp"
 #include "model_inputs.hpp"
@@ -163,11 +164,15 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
                                const std::vector<ProfileSources>* sources = nullptr,
                                const std::vector<std::string>& sketches = {}) {
   std::vector<NamedEntity> result;
-  // A history entry can only match names from the same immutable input snapshot.
+  // A history entry can only match the same snapshot and topology kind.
   // Nested patterns otherwise scan every copy's history for every inherited name.
-  std::map<const kernel::Shape*, std::vector<const kernel::History*>> histories;
+  using HistoryKey = std::pair<const kernel::Shape*, kernel::EntityKind>;
+  std::map<HistoryKey, std::vector<const kernel::History*>> histories;
   for (const auto& h : operation.history)
-    if (h.before) histories[h.before->owner().get()].push_back(&h);
+    if (h.before) histories[{h.before->owner().get(), h.before->kind()}].push_back(&h);
+  // Aliases often share one entity handle. Resolve its history only once per operation.
+  std::unordered_map<const kernel::Entity*, const kernel::History*> matched;
+  matched.reserve(operation.history.size());
   std::map<std::tuple<std::string, std::string, std::string>, std::vector<std::size_t>> named;
   auto append = [&](const std::string& producer, const std::string& role,
                     const kernel::EntityPtr& entity, const std::string& from = "") {
@@ -182,14 +187,19 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
   };
   for (const auto* input : inputs) {
     for (const auto& name : input->names) {
-      const auto& candidates = histories[name.entity->owner().get()];
-      const auto found = std::ranges::find_if(
-          candidates, [&](const auto* h) { return h->before->same_as(*name.entity); });
-      if (found == candidates.end()) fail("kernel", "incomplete naming history", "/inputs");
-      if (!(*found)->deleted && (*found)->modified.empty())
+      auto [match, inserted] = matched.try_emplace(name.entity.get(), nullptr);
+      if (inserted) {
+        const auto& candidates = histories[{name.entity->owner().get(), name.entity->kind()}];
+        const auto found = std::ranges::find_if(
+            candidates, [&](const auto* h) { return h->before->same_as(*name.entity); });
+        if (found == candidates.end()) fail("kernel", "incomplete naming history", "/inputs");
+        match->second = *found;
+      }
+      const auto* history = match->second;
+      if (!history->deleted && history->modified.empty())
         fail("kernel", "history omitted a surviving entity", "/inputs");
-      if (!(*found)->deleted)
-        for (const auto& entity : (*found)->modified)
+      if (!history->deleted)
+        for (const auto& entity : history->modified)
           append(name.feature, name.role, entity, name.from);
     }
   }
