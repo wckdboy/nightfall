@@ -1,6 +1,6 @@
 # RFC 0009: Kernel-first geometry, assemblies and simulation program
 
-- **Status:** Draft
+- **Status:** Review
 - **Author(s):** The Nightfall Authors (agent-authored proposal)
 - **Phase:** 2 (program definition; later implementation gates proposed below)
 - **Created:** 2026-10-20
@@ -40,7 +40,8 @@ Current evidence at integration candidate `d287f14`:
   for persistent topology, not evidence that every topology-changing edit is solved.
 - The full local integration gate passes **884/884 in 250.54 s**; scoped native
   ASan/UBSan passes **564/564 in 203.51 s**. Rust and installed OCCT are uninstrumented.
-  Remote integration checks remain separate. #185 latency and #195 diagnostics stay open.
+  All integration CI passes; PR #224 is squash-merged as `069b49e`. #185 latency and
+  #195 diagnostics stay open.
 - Placed component solids exist. Assembly constraints, dynamics, volume analysis meshes,
   structural/thermal solvers and CFD are not implemented. #169 and #194 record ambitions.
 
@@ -240,7 +241,30 @@ Sparse parallel assembly, preconditioners, partitioning, adaptive refinement and
 execution need their own accuracy/scaling evidence; adding threads is not a solver design.
 AI and any future client consume the same typed, validated headless contracts.
 
-### 12. Quality corpus and performance
+### 12. Precise, compact factual feedback to AI
+
+Every build/query must be usable by an AI to verify a change. Bind feedback to the exact
+request, effective source/revision, solver/configuration and result/artifact digests.
+Return round-trip numerical precision, explicit units and tolerance/uncertainty scope;
+geometric comparison tolerance is not a certified volume/area error bound. Unknown
+quantities are explicit, never fabricated zeros or a generic successful validation flag.
+
+Provide measured body geometry, topology, validity/admission basis, resolved reference
+cardinality/lineage, feature diagnostics and build/cache/timing evidence. For assemblies
+and studies, add DOF/constraint residuals, clearances, mesh quality/coverage, solver residuals,
+conservation, quantities of interest and convergence only when actually computed.
+Checks identify actual/expected values, units, absolute/relative tolerances and outcome;
+distinguish computed facts, checked assertions, unsupported checks and model assumptions.
+
+Keep default feedback compact: shared units/configuration, summary counts and changed
+evidence against an identified baseline. Expose detailed topology, query witnesses, logs
+and full fields through bounded/paginated retrieval, with exact artifact references and
+explicit truncation. Fail stale baselines; never mix last-valid display geometry with a
+failed revision's facts. AI and clients share the same contracts. New query/tool schemas
+need concrete Accepted RFCs. [#228](https://github.com/wckdboy/nightfall/issues/228) starts
+by enriching existing headless build records with already-available geometry evidence.
+
+### 13. Quality corpus and performance
 
 Maintain small analytic cases, adversarial degeneracies and representative real parts.
 Add deterministic property/metamorphic tests: rigid invariance, scale-aware behavior,

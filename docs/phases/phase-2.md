@@ -81,6 +81,8 @@ The scoped final native ASan/UBSan kernel/evaluator/bridge/adapter gate passes
 Rust/installed OCCT remain uninstrumented. The complete local gate on the published
 performance candidate passes **884/884 in 250.54 s**, plus Rust math/schema/hygiene;
 remote checks and conversation resolution remain separate merge gates.
+All required and geometry/backend CI passes; PR #224 is squash-merged as `069b49e`.
+Its tree exactly matches the tested `d287f14` candidate. #185/#195 remain open.
 
 ## Rust kernel and engine migration decision (#188)
 
