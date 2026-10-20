@@ -117,7 +117,11 @@ The [private native adapter](core/kernel/native/include/nf_native.h) also expose
 STEP export: `nf_native_export_step` encodes every supplied same-context snapshot as AP242
 millimetre bytes, including coincident bodies. Its independent immutable byte owner survives
 source/context teardown, with paired `nf_native_step_query` / `nf_native_step_release`.
-The adapter opens no files. Safe Rust ownership and typed Kernel export follow separately.
+The adapter opens no files. `nightfall_native::Context::export_step(&[Shape])` returns a
+cloneable `step::Step` with borrowed immutable `bytes()`. It rejects empty/foreign-context
+lists before native access and checks returned pointer/count metadata. Clones share the
+allocation after all sources/context drop and remain thread-affine; copied `Vec<u8>` can
+cross threads. The typed Kernel export API follows separately.
 
 Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
 delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.

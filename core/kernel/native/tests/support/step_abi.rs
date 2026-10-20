@@ -1,24 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 use crate::extrusion::{Extrusion, Frame, Region};
+use crate::step_ffi::{
+    Info as StepInfo, nf_native_export_step, nf_native_step_query, nf_native_step_release,
+};
 use crate::{Context, NativeError, c_void, with_native};
 use nightfall_math::{KnotVector, NurbsCurve2};
-#[repr(C)]
-#[derive(Default)]
-struct StepInfo {
-    bytes: *const u8,
-    byte_count: u64,
-}
-unsafe extern "C" {
-    fn nf_native_export_step(
-        context: *mut c_void,
-        sources: *const *const c_void,
-        source_count: u64,
-        out: *mut *mut c_void,
-    ) -> u32;
-    fn nf_native_step_query(step: *const c_void, out: *mut StepInfo) -> u32;
-    fn nf_native_step_release(step: *mut c_void);
-}
 #[test]
 fn step_byte_record_matches_independent_c17_and_cpp_layouts() {
     use std::mem::{align_of, offset_of, size_of};

@@ -10,6 +10,8 @@ pub mod extrusion;
 mod extrusion_ffi;
 pub mod mesh;
 mod mesh_ffi;
+pub mod step;
+mod step_ffi;
 pub mod transform;
 const ABI: u32 = 1;
 static NATIVE_CALL: Mutex<()> = Mutex::new(());

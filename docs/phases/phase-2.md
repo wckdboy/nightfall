@@ -27,6 +27,37 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Safe Rust retained STEP bytes (#220)
+
+`nightfall-native` now exposes `Context::export_step(&[Shape])` and a cloneable `step::Step`
+with borrowed immutable bytes. Rust rejects empty/foreign-context lists before native
+access and validates nonnull/count/range metadata before any unsafe slice borrow. The
+independent byte owner needs no geometry/context to release it. All native calls and the
+paired final release stay serialized on its creating thread; adoption/error cleanup occurs
+outside guard scopes. Clones share the same allocation and remain neither Send nor Sync;
+ordinary copied byte vectors can cross threads. Raw bindings and pointers stay private.
+
+The scaffold fails the metadata check in both configurations and all **six new export
+integration tests**. Implemented Rust checks pass **45 native checks** and **23 Kernel
+checks** per backend/profile, including Debug/Release, fmt and Clippy/warnings denied.
+Source golden checks cover the box (6000 mm³ / 2200 mm² / six faces / twelve edges at
+1e-8), placed/coincident inputs and rational annular holes (2250π mm³ / 1050π mm² at 1e-6).
+Export checks cover complete manifold-solid records, source/entity/prior-output preservation,
+metadata failures,
+empty/foreign lists and recovery, clone lifetimes, positive thread-affinity assertions and
+four independent caller threads. Existing native exact STEP round-trip checks remain in
+the gate. Adapter ASan/UBSan passes **43/43 in 55.07 s**; Rust and installed OCCT remain
+uninstrumented. The full OCCT gate passes **872/872 in 240.89 s**, plus Rust math, schema
+and hygiene, including native XPC/Metal/CLI and client ThreadSanitizer cases.
+Logs: `/tmp/nightfall-220-{red,step-red,rust,asan,check}.log`.
+
+A CI audit of parent PR #217 finds `bundle.nocturne` timing out at 5.22 s with no active
+feature index in [run 39439019426](https://github.com/wckdboy/nightfall/actions/runs/39439019426).
+That failure remains under #185; this slice preserves the five/seven-second deadlines and
+does not claim remote CI recovery. No Greptile findings were published on the latest PRs
+when checked. The typed Kernel export API/example and production client cutover remain
+separate work under RFC 0008; #195 and the Phase 2/MVP gates also stay open.
+
 ## Native exact STEP byte ownership (#219)
 
 The private C adapter now accepts a checked nonempty array of same-context result owners
