@@ -27,6 +27,46 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Typed Rust STEP export and headless fixture (#221)
+
+The forbid-unsafe `nightfall-kernel` facade now exposes `Kernel::export_step(&[Shape])`
+and reexports the retained `Step` owner under Accepted RFC 0008. Every supplied body,
+including coincident bodies, retains its exact AP242 millimetre geometry. Sources stay
+immutable, empty/foreign lists preserve the native InvalidArgument diagnostic, and no
+file I/O enters the kernel. Cloned immutable bytes share their allocation after all
+geometry/facade owners end; `Step` remains neither Send nor Sync. Copied byte vectors may
+cross threads. Receipt consumers migrate to `policy=extrusion-rigid-mesh-step-v1`;
+persisted documents and cache formats are unchanged.
+
+Four new geometry/export tests first fail against the stub. The five implemented typed
+export checks bring the Kernel total to **28**, with **45 native Rust checks** per
+backend/profile, passing linked/unavailable Debug/Release, fmt, Clippy and warnings denied.
+Checks cover retained clones, copied bytes across threads, complete coincident/placed body
+records, immutable source measures/entities/meshes/history/prior exports, rejected empty
+and mixed-context lists and recovery, and positive thread-affinity assertions.
+
+`nf-kernel-step` builds six placed rational two-hole plates, drops every geometry owner
+and Kernel, then optionally writes retained bytes to a new file. Existing destinations
+are refused and checked byte-for-byte. The native Rust gate reloads the actual file through
+an independent OCCT reader and full closed-solid validation: **6 solids, 84 faces, 216
+edges**, **52774.513684086 mm³ / 22326.371578978 mm²**, twelve exact radius-4 mm holes.
+Per-body volume/area use 1e-5 mm³/mm² absolute tolerance (aggregate 6e-5); world centroids
+use 1e-7 mm, bounds 1e-6 mm and analytic cylinder radii 1e-8 mm. Independent OCCT mass/area
+checks agree with Nightfall's conditioned snapshot integrator. The focused Rust gate
+passes **2/2 in 15.83 s**. Retained example output is at
+`out/rust-kernel-step-gh221/plates.step`.
+
+Native adapter ASan/UBSan passes **43/43 in 43.03 s**, including the new output reload;
+Rust and installed OCCT remain uninstrumented. The full OCCT gate passes **872/872 in
+204.20 s**, plus Rust math, schema and hygiene, including native XPC/Metal/CLI, packaged
+document sequences and client ThreadSanitizer checks. Local `bundle.nocturne` passes in
+2.97 s; parent PR #217's remote timeout remains tracked under #185. Logs:
+`/tmp/nightfall-221-{red,step-red,rust,export,asan,check}.log`.
+
+No Greptile findings were posted when checked. This change remains a local stack on #220;
+remote CI/review has not run on it. Remaining Rust operation parity, IR/evaluation and
+production client cutover continue under RFC 0008. Phase 2/MVP gates and #185/#195 stay open.
+
 ## Safe Rust retained STEP bytes (#220)
 
 `nightfall-native` now exposes `Context::export_step(&[Shape])` and a cloneable `step::Step`

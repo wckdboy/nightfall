@@ -6,8 +6,9 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
-root, cargo, library, expected, target = sys.argv[1:]
+root, cargo, library, expected, target, *probes = sys.argv[1:]
 rust_target = next(line.removeprefix("host: ") for line in
                    subprocess.check_output([cargo, "-vV"], text=True).splitlines()
                    if line.startswith("host: "))
@@ -31,7 +32,19 @@ if expected == "1":
     for package, example in (("nightfall-native", "nf-rust-extrude"),
                              ("nightfall-kernel", "nf-kernel-extrude"),
                              ("nightfall-kernel", "nf-kernel-placement"),
-                             ("nightfall-kernel", "nf-kernel-mesh")):
+                             ("nightfall-kernel", "nf-kernel-mesh"),
+                             ("nightfall-kernel", "nf-kernel-step")):
         subprocess.run([cargo, "run", "-p", package, "--example", example,
                         "--target", rust_target, "--release", "--locked", "--offline"],
                        cwd=root, env=env, check=True)
+    assert len(probes) == 1, "linked STEP reload probe required"
+    example = Path(target) / rust_target / "release/examples/nf-kernel-step"
+    with tempfile.TemporaryDirectory(prefix="nf-rust-step-") as directory:
+        output = Path(directory) / "placed rational plates.step"
+        subprocess.run([example, "--output", output], cwd=root, env=env, check=True)
+        before = output.read_bytes()
+        subprocess.run([probes[0], output], cwd=root, env=env, check=True)
+        refused = subprocess.run([example, "--output", output], cwd=root, env=env,
+                                 capture_output=True, text=True)
+        assert refused.returncode != 0, "existing output must be refused"
+        assert output.read_bytes() == before, "existing STEP output changed"

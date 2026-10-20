@@ -3,6 +3,7 @@
 //! Headless typed kernel policy (RFC 0008); exact geometry remains native C++/OCCT.
 #![forbid(unsafe_code)]
 mod mesh;
+mod step;
 mod transform;
 pub use mesh::{MeshLocation, MeshProblem};
 pub use nightfall_math::{KnotVector, MathError, NurbsCurve2};
@@ -12,6 +13,7 @@ pub use nightfall_native::extrusion::{
     ProfileEdge, Region, Shape,
 };
 pub use nightfall_native::mesh::{Mesh, MeshFace, MeshingOptions, Vertex};
+pub use nightfall_native::step::Step;
 pub use nightfall_native::transform::RigidTransform;
 pub use nightfall_native::{BackendInfo, NativeError, Operation as NativeOperation};
 pub use transform::{TransformLocation, TransformProblem};
@@ -83,7 +85,7 @@ pub struct KernelInfo {
     pub identity: String,
     pub backend: BackendInfo,
 }
-/// Thread-affine typed facade exposing exact extrusion, rigid placement and mesh readback.
+/// Thread-affine typed facade for exact extrusion, rigid placement, mesh and STEP readback.
 ///
 /// ```compile_fail
 /// use nightfall_kernel::Kernel;
@@ -109,7 +111,7 @@ impl Kernel {
         let backend = self.native.info()?;
         Ok(KernelInfo {
             identity: format!(
-                "nightfall-rust/{};policy=extrusion-rigid-mesh-v1;native={}",
+                "nightfall-rust/{};policy=extrusion-rigid-mesh-step-v1;native={}",
                 env!("CARGO_PKG_VERSION"),
                 backend.identity
             ),

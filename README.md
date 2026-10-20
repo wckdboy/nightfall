@@ -61,7 +61,7 @@ For the configured native checks, run:
 
 ```sh
 cmake --preset occt
-cmake --build --preset occt --target nf_native_adapter_tests nf_native_adapter_c_smoke nf_native_unavailable_tests nf_native_unavailable_c_smoke
+cmake --build --preset occt --target nf_native_adapter_tests nf_native_adapter_c_smoke nf_native_adapter_step_probe nf_native_unavailable_tests nf_native_unavailable_c_smoke
 ctest --preset occt -R '^native-abi\.'
 ```
 
@@ -73,7 +73,7 @@ geometry and full solid validation. It never samples or rewrites the NURBS. Reta
 use the safe native ownership layer; no raw pointer, client, XPC or model provider is needed.
 `Kernel::info` distinguishes the Rust implementation from the solver and its configuration;
 native solver capabilities do not imply Rust operation parity. Extrusion, rigid
-placement and mesh readback are exposed in the current Rust surface.
+placement, mesh readback and exact STEP export are exposed in the current Rust surface.
 CTest also runs `nf-kernel-extrude`, which reports a disconnected-profile diagnostic and
 builds the exact two-hole plate through `Kernel`. To see the examples' receipts/measures:
 
@@ -96,7 +96,7 @@ deflections against configured precision floors and the native triangle limit. S
 native buffers; a cloned picking face stays valid after every mesh/source/facade drops.
 Offsets in derived meshes are transient and never persisted selectors.
 Rust consumers matching `KernelError` exhaustively must handle the new `MeshInput`
-variant; diagnostic receipt consumers update to `policy=extrusion-rigid-mesh-v1`.
+variant; diagnostic receipt consumers update to `policy=extrusion-rigid-mesh-step-v1`.
 No persisted document or cache migration is needed.
 
 `nf-kernel-mesh` validates six exact rational two-hole plates and exports a derived OBJ,
@@ -121,7 +121,24 @@ The adapter opens no files. `nightfall_native::Context::export_step(&[Shape])` r
 cloneable `step::Step` with borrowed immutable `bytes()`. It rejects empty/foreign-context
 lists before native access and checks returned pointer/count metadata. Clones share the
 allocation after all sources/context drop and remain thread-affine; copied `Vec<u8>` can
-cross threads. The typed Kernel export API follows separately.
+cross threads.
+
+`Kernel::export_step(&[Shape])` exposes the same exact export through the forbid-unsafe
+typed facade and reexports `Step`. Empty/foreign-context lists return
+`KernelError::Native(NativeError::InvalidArgument)`; solver errors keep their native
+diagnostics. The operation performs no file I/O. Retained bytes survive every geometry
+owner and Kernel; STEP contains geometry without editable history or selectors.
+`nf-kernel-step` builds the six placed two-hole plates and writes a new exact STEP file:
+
+```sh
+build/occt/rust-nf_native_adapter/aarch64-apple-darwin/release/examples/nf-kernel-step --output out/rust-plates.step
+```
+
+The example refuses existing destinations. The native Rust gate independently reloads the
+actual file and validates six closed solids, 84 faces, 216 edges, twelve analytic holes,
+world bounds/centroids and exact volume/area. Diagnostic receipt consumers migrate from
+`policy=extrusion-rigid-mesh-v1` to `policy=extrusion-rigid-mesh-step-v1`; persisted documents
+and cache formats are unchanged.
 
 Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
 delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.

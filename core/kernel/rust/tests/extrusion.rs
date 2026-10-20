@@ -343,10 +343,9 @@ fn entity_owners_reject_foreign_kernels_and_distinct_snapshots_compare_unequal()
 fn implementation_receipts_are_namespaced_and_include_backend_configuration() {
     let Some(kernel) = kernel() else { return };
     let info = kernel.info().unwrap();
-    assert!(
-        info.identity
-            .starts_with("nightfall-rust/0.0.1;policy=extrusion-rigid-mesh-v1;native=occt/7.9.3;")
-    );
+    assert!(info.identity.starts_with(
+        "nightfall-rust/0.0.1;policy=extrusion-rigid-mesh-step-v1;native=occt/7.9.3;"
+    ));
     assert!(info.identity.ends_with(&info.backend.identity));
     assert_ne!(info.identity, info.backend.identity);
     assert_ne!(
