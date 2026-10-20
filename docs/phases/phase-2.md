@@ -252,6 +252,33 @@ including Rust Debug/Release, both doctests, zero-allocation observation, Clippy
 schema/hygiene and unchanged native XPC/Metal/concurrency regressions. Final log:
 `/tmp/nightfall-234-check.log`. Remote CI and human review remain pending.
 
+## Eclipse capability boundary (#225)
+
+The new headless workcell is reproducible with `tools/make_eclipse.py --check` and targets
+**113 features / 32 bodies / 529 solids**. The original 112-feature model correctly fails
+the 64-instance per-feature limit: 21 robot bodies × four instances = 84. Two authored
+batches preserve all geometry and stay within that unchanged bound. The private probe
+requires per-body analytic volume, symmetric centroids, foundation area, edit/restore,
+cache-clear rebuild and retained snapshots, plus complete outward mesh and separate STEP
+integration. Its receipt binds source/executable/artifact digests and reports full f64
+per-body analytic/observed differences; physics/assemblies/interactive deadlines are not run.
+
+The first volume failure exposes #233's offset-circle/chamfer discrepancy (corrected by
+PR #235 below). The next run reaches the twisted vanes and fails at
+**1086259.4812360606 vs 1090379.9332788421 mm³**, keeping the predeclared **0.02 mm³**
+budget. The oracle assumes fixed ellipse-parameter correspondence. Automatic compatible
+wires may introduce a different correspondence; #236 investigates this before treating
+the oracle or solver as correct. One minimal vane has 10 faces / 24 edges and measured
+90521.6234363384 mm³, not the assumed four-sided interpolation. Full cold evaluation is
+**70323.303 ms** (M3 Pro/macOS 27.2, Release, uncontrolled host load).
+
+This is a retained failing acceptance case, not a completed milestone or a passing gate.
+The fixture, numeric budgets, new 120-second headless bound and existing five/seven-second
+service/client deadlines remain unchanged. Logs:
+`/tmp/nightfall-225-{first-failure,volume-failure,loft-failure}.log`.
+Raw source/STEP/build facts are captured separately under `out/kernel-evidence-gh225/`;
+they do not establish agreement with the independent acceptance oracle.
+
 ## Translated circular chamfer regression (#233)
 
 The Eclipse analytic probe (#225) exposes a real geometry discrepancy: 32 deck bolts
