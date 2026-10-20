@@ -20,6 +20,23 @@ enum {
 typedef struct nf_native_context nf_native_context;
 typedef struct nf_native_result nf_native_result;
 typedef struct nf_native_entity nf_native_entity;
+typedef struct nf_native_mesh nf_native_mesh;
+typedef struct {
+  double linear_deflection, angular_deflection;
+  uint64_t max_triangles;
+} nf_native_meshing_options;
+typedef struct {
+  double position[3], normal[3];
+} nf_native_mesh_vertex;
+typedef struct {
+  const nf_native_mesh_vertex* vertices;
+  const uint32_t* indices;
+  uint64_t vertex_count, index_count, face_count;
+} nf_native_mesh_info;
+typedef struct {
+  const nf_native_entity* face;
+  uint32_t first_index, index_count;
+} nf_native_mesh_face;
 typedef struct {
   double x, y;
 } nf_native_point2;
@@ -100,6 +117,19 @@ uint32_t nf_native_extrude(nf_native_context*, const nf_native_extrusion*,
 uint32_t nf_native_transform(nf_native_context*, const nf_native_result* source,
                              const nf_native_rigid_transform*,
                              nf_native_result** out) NF_NATIVE_NOEXCEPT;
+// Tessellate an immutable COPY, using mm/radian deflections and the native precision floors.
+// At most 1M triangles / 3M vertices. Foreign contexts return INVALID; native failures publish
+// no mesh. Success retains the original snapshot/backend independently of source/context.
+uint32_t nf_native_tessellate(nf_native_context*, const nf_native_result* source,
+                              const nf_native_meshing_options*,
+                              nf_native_mesh** out) NF_NATIVE_NOEXCEPT;
+// Immutable world-space positions, outward unit normals, triangle indices. Buffers and faces
+// are borrowed until mesh_release. Queries clear outputs on failure. Indices are transient,
+// never persisted selectors; face ranges cover all indices and identify ORIGINAL faces.
+uint32_t nf_native_mesh_query(const nf_native_mesh*, nf_native_mesh_info* out) NF_NATIVE_NOEXCEPT;
+uint32_t nf_native_mesh_face_at(const nf_native_mesh*, uint64_t index,
+                                nf_native_mesh_face* out) NF_NATIVE_NOEXCEPT;
+void nf_native_mesh_release(nf_native_mesh*) NF_NATIVE_NOEXCEPT;  // NULL-safe
 // Queries clear outputs on failure. Exact measures use mm units; estimates are not RSS limits.
 uint32_t nf_native_result_query(const nf_native_result*,
                                 nf_native_result_info* out) NF_NATIVE_NOEXCEPT;

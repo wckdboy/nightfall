@@ -9,6 +9,10 @@ _Static_assert(sizeof(nf_native_generated) == 64, "generated layout");
 _Static_assert(sizeof(nf_native_rigid_transform) == 80, "transform layout");
 _Static_assert(sizeof(nf_native_history) == 32, "history layout");
 _Static_assert(sizeof(nf_native_entity_view) == 16, "entity layout");
+_Static_assert(sizeof(nf_native_meshing_options) == 24, "meshing options layout");
+_Static_assert(sizeof(nf_native_mesh_vertex) == 48, "vertex layout");
+_Static_assert(sizeof(nf_native_mesh_info) == 40, "mesh layout");
+_Static_assert(sizeof(nf_native_mesh_face) == 16, "mesh face layout");
 int main(void) {
   nf_native_context* context = NULL;
   uint32_t status = nf_native_context_create(NF_NATIVE_ABI_VERSION, 1e-6, 1e-9, &context);
@@ -37,6 +41,9 @@ int main(void) {
     nf_native_result* moved = NULL;
     if (nf_native_transform(context, result, &transform, &moved) != NF_NATIVE_OK || !moved)
       return 7;
+    nf_native_mesh* mesh = NULL;
+    const nf_native_meshing_options options = {0.1, 0.2, 12};
+    if (nf_native_tessellate(context, moved, &options, &mesh) != NF_NATIVE_OK || !mesh) return 10;
     nf_native_context_release(context);
     context = NULL;
     nf_native_result_info measures = {0};
@@ -67,9 +74,22 @@ int main(void) {
         return 9;
     }
     nf_native_result_release(moved);
+    nf_native_mesh_info buffers = {0};
+    if (nf_native_mesh_query(mesh, &buffers) != NF_NATIVE_OK || buffers.vertex_count != 24 ||
+        buffers.index_count != 36 || buffers.face_count != 6 || !buffers.vertices ||
+        !buffers.indices)
+      return 11;
+    for (uint64_t i = 0; i < buffers.face_count; ++i) {
+      nf_native_mesh_face picked = {0};
+      if (nf_native_mesh_face_at(mesh, i, &picked) != NF_NATIVE_OK || picked.index_count != 6 ||
+          nf_native_entities_same(picked.face, picked.face, &same) != NF_NATIVE_OK || same != 1)
+        return 12;
+    }
+    nf_native_mesh_release(mesh);
   } else if (status != NF_NATIVE_UNAVAILABLE || context)
     return 3;
   nf_native_context_release(context);
   nf_native_context_release(NULL);
+  nf_native_mesh_release(NULL);
   return 0;
 }
