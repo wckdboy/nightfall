@@ -203,6 +203,18 @@ complete kernel (124 cases / 158551 assertions), evaluator (367 / 444301) and C 
 (12 / 65400) suites without sanitizer diagnostics. Preview 0.0.10 contains these fixes;
 its packaging and extracted-GUI verification are recorded separately below.
 
+Preview archive: `out/Nightfall-0.0.10-preview-arm64-macos.zip` (17401190 bytes), source
+`60279fee433d99d41362ae3d22920d2bba8c4afc`, SHA-256
+`1895e58689a723a6f4732082ef1e6490ab6b22c1f740488b3ca40e9c12b0868d`.
+The receipt pins that source independently of this documentation follow-up. The extracted
+app is byte-identical to the tested build; strict signatures, deployment target, dependency
+closure, 26 service-local OCCT dylibs and all 24 example sources pass verification.
+The actual extracted app completes 1→8→4→8 and all three Undo steps, followed by
+conduit/edit/Undo/loft/edit/Undo/conduit without errors or recovery notices. Both the
+217142-triangle Asterion and final 23494-triangle conduit were visually inspected.
+The app remains open on the clean conduit. This is an ad-hoc arm64/macOS 15+ development
+preview, without notarization or a tagged-main/MVP release; earlier previews are preserved.
+
 ## Sweep document and native integration (#179)
 
 The existing v1 sweep operation now binds the current profile and named open sketch path,
