@@ -1,16 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
+#include "context.hpp"
 #include <cmath>
 #include "guard.hpp"
 #include "nf_native.h"
 #if NF_NATIVE_OCCT
 #include <array>
-#include "nf/kernel/kernel.hpp"
-struct nf_native_context {
-  std::unique_ptr<nf::kernel::IKernel> kernel;
-};
-#else
-struct nf_native_context {};
 #endif
 
 uint32_t nf_native_context_create(uint32_t abi, double linear, double angular,

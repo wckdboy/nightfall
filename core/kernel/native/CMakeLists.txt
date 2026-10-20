@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
 function(nf_native_adapter name occt directory)
-  add_library(${name} SHARED src/context.cpp)
+  add_library(${name} SHARED src/context.cpp src/extrusion.cpp)
   target_include_directories(${name} PUBLIC include)
   target_compile_definitions(${name} PRIVATE NF_NATIVE_OCCT=$<BOOL:${occt}>)
   target_link_libraries(${name} PRIVATE nf::warnings)
@@ -9,7 +9,12 @@ function(nf_native_adapter name occt directory)
     target_link_options(${name} PRIVATE
       "LINKER:-exported_symbol,_nf_native_context_create"
       "LINKER:-exported_symbol,_nf_native_context_info"
-      "LINKER:-exported_symbol,_nf_native_context_release")
+      "LINKER:-exported_symbol,_nf_native_context_release"
+      "LINKER:-exported_symbol,_nf_native_extrude"
+      "LINKER:-exported_symbol,_nf_native_result_query"
+      "LINKER:-exported_symbol,_nf_native_result_generated"
+      "LINKER:-exported_symbol,_nf_native_entities_same"
+      "LINKER:-exported_symbol,_nf_native_result_release")
   endif()
   set_target_properties(${name} PROPERTIES OUTPUT_NAME nf_native_adapter
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${directory}"
@@ -19,10 +24,13 @@ function(nf_native_adapter name occt directory)
     target_link_libraries(${name} PRIVATE nf::kernel)
   endif()
   if(NF_BUILD_TESTS)
-    add_executable(${name}_tests tests/context_tests.cpp)
+    add_executable(${name}_tests tests/context_tests.cpp tests/extrusion_tests.cpp)
     target_include_directories(${name}_tests PRIVATE src)
     target_compile_definitions(${name}_tests PRIVATE NF_EXPECT_OCCT=$<BOOL:${occt}>)
     target_link_libraries(${name}_tests PRIVATE ${name} nf::warnings Catch2::Catch2WithMain)
+    if(occt)
+      target_link_libraries(${name}_tests PRIVATE nf::kernel)
+    endif()
     catch_discover_tests(${name}_tests TEST_PREFIX "native-abi.${name}.")
     add_executable(${name}_c_smoke tests/c_smoke.c)
     target_compile_definitions(${name}_c_smoke PRIVATE NF_EXPECT_OCCT=$<BOOL:${occt}>)
