@@ -39,7 +39,9 @@ Only directories with real content exist; the rest arrive with their phase.
 Requirements: macOS 15+ on Apple Silicon, Xcode 26+, CMake 3.28+, Ninja, rustup.
 `rustup show` installs the exact Rust toolchain and components in `rust-toolchain.toml`.
 The std-only `nightfall-math` crate starts the [Rust migration](docs/rfcs/0008-rust-kernel.md)
-with checked B-spline basis/derivative evaluation. The production client still uses the
+with checked B-spline bases and rational 2D/3D curves, including allocation-free points
+and translation-conditioned derivatives. Run `cargo doc --locked --offline --no-deps --open` for the Rust API
+and a headless conic example. The production client still uses the
 existing C++ engine while parity gates are built. `tools/check.sh` checks both languages;
 Rust dependency resolution is locked/offline and artifacts go to `build/rust/`.
 

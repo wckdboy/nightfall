@@ -9,8 +9,10 @@ const SIDE: usize = MAX_DEGREE + 1;
 
 mod basis;
 mod knot_vector;
+mod nurbs_curve;
 pub use basis::{BasisDerivatives, BasisValues, basis_derivatives, basis_functions};
 pub use knot_vector::KnotVector;
+pub use nurbs_curve::{NurbsCurve, NurbsCurve2, NurbsCurve3};
 
 /// Checked construction/evaluation failure; errors never allocate diagnostic strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,4 +27,10 @@ pub enum MathError {
     NonFiniteParameter,
     DerivativeOrder,
     NumericalRange,
+    Dimension,
+    ControlPointCount,
+    NonFinitePoint,
+    WeightCount,
+    InvalidWeight,
+    WeightRange,
 }
