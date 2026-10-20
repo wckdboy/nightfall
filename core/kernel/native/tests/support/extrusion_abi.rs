@@ -180,3 +180,16 @@ fn rust_abi_retains_face_sources_and_distinguishes_snapshots() {
         });
     }
 }
+#[test]
+fn rigid_history_layout_matches_independent_c17_and_cpp_records() {
+    use crate::transform::RigidTransform;
+    use std::mem::{align_of, offset_of, size_of};
+    assert_eq!(size_of::<RigidTransform>(), 80);
+    assert_eq!(align_of::<RigidTransform>(), 8);
+    assert_eq!(offset_of!(RigidTransform, angle), 72);
+    assert_eq!(size_of::<crate::extrusion_ffi::History>(), 32);
+    assert_eq!(offset_of!(crate::extrusion_ffi::History, before_kind), 24);
+    assert_eq!(offset_of!(crate::extrusion_ffi::History, deleted), 28);
+    assert_eq!(size_of::<crate::extrusion_ffi::EntityView>(), 16);
+    assert_eq!(offset_of!(crate::extrusion_ffi::EntityView, kind), 8);
+}

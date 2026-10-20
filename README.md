@@ -50,6 +50,10 @@ Contexts and native snapshots are neither `Send` nor `Sync`; native calls and ma
 releases are serialized. The headless `nf-rust-extrude` example builds a plate with two
 exact rational circular holes and checks it after input/context teardown. The configured
 native CTest checks run this example and print its exact measurements in verbose mode.
+`nightfall_native::transform` adds exact rigid placement and complete owned face/edge
+history. A retained before/modified/generated entity keeps both native snapshots alive,
+including after source, intermediate result and context teardown. Foreign contexts reject
+before native access; axis normalization and geometry validation remain native.
 CMake builds the private dynamic adapter before CTest runs Rust Debug/Release and Clippy
 against both OCCT-enabled and unavailable configurations. Math-only Cargo commands remain
 independent; native Cargo consumers must set an absolute `NF_NATIVE_LIB_DIR` and a runtime rpath.

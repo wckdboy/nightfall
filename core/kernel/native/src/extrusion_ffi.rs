@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
+use super::transform::RigidTransform;
 use super::{
     c_void,
     extrusion::{Frame, Measures},
@@ -58,7 +59,36 @@ pub(crate) struct Generated {
     pub has_from: u32,
     pub kind: u32,
 }
+#[repr(C)]
+#[derive(Default)]
+pub(crate) struct EntityView {
+    pub entity: *const c_void,
+    pub kind: u32,
+}
+#[repr(C)]
+#[derive(Default)]
+pub(crate) struct History {
+    pub before: *const c_void,
+    pub modified_count: u64,
+    pub generated_count: u64,
+    pub before_kind: u32,
+    pub deleted: u32,
+}
 unsafe extern "C" {
+    pub fn nf_native_transform(
+        context: *mut c_void,
+        source: *const c_void,
+        input: *const RigidTransform,
+        out: *mut *mut c_void,
+    ) -> u32;
+    pub fn nf_native_result_history(result: *const c_void, index: u64, out: *mut History) -> u32;
+    pub fn nf_native_result_history_entity(
+        result: *const c_void,
+        history: u64,
+        list: u32,
+        index: u64,
+        out: *mut EntityView,
+    ) -> u32;
     pub fn nf_native_extrude(
         context: *mut c_void,
         input: *const Extrusion,
