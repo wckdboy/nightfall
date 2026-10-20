@@ -67,6 +67,12 @@ No Greptile findings were posted when checked. This change remains a local stack
 remote CI/review has not run on it. Remaining Rust operation parity, IR/evaluation and
 production client cutover continue under RFC 0008. Phase 2/MVP gates and #185/#195 stay open.
 
+Merge preparation catches an explicit-target CI dependency: building
+`nf_native_adapter_tests` must also build the STEP file verifier used by its Rust gate.
+The target now depends on that verifier. Rebuilding only the existing sanitizer CI target
+recompiles/relinks the verifier, and the native sanitizer gate passes **43/43 in 12.13 s**.
+Logs: `/tmp/nightfall-221-merge-{configure,build,asan}.log`.
+
 ## Safe Rust retained STEP bytes (#220)
 
 `nightfall-native` now exposes `Context::export_step(&[Shape])` and a cloneable `step::Step`
