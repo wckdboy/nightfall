@@ -22,7 +22,7 @@ by any AI agent.
 ## Repository layout
 
 ```
-core/        C++ libraries (math, svg, ir, kernel, usd, script)
+core/        C++/Rust libraries (math, svg, ir, kernel, usd, script)
 services/    XPC services (kernel isolation)
 app/         macOS app (SwiftUI + Metal)
 agent/       AI tools, model providers, eval suite
@@ -44,6 +44,19 @@ and translation-conditioned derivatives. Run `cargo doc --locked --offline --no-
 and a headless conic example. The production client still uses the
 existing C++ engine while parity gates are built. `tools/check.sh` checks both languages;
 Rust dependency resolution is locked/offline and artifacts go to `build/rust/`.
+The std-only `nightfall-native` crate adds checked, retained OCCT context ownership,
+serialized native calls and owned backend metadata. It exposes no modeling operations yet.
+Contexts are neither `Send` nor `Sync`; all native allocations use their matching release.
+CMake builds the private dynamic adapter before CTest runs Rust Debug/Release and Clippy
+against both OCCT-enabled and unavailable configurations. Math-only Cargo commands remain
+independent; native Cargo consumers must set an absolute `NF_NATIVE_LIB_DIR` and a runtime rpath.
+For the configured native checks, run:
+
+```sh
+cmake --preset occt
+cmake --build --preset occt --target nf_native_adapter_tests nf_native_adapter_c_smoke nf_native_unavailable_tests nf_native_unavailable_c_smoke
+ctest --preset occt -R '^native-abi\.'
+```
 
 Build the native visual preview with the production, dynamically linked OCCT kernel:
 

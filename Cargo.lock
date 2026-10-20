@@ -5,3 +5,7 @@ version = 4
 [[package]]
 name = "nightfall-math"
 version = "0.0.1"
+
+[[package]]
+name = "nightfall-native"
+version = "0.0.1"

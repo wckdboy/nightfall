@@ -78,9 +78,10 @@ fi
 
 step "Rust math (pinned toolchain; locked, offline dependencies)"
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked --offline -- -D warnings
-cargo test --workspace --locked --offline
-cargo test --workspace --locked --offline --release
+cargo clippy -p nightfall-math --all-targets --locked --offline -- -D warnings
+cargo test -p nightfall-math --locked --offline
+cargo test -p nightfall-math --locked --offline --release
+# Native Rust checks run through CTest after its adapter has been built by CMake.
 
 step "IR schema"
 python3 core/ir/schema/build_schema.py --check
