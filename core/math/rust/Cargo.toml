@@ -11,3 +11,11 @@ publish = false
 [[example]]
 name = "nf-rust-basis-probe"
 path = "tests/support/basis_probe.rs"
+
+[[example]]
+name = "nf-rust-curve-probe"
+path = "tests/support/curve_probe.rs"
+
+[[example]]
+name = "nf-rust-curve-bench"
+path = "tests/support/curve_bench.rs"

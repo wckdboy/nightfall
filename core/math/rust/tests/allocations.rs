@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 #![deny(unsafe_op_in_unsafe_fn)]
-use nightfall_math::{KnotVector, basis_derivatives, basis_functions};
+use nightfall_math::{KnotVector, NurbsCurve3, basis_derivatives, basis_functions};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::hint::black_box;
@@ -62,5 +62,42 @@ fn evaluation_and_errors_allocate_nothing() {
         }
         TRACK.with(|v| v.set(false));
         assert_eq!(CALLS.with(Cell::get), 0, "degree {degree}");
+    }
+}
+
+#[test]
+fn curve_points_derivatives_clones_and_errors_allocate_nothing() {
+    for degree in 1..=9 {
+        for rational in [false, true] {
+            let mut values = vec![0.0; degree + 1];
+            values.extend(std::iter::repeat_n(0.5, degree));
+            values.extend(std::iter::repeat_n(1.0, degree + 1));
+            let knots = KnotVector::new(degree, values).unwrap();
+            let points: Vec<_> = (0..knots.control_point_count())
+                .map(|i| [i as f64, (i % 3) as f64, 0.0])
+                .collect();
+            let weights = if rational {
+                (0..points.len()).map(|i| (i % 5 + 1) as f64).collect()
+            } else {
+                vec![]
+            };
+            let curve = NurbsCurve3::new(knots, points, weights).unwrap();
+            CALLS.with(|v| v.set(0));
+            TRACK.with(|v| v.set(true));
+            for i in 0..1024 {
+                let u = black_box(i as f64 / 1023.0);
+                let retained = black_box(curve.clone());
+                black_box(retained.point(u).unwrap());
+                black_box(retained.derivatives::<13>(u).unwrap());
+                black_box(retained.point(f64::NAN)).unwrap_err();
+                black_box(retained.derivatives::<13>(f64::NAN)).unwrap_err();
+            }
+            TRACK.with(|v| v.set(false));
+            assert_eq!(
+                CALLS.with(Cell::get),
+                0,
+                "degree {degree}, rational={rational}"
+            );
+        }
     }
 }

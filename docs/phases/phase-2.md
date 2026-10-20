@@ -27,6 +27,36 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Rust rational curves (#192)
+
+The std-only Rust math crate now owns immutable 2D/3D NURBS curves, checked controls and
+positive weights, exact power-of-two weight normalization (including subnormals), points
+and caller-sized stack derivative outputs. Polynomial derivatives above the degree are
+zero; rational derivatives continue above it. Relative-coordinate differentiation avoids
+translation/constant-coordinate artifacts. The Rust API includes a headless conic example.
+
+Thirteen curve tests cover analytic lines/conics/Bernstein polynomials, finite differences,
+repeated knots, all degrees 1–9, weight invariance/ranges, retained concurrent readers,
+nonfinite/range failures, constant geometry, translations by 1e12 and homogeneous products
+that underflow despite representable results. Blend coefficients normalize before applying
+coordinates; point-only requests avoid unneeded derivative intermediates. Allocation tracking
+measures zero allocations for 36,864 point/derivative evaluations, 36,864 errors and 18,432
+clones. Conformance covers 3,384 C++ cases; 55 independent 80-digit checks resolve two
+legacy disagreements at the original Rust tolerances. Existing C++ polynomial derivative
+residuals are recorded separately in #193; no existing native tolerance is changed.
+
+Release cubic/20-control benchmarks (median of five runs of 1,000,000 calls, Apple M3 Pro):
+checked Rust 34.78 / 42.02 ns per polynomial/rational point; C++ 19.93 / 19.61 ns.
+This is a local observation, not an end-to-end engine speedup; Rust remains slower here.
+Checksums agree within 1e-15 relative. The final local gate passes **829/829 in 286.82 s**,
+plus 25 Rust tests in each profile, schema and hygiene. An earlier final-source run had
+one empty CLI diagnostic (828/829), followed by an isolated 201-assertion pass and a fresh
+full run after reclaiming generated cache space. #195 preserves that unresolved observation;
+storage pressure is a hypothesis, not a demonstrated cause. No CLI source is changed.
+Foundation PR #191's remote OCCT (826/828) and both-kernel/USD (835/836) jobs fail native
+XPC deadlines under #185 while their Rust checks pass. Production Rust integration,
+native/client reliability, remote CI and review remain open.
+
 ## Rust math foundation (#190)
 
 Accepted RFC 0008 now has a pinned Rust 1.99.1, std-only Cargo workspace and a safe
