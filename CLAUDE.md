@@ -20,7 +20,9 @@ The process is in `docs/process/WORKFLOW.md`. It is binding. The short version:
 - Stay inside the issue's scope. Note unrelated problems for the human; don't fix them.
 - Keep the PR under 400 changed lines excluding tests. Propose a split if it won't fit.
 - Tests first for `core/` code. Every tolerance in a test is explicit.
-- C++23 in `core/`, Swift 6 strict concurrency in `app/`. No AppKit outside `app/`.
+- Rust for new kernel/math/engine migration work under Accepted RFC 0008; C++23 remains
+  for existing implementations and native solver adapters. Swift 6 strict concurrency in
+  `app/`. No AppKit outside `app/`.
 - No new dependency without an accepted RFC and a `third_party/README.md` entry.
 - Match the surrounding code's style and comment density.
 
