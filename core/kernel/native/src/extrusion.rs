@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
-//! Exact native extrusion with immutable Rust ownership; geometry remains delegated to OCCT.
+//! Exact native solids with immutable Rust ownership; geometry remains delegated to OCCT.
 use super::{Context, NativeError, NonNull, Rc, c_void, extrusion_ffi as ffi, status, with_native};
 use nightfall_math::NurbsCurve2;
 /// Sketch frame in mm with unit orthogonal x/normal axes. Geometry validation remains native.
@@ -79,6 +79,12 @@ impl Shape {
     pub fn measures(&self) -> &Measures {
         &self.0.info.measures
     }
+    pub(crate) fn native_pointer(&self, context: &Context) -> Result<NonNull<c_void>, NativeError> {
+        if !Rc::ptr_eq(&self.0.context.0, &context.0) {
+            return Err(NativeError::InvalidArgument);
+        }
+        Ok(self.0.pointer)
+    }
 }
 /// Retains the complete originating result/snapshot/backend. Never Send or Sync.
 #[derive(Clone)]
@@ -122,14 +128,14 @@ pub struct Generated {
     pub from: Option<ProfileEdge>,
     pub entity: Entity,
 }
-/// Prior-input changes; pure extrusion has none. Nonempty unsupported native history is rejected.
+/// Complete prior-input changes, retaining both snapshots; pure extrusion has none.
 pub struct History {
     pub before: Entity,
     pub modified: Vec<Entity>,
     pub generated: Vec<Entity>,
     pub deleted: bool,
 }
-/// Complete extrusion result; estimates describe native retained geometry, not RSS.
+/// Complete operation result; estimates describe native retained geometry, not RSS.
 pub struct OperationResult {
     pub shape: Shape,
     pub generated: Vec<Generated>,
@@ -203,6 +209,12 @@ impl Context {
             status(unsafe { ffi::nf_native_extrude(self.0.0.as_ptr(), &request, &mut out) })?;
             NonNull::new(out).ok_or(NativeError::NativeFailure)
         })?;
+        self.adopt_result(pointer)
+    }
+    pub(crate) fn adopt_result(
+        &self,
+        pointer: NonNull<c_void>,
+    ) -> Result<OperationResult, NativeError> {
         // Construct outside the guard: every subsequent error releases without recursive locking.
         let mut owner = Owner {
             pointer,
@@ -213,9 +225,6 @@ impl Context {
             // SAFETY: retained native result and writable aligned output.
             status(unsafe { ffi::nf_native_result_query(pointer.as_ptr(), &mut owner.info) })
         })?;
-        if owner.info.history_count != 0 {
-            return Err(NativeError::AbiMismatch);
-        }
         let owner = Rc::new(owner);
         let mut generated = Vec::new();
         for index in 0..owner.info.generated_count {
@@ -245,23 +254,73 @@ impl Context {
                 }),
                 _ => return Err(NativeError::AbiMismatch),
             };
-            let kind = match g.kind {
-                1 => EntityKind::Face,
-                2 => EntityKind::Edge,
-                _ => return Err(NativeError::AbiMismatch),
-            };
-            let entity = Entity {
-                owner: owner.clone(),
-                pointer: NonNull::new(g.entity.cast_mut()).ok_or(NativeError::NativeFailure)?,
-                kind,
-            };
+            let entity = retained_entity(&owner, g.entity, g.kind)?;
             generated.push(Generated { role, from, entity });
+        }
+        let mut history = Vec::new();
+        for index in 0..owner.info.history_count {
+            history.push(read_history(&owner, index)?);
         }
         Ok(OperationResult {
             estimated_bytes: owner.info.estimated_bytes,
             shape: Shape(owner),
             generated,
-            history: Vec::new(),
+            history,
         })
     }
+}
+fn retained_entity(
+    owner: &Rc<Owner>,
+    pointer: *const c_void,
+    kind: u32,
+) -> Result<Entity, NativeError> {
+    Ok(Entity {
+        owner: owner.clone(),
+        pointer: NonNull::new(pointer.cast_mut()).ok_or(NativeError::NativeFailure)?,
+        kind: match kind {
+            1 => EntityKind::Face,
+            2 => EntityKind::Edge,
+            _ => return Err(NativeError::AbiMismatch),
+        },
+    })
+}
+fn read_history(owner: &Rc<Owner>, index: u64) -> Result<History, NativeError> {
+    let mut row = ffi::History::default();
+    // SAFETY: owner retains the immutable result; query checks index and writes aligned output.
+    with_native(|| {
+        status(unsafe { ffi::nf_native_result_history(owner.pointer.as_ptr(), index, &mut row) })
+    })?;
+    let entities = |list: u32, count: u64| -> Result<Vec<Entity>, NativeError> {
+        if count > (isize::MAX as usize / std::mem::size_of::<Entity>()) as u64 {
+            return Err(NativeError::AbiMismatch);
+        }
+        let mut values = Vec::new();
+        for i in 0..count {
+            let mut view = ffi::EntityView::default();
+            // SAFETY: owner retains both snapshots; adapter checks history/list/entity indices.
+            with_native(|| {
+                status(unsafe {
+                    ffi::nf_native_result_history_entity(
+                        owner.pointer.as_ptr(),
+                        index,
+                        list,
+                        i,
+                        &mut view,
+                    )
+                })
+            })?;
+            values.push(retained_entity(owner, view.entity, view.kind)?);
+        }
+        Ok(values)
+    };
+    Ok(History {
+        before: retained_entity(owner, row.before, row.before_kind)?,
+        modified: entities(0, row.modified_count)?,
+        generated: entities(1, row.generated_count)?,
+        deleted: match row.deleted {
+            0 => false,
+            1 => true,
+            _ => return Err(NativeError::AbiMismatch),
+        },
+    })
 }

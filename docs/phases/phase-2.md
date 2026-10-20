@@ -27,6 +27,27 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Safe Rust rigid transforms and retained history (#209)
+
+The safe native crate now exposes exact `RigidTransform` / `Context::transform(&Shape, ...)`
+and decodes complete native before/modified/generated/deleted history. Each cloned entity
+retains the complete operation, including source/output snapshots and its creating context.
+Foreign contexts reject before native access; shared result adoption and metadata failures
+release only after native guards end. Topology kinds, flags/counts/pointers are checked;
+raw pointers and unsafe calls remain private. No history is synthesized or discarded.
+
+All five transform integration tests first fail against the stub. The new safe tests cover
+analytic/offset-axis/nonunit/identity/repeated goldens, source immutability, all eighteen
+face/edge mappings, retained readers after all facade/result teardown, foreign/invalid
+recovery and eight independent thread-local geometry contexts. Independent Rust record
+layout checks match C17/C++. All **23 native Rust tests per backend/profile** pass in
+Debug and Release, alongside twelve kernel checks, with fmt/Clippy/warnings denied.
+The native sanitizer suite passes **26/26 in 38.48 s**; Rust and installed OCCT remain
+uninstrumented. The full gate passes **855/855 in 209.37 s**, plus Rust math, schema and
+hygiene. Logs: `/tmp/nightfall-209-{red,focused,asan,check}.log`.
+Typed forbid-unsafe Kernel transform policy/example follows separately under #206. No
+production switch, IR/cache/dependency change, #185/#195 fix or full Rust-engine claim.
+
 ## Native rigid transform and complete history boundary (#207)
 
 Accepted RFC 0008's next ownership operation is split under delivery #206. The private
