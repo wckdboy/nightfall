@@ -23,6 +23,8 @@ analytic/property/C++ differential tests. It is not a wrapper around the complet
 evaluator. The proposal preserves existing geometry/IR/provenance/deadline contracts and
 keeps #185's actual-app timeout open. The concrete RFC is in Review; no Rust production
 cutover, completed port or review-period waiver is claimed.
+The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
+Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
 ## Parallel exact integration and copied-geometry tessellation (#185)
 

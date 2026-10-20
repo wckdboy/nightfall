@@ -76,8 +76,9 @@ Add a root Cargo workspace with these staged members inside the existing module 
 
 Start with Rust **1.99.1**, edition 2024, pinned in `rust-toolchain.toml`, with `rustfmt` and
 Clippy components. Local evidence is rustc 1.99.1 (`58cf8f9c3`, 2026-10-13), Cargo 1.99.1,
-`aarch64-apple-darwin`; rustfmt/Clippy are not currently installed. This is a reproducible
-toolchain choice, not a claim about the latest release. Record tooling in
+`aarch64-apple-darwin`. Preflight installed the previously missing rustfmt 1.10.0 and
+Clippy 0.1.99 components for that existing toolchain. This is a reproducible toolchain
+choice, not a claim about the latest release. Record tooling in
 `third_party/README.md` and retain its upstream licenses/notices.
 
 The first math slice uses only Rust's standard library: no runtime crates, bindgen,
@@ -126,6 +127,12 @@ native context. Document close/drop also executes there. The watchdog still runs
 the blocked calculation and counts queueing time. Only owned bytes/plain values cross
 executors. Direct Rust callers use the safe kernel on its owning thread; mathematical
 values may be shared where their own types permit it.
+
+A process-wide native-call guard also serializes safe Rust adapter entry points, including
+context creation and final release. Non-Send handles alone do not prevent independent
+contexts on separate caller threads from entering a library with shared global state.
+This guard preserves the current serialized-backend contract; tested internal per-request
+solver parallelism remains available. Drop/release paths must not panic or unwind.
 
 Extern-C Rust entry points catch unwinding Rust panics and translate them into failure
 results, with `panic=unwind` selected explicitly. They do not attempt to catch native
