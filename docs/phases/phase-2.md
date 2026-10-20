@@ -12,6 +12,36 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Translated circular chamfer regression (#233)
+
+The Eclipse analytic probe (#225) exposes a real geometry discrepancy: 32 deck bolts
+measure 21764.035312 mm³ instead of 21762.943285 mm³. The minimal annulus has radii
+6/2.8 mm, height 8 mm and a 1 mm top chamfer. A sketch offset of 610 mm incorrectly
+loses four analytic cylinder faces, yielding 680.126103493 mm³ and 586.896411570 mm²;
+the equivalent centered profile yields analytic 680.091977649 mm³ / 586.881422181 mm².
+A separate STEP reader retains the discrepancy, distinguishing geometry from reporting.
+The initial minimal test fails 4 of 96 assertions. Budgets stay at 1e-5 mm³/mm²,
+1e-8 mm centroid, with complete current-owner checks.
+
+Circle recognition now attempts a symmetric endpoint-radius candidate only when its
+original candidate fails the existing 64-epsilon certificate. Both endpoints and the
+other three degree-four Bernstein coefficients must satisfy that same bound; there is
+no modeling-tolerance fitting. Already certified primitives retain their original
+representation. Kernel identity advances to `profile=exact-lines-arcs-v4`.
+The corrected separate STEP measurement is 680.091977649131 mm³ / 586.881422180843 mm².
+Translated true ellipses (relative anisotropy 1e-8, 1e-10, 1e-12), perturbed poles/weights
+and scaled planes retain NURBS geometry. The focused suite passes **1582 assertions
+in 15 cases**. Both unchanged native mesh goldens pass **2/2 in 17.85 s**; the final
+complete local gate passes **890/890 in 305.04 s**, plus Rust Debug/Release,
+Clippy/format, schema, license/layering and native concurrency checks.
+
+The first complete run with an unconditional symmetric candidate passes 888/890 in
+237.54 s but changes the Asterion mesh golden by eight triangles, failing scalability
+and document-sequence tests. The conditional certificate preserves existing primitives;
+the old mesh goldens, geometry tolerances and deadlines are unchanged. Logs retain both
+the original failure and verification:
+`/tmp/nightfall-233-{red,focused,first-check,check,native-recheck}.log`.
+
 ## Factual headless build evidence (#228)
 
 The existing `nf build` JSON records now carry additive evidence version 1 under the
