@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "nightfall-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+nightfall-math = { path = "../../math/rust" }
+nightfall-native = { path = "../native" }
+
+[[example]]
+name = "nf-kernel-extrude"
+path = "tests/support/extrude_example.rs"

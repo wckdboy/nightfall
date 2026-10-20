@@ -27,6 +27,32 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Typed Rust kernel extrusion policy (#204)
+
+The `nightfall-kernel` crate exposes the initial headless typed `Kernel` with unsafe code
+forbidden. It owns finite/structural/endpoint-connectivity policy and reports precise field
+coordinates or region/loop/curve locations, including numerical endpoint-evaluation errors.
+Connectivity uses Euclidean distance and the configured mm tolerance; inputs remain exact
+and immutable. Native orthonormal-frame, winding and full closed-solid validation remain
+in force. Results reuse the safe retained shape/entity/history/measurement owners. A
+namespaced implementation receipt separates Rust policy from the configured native solver;
+native capabilities are not a claim of Rust operation parity or a persisted cache key.
+
+Eight of ten tests fail against the stub; a further numerical-range diagnostic test fails
+before implementation. Eleven integration cases plus a compile-fail affinity example now
+pass per backend/profile, alongside seventeen native Rust tests, with fmt/Clippy/warnings
+denied. Cases cover exact/placed/oblique/hole geometry, retained readers, foreign contexts,
+nonfinite fields, empty/disconnected loops, diagonal/configured tolerance boundaries and
+native rejection cleanup. CTest runs a kernel-only consumer that diagnoses the incomplete
+profile at region 0 / loop 0 / curve 2, then builds the exact rational two-hole plate:
+**8795.752280681 mm³ / 3721.061929830 mm² / one solid / fourteen faces / thirty-six edges**.
+The native adapter ASan/UBSan suite passes **20/20 in 16.13 s**; Rust and installed OCCT
+remain uninstrumented. The full gate passes **849/849 in 213.27 s**, plus Rust math,
+schema and hygiene. Logs: `/tmp/nightfall-204-{red,range-red,rust,example,asan,check}.log`.
+This implements the final initial-extrusion slice under #199, pending remote CI/human
+review. Full operation parity, Rust IR/evaluator and production-client cutover remain
+separate; #185/#195 and the Phase 2/MVP gates remain open.
+
 ## Safe Rust exact extrusion and retained snapshots (#202)
 
 `nightfall-native` now exposes typed frames/regions of checked Rust NURBS, exact extrusion,

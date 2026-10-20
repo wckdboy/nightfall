@@ -61,9 +61,23 @@ cmake --build --preset occt --target nf_native_adapter_tests nf_native_adapter_c
 ctest --preset occt -R '^native-abi\.'
 ```
 
-The safe API is documented in `nightfall_native::extrusion`. Mathematical curves come
-from `nightfall-math`; exact solid validation/construction remain delegated to the native
-OCCT adapter. Rust kernel policy, IR/evaluation and production client cutover are pending.
+`nightfall-kernel` is the headless typed entry point, with unsafe code forbidden. It checks
+finite inputs, nonempty regions/loops and exact endpoint connectivity at the configured
+mm tolerance, returning field coordinates or region/loop/curve locations. Its
+`validate_extrusion` checks input structure; `extrude` also invokes native orthonormal-frame,
+geometry and full solid validation. It never samples or rewrites the NURBS. Retained readers
+use the safe native ownership layer; no raw pointer, client, XPC or model provider is needed.
+`Kernel::info` distinguishes the Rust implementation from the solver and its configuration;
+native solver capabilities do not imply Rust operation parity. Only extrusion is exposed.
+CTest also runs `nf-kernel-extrude`, which reports a disconnected-profile diagnostic and
+builds the exact two-hole plate through `Kernel`. To see both examples' receipts/measures:
+
+```sh
+ctest --preset occt -R '^native-abi.*\.rust$' -V
+```
+
+Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
+delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.
 
 Build the native visual preview with the production, dynamically linked OCCT kernel:
 
