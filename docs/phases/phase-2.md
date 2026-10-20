@@ -27,6 +27,26 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Exact extrusion native boundary (#200)
+
+The private adapter now accepts exact degree-1..9 NURBS regions with outer/hole loops,
+planes and displacement, then calls the existing validated native extrusion. Checked
+pointer/count/alignment and signed-index conversions precede access. Immutable results
+retain the complete operation and backend after context teardown; queries return exact
+measures/topology, estimates, cap/side roles, source lineage and borrowed entity equality.
+No JSON evaluator or sampled-profile substitute crosses the boundary. Failed calls clear
+outputs and publish no partial result; raw forged/stale pointers remain invalid preconditions.
+
+The failure-only scaffold fails 8/20 focused checks. Implemented C17/C++/private Rust ABI
+tests pass 20/20, including a 6000 mm³ / 2200 mm² / six-face / twelve-edge box after input
+and context teardown, placed/negative/oblique extrusions, circular holes and ellipse profiles.
+Geometry and generated-source indices match the existing backend at explicit tolerances.
+The ASan/UBSan boundary suite passes **20/20 in 12.40 s**; Rust and installed OCCT remain
+uninstrumented. The full OCCT/native gate passes **849/849 in 227.05 s**, plus Rust math
+and native Debug/Release checks, schema and hygiene. Safe Rust shape/entity wrappers and
+typed kernel policy follow separately under #199; no production
+switch, completed Rust kernel, deadline relaxation or #185/#195 fix is claimed.
+
 ## Rust native context ownership (#197)
 
 Accepted RFC 0008 now has a std-only `nightfall-native` crate and a private C adapter
