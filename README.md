@@ -299,6 +299,22 @@ and sorted `bodies`; errors write an `errors` array to stderr with codes, messag
 Pointers and available expression offsets. Exit codes are 0 for success, 1 for build/I/O
 failure, and 2 for usage errors (`nf --help`). An existing output is replaced only after
 successful encoding and a complete temporary-file write; input aliases are refused.
+
+Build records include compact, canonical `evidence` version 1 for factual AI verification.
+It retains full round-trip numerical precision: explicit mm/mm²/mm³ units, comparison
+tolerances, configured kernel identity, per-body state hashes, volume/area, centroid,
+bounds, topology counts and name-record counts; plus feature-status totals, cache activity,
+evaluation/export times in ms and STEP byte count/SHA-256. Cache bytes are estimates,
+not process RSS; timings cover the named stages, not total command time.
+`input_sha256` identifies original file bytes; `effective_source_sha256` identifies the
+in-memory source after overrides. `request_sha256` hashes canonical JSON containing the
+input digest and override strings, excluding output path. These differ from semantic
+body state hashes. Errors retain available request/source context and omit success-only
+geometry, artifact and check claims; previous output stays intact on failure.
+`checks.closed_solids=kernel_validated` records kernel admission, while independent STEP
+round-trip and physics checks are `not_run`. `measurement_error_bounds=null` explicitly
+means unavailable: geometric comparison tolerances are not volume/area error bounds.
+
 The backend encodes in memory and preserves source snapshots. Backend implementers must add
 `IKernel::export_step(const std::vector<ShapePtr>&)` and rebuild for the new virtual interface;
 no document migration is needed. STEP carries geometry, without Nightfall history or selectors.
