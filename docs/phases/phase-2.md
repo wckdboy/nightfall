@@ -12,6 +12,18 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Rust kernel and engine migration proposal (#188)
+
+The maintainer requests Rust for Nightfall's own kernel/engine implementation.
+[RFC 0008](../rfcs/0008-rust-kernel.md) proposes Rust numerical geometry, safe kernel
+ownership/policy, IR/evaluation/naming/cache code and a narrow native geometry C adapter.
+Swift remains the macOS client/XPC host; OCCT remains the selected solver. The first
+executable slice after acceptance is std-only checked NURBS evaluation/derivatives with
+analytic/property/C++ differential tests. It is not a wrapper around the complete C++
+evaluator. The proposal preserves existing geometry/IR/provenance/deadline contracts and
+keeps #185's actual-app timeout open. The concrete RFC is in Review; no Rust production
+cutover, completed port or review-period waiver is claimed.
+
 ## Parallel exact integration and copied-geometry tessellation (#185)
 
 The overnight OCCT CI run for #184 passed 822/824 tests, with `bundle.scalability` and
