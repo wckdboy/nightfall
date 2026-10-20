@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
+#include <string.h>
 #include "nf_native.h"
 _Static_assert(sizeof(uint32_t) == 4, "status width");
 _Static_assert(offsetof(nf_native_info, identity) == 8, "identity layout");
@@ -13,6 +14,8 @@ _Static_assert(sizeof(nf_native_meshing_options) == 24, "meshing options layout"
 _Static_assert(sizeof(nf_native_mesh_vertex) == 48, "vertex layout");
 _Static_assert(sizeof(nf_native_mesh_info) == 40, "mesh layout");
 _Static_assert(sizeof(nf_native_mesh_face) == 16, "mesh face layout");
+_Static_assert(sizeof(nf_native_step_info) == 16, "STEP buffer layout");
+_Static_assert(offsetof(nf_native_step_info, byte_count) == 8, "STEP count layout");
 int main(void) {
   nf_native_context* context = NULL;
   uint32_t status = nf_native_context_create(NF_NATIVE_ABI_VERSION, 1e-6, 1e-9, &context);
@@ -44,6 +47,9 @@ int main(void) {
     nf_native_mesh* mesh = NULL;
     const nf_native_meshing_options options = {0.1, 0.2, 12};
     if (nf_native_tessellate(context, moved, &options, &mesh) != NF_NATIVE_OK || !mesh) return 10;
+    nf_native_step* step = NULL;
+    const nf_native_result* bodies[] = {result, moved, result};
+    if (nf_native_export_step(context, bodies, 3, &step) != NF_NATIVE_OK || !step) return 13;
     nf_native_context_release(context);
     context = NULL;
     nf_native_result_info measures = {0};
@@ -86,10 +92,16 @@ int main(void) {
         return 12;
     }
     nf_native_mesh_release(mesh);
+    nf_native_step_info encoded = {0};
+    if (nf_native_step_query(step, &encoded) != NF_NATIVE_OK || !encoded.bytes ||
+        encoded.byte_count < 13 || memcmp(encoded.bytes, "ISO-10303-21;", 13) != 0)
+      return 14;
+    nf_native_step_release(step);
   } else if (status != NF_NATIVE_UNAVAILABLE || context)
     return 3;
   nf_native_context_release(context);
   nf_native_context_release(NULL);
   nf_native_mesh_release(NULL);
+  nf_native_step_release(NULL);
   return 0;
 }

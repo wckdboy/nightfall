@@ -135,5 +135,8 @@ impl Context {
 #[path = "../tests/support/extrusion_abi.rs"]
 mod extrusion_abi_tests;
 #[cfg(test)]
+#[path = "../tests/support/step_abi.rs"]
+mod step_abi_tests;
+#[cfg(test)]
 #[path = "../tests/support/internal.rs"]
 mod tests;

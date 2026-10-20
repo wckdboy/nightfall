@@ -113,6 +113,12 @@ The [inspected fixture](docs/images/rust-kernel-mesh.png) has 6 solids, 84 origi
 and 4,152 triangles, with mesh volume within 0.0086% of exact geometry. This viewer is a
 validation example; production macOS client integration remains a separate migration gate.
 
+The [private native adapter](core/kernel/native/include/nf_native.h) also exposes exact
+STEP export: `nf_native_export_step` encodes every supplied same-context snapshot as AP242
+millimetre bytes, including coincident bodies. Its independent immutable byte owner survives
+source/context teardown, with paired `nf_native_step_query` / `nf_native_step_release`.
+The adapter opens no files. Safe Rust ownership and typed Kernel export follow separately.
+
 Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
 delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.
 

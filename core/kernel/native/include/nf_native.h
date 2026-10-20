@@ -21,6 +21,11 @@ typedef struct nf_native_context nf_native_context;
 typedef struct nf_native_result nf_native_result;
 typedef struct nf_native_entity nf_native_entity;
 typedef struct nf_native_mesh nf_native_mesh;
+typedef struct nf_native_step nf_native_step;
+typedef struct {
+  const uint8_t* bytes;
+  uint64_t byte_count;
+} nf_native_step_info;
 typedef struct {
   double linear_deflection, angular_deflection;
   uint64_t max_triangles;
@@ -130,6 +135,17 @@ uint32_t nf_native_mesh_query(const nf_native_mesh*, nf_native_mesh_info* out) N
 uint32_t nf_native_mesh_face_at(const nf_native_mesh*, uint64_t index,
                                 nf_native_mesh_face* out) NF_NATIVE_NOEXCEPT;
 void nf_native_mesh_release(nf_native_mesh*) NF_NATIVE_NOEXCEPT;  // NULL-safe
+// Encode every supplied same-context snapshot as exact AP242 STEP in millimetres, including
+// coincident bodies. Inputs are a nonempty aligned array, borrowed only during this call;
+// no file I/O, tessellation or source mutation. Foreign/null/malformed inputs return INVALID
+// before geometry access; solver failures return FAILURE. A valid *out is cleared on error.
+// Success transfers one independent byte owner, readable after all inputs/context end.
+uint32_t nf_native_export_step(nf_native_context*, const nf_native_result* const* sources,
+                               uint64_t source_count, nf_native_step** out) NF_NATIVE_NOEXCEPT;
+// Immutable counted bytes, not NUL-terminated by contract, borrowed until step_release.
+// Queries clear aligned valid outputs on failure. Misaligned outputs are rejected untouched.
+uint32_t nf_native_step_query(const nf_native_step*, nf_native_step_info* out) NF_NATIVE_NOEXCEPT;
+void nf_native_step_release(nf_native_step*) NF_NATIVE_NOEXCEPT;  // NULL-safe
 // Queries clear outputs on failure. Exact measures use mm units; estimates are not RSS limits.
 uint32_t nf_native_result_query(const nf_native_result*,
                                 nf_native_result_info* out) NF_NATIVE_NOEXCEPT;

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
 function(nf_native_adapter name occt directory)
-  add_library(${name} SHARED src/context.cpp src/extrusion.cpp src/transform.cpp src/mesh.cpp)
+  add_library(${name} SHARED src/context.cpp src/extrusion.cpp src/transform.cpp src/mesh.cpp src/step.cpp)
   target_include_directories(${name} PUBLIC include)
   target_compile_definitions(${name} PRIVATE NF_NATIVE_OCCT=$<BOOL:${occt}>)
   target_link_libraries(${name} PRIVATE nf::warnings)
@@ -16,6 +16,9 @@ function(nf_native_adapter name occt directory)
       "LINKER:-exported_symbol,_nf_native_mesh_query"
       "LINKER:-exported_symbol,_nf_native_mesh_face_at"
       "LINKER:-exported_symbol,_nf_native_mesh_release"
+      "LINKER:-exported_symbol,_nf_native_export_step"
+      "LINKER:-exported_symbol,_nf_native_step_query"
+      "LINKER:-exported_symbol,_nf_native_step_release"
       "LINKER:-exported_symbol,_nf_native_result_history"
       "LINKER:-exported_symbol,_nf_native_result_history_entity"
       "LINKER:-exported_symbol,_nf_native_result_query"
@@ -31,11 +34,12 @@ function(nf_native_adapter name occt directory)
     target_link_libraries(${name} PRIVATE nf::kernel)
   endif()
   if(NF_BUILD_TESTS)
-    add_executable(${name}_tests tests/context_tests.cpp tests/extrusion_tests.cpp tests/transform_tests.cpp tests/mesh_tests.cpp)
+    add_executable(${name}_tests tests/context_tests.cpp tests/extrusion_tests.cpp tests/transform_tests.cpp tests/mesh_tests.cpp tests/step_tests.cpp)
     target_include_directories(${name}_tests PRIVATE src)
-    target_compile_definitions(${name}_tests PRIVATE NF_EXPECT_OCCT=$<BOOL:${occt}>)
+    target_compile_definitions(${name}_tests PRIVATE NF_EXPECT_OCCT=$<BOOL:${occt}> NF_NATIVE_OCCT=$<BOOL:${occt}>)
     target_link_libraries(${name}_tests PRIVATE ${name} nf::warnings Catch2::Catch2WithMain)
     if(occt)
+      target_include_directories(${name}_tests PRIVATE ../src)
       target_link_libraries(${name}_tests PRIVATE nf::kernel)
     endif()
     catch_discover_tests(${name}_tests TEST_PREFIX "native-abi.${name}.")

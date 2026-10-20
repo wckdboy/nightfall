@@ -27,6 +27,40 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Native exact STEP byte ownership (#219)
+
+The private C adapter now accepts a checked nonempty array of same-context result owners
+and exports every exact snapshot through the existing AP242 millimetre STEP encoder.
+The complete owner list is checked before geometry access/allocation; null/foreign owners,
+alignment/count errors and incomplete records publish no bytes. Native failures clear valid
+outputs, preserve inputs and leave prior exports readable. A paired immutable byte owner
+survives all source/result/context teardown; no C++ container layout or file I/O crosses
+the boundary. Existing ABI records, solver identity and Rust policy receipts are unchanged.
+
+The failure-only scaffold first fails **13/42** focused checks. Final native ABI checks pass
+**43/43 in 17.79 s**, including independent C17/C++/Rust layouts, null/misaligned/overflow
+boundaries, foreign-owner preflight, native-failure recovery and real retained reads from
+Rust after every geometry owner ends. All **36 native Rust checks** and **23 Kernel checks**
+pass per backend/profile in Debug/Release with Clippy/warnings denied.
+
+Exported bytes reload as fully validated exact solids: box **6000 mm³ / 2200 mm² / six
+faces / twelve edges**, repeated/coincident, separated and compound bodies **12000 mm³ /
+4400 mm² / two solids / twelve faces / twenty-four edges**, and rational annular geometry
+**2250π mm³ / 1050π mm²** with analytic cylindrical surfaces. Volume/area tolerances stay
+1e-6; centroids stay 1e-7, including **[0,6,18] mm** after offset-axis rotation/translation.
+Centroids use the existing conditioned shell integrator; volume/area also agree with
+independent OCCT integrations. Source B-rep serialization and original face equality are
+unchanged after repeated export; prior byte-buffer addresses and content remain stable.
+
+Native adapter ASan/UBSan passes **43/43 in 61.01 s**; Rust and installed OCCT remain
+uninstrumented. The full OCCT gate passes **872/872 in 244.14 s**, plus Rust math, schema
+and hygiene, including the native app/XPC/Metal/CLI and client ThreadSanitizer cases.
+The dylib exports only its eighteen intended C symbols. Logs:
+`/tmp/nightfall-219-{red,focused-final,asan,check}.log`.
+
+Safe Rust ownership, typed Kernel export and production client cutover remain pending under
+RFC 0008. #185/#195 and the Phase 2/MVP gates stay open.
+
 ## Typed Rust kernel meshing and visual fixture (#218)
 
 The forbid-unsafe `nightfall-kernel` facade now exposes `validate_meshing` and `tessellate`,
