@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "nightfall-kernel"
+version = "0.0.1"
+dependencies = [
+ "nightfall-math",
+ "nightfall-native",
+]
+
+[[package]]
 name = "nightfall-math"
 version = "0.0.1"
 
