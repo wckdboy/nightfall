@@ -12,7 +12,7 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
-## Rust kernel and engine migration proposal (#188)
+## Rust kernel and engine migration decision (#188)
 
 The maintainer requests Rust for Nightfall's own kernel/engine implementation.
 [RFC 0008](../rfcs/0008-rust-kernel.md) proposes Rust numerical geometry, safe kernel
@@ -21,8 +21,9 @@ Swift remains the macOS client/XPC host; OCCT remains the selected solver. The f
 executable slice after acceptance is std-only checked NURBS evaluation/derivatives with
 analytic/property/C++ differential tests. It is not a wrapper around the complete C++
 evaluator. The proposal preserves existing geometry/IR/provenance/deadline contracts and
-keeps #185's actual-app timeout open. The concrete RFC is in Review; no Rust production
-cutover, completed port or review-period waiver is claimed.
+keeps #185's actual-app timeout open. The maintainer accepts the concrete design and
+explicitly waives the review wait on 2026-10-20: “waived, lets go.” RFC 0008 is Accepted;
+implementation can begin. No Rust production cutover or completed port is claimed.
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 

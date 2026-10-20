@@ -1,15 +1,16 @@
 # RFC 0008: Rust implementation of the Nightfall kernel and engine
 
-- **Status:** Review
+- **Status:** Accepted
 - **Author(s):** The Nightfall Authors (agent-authored proposal)
 - **Phase:** 2
 - **Created:** 2026-10-20
 - **Issue:** [#188](https://github.com/wckdboy/nightfall/issues/188)
-- **Decision requested:** Accept this migration design and authorize its implementation.
+- **Accepted:** 2026-10-20 by the maintainer in the project conversation: “waived, lets go.”
+  This accepts the concrete design in PR #189 and explicitly waives the normal review wait.
 
 The maintainer explicitly requests Rust for the kernel and engine. That establishes the
 language direction. This RFC supplies the concrete module, ownership, FFI and cutover
-design required by WORKFLOW §3; acceptance and a review-period waiver are not inferred.
+design required by WORKFLOW §3; the maintainer subsequently accepts it and waives the wait.
 RFC 0006 remains reserved for Nightfall Script.
 
 ## Summary
@@ -226,8 +227,8 @@ whole evaluator behind one call. Cross-language panic, allocator and thread-affi
 are release blockers. Later parser/hash/runtime dependencies require concrete proposals.
 The outstanding interactive timeout must remain visible throughout the migration.
 
-Implementation waits for acceptance under WORKFLOW §3. The maintainer can explicitly waive
-the normal review wait after reviewing this concrete design; no such waiver is recorded yet.
+Implementation is authorized by the maintainer's explicit acceptance and review-wait waiver
+recorded above. Normal per-issue scope, tests, sign-offs and PR review still apply.
 
 References: [RFC 0004](0004-libnf-math.md), [RFC 0007](0007-kernel-evaluator-contract.md),
 [Rust FFI guidance](https://doc.rust-lang.org/nomicon/ffi.html),
