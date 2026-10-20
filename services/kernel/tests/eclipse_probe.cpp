@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -32,8 +33,11 @@ void require(bool condition, const std::string& message) {
   if (!condition) throw std::runtime_error(message);
 }
 void near(double value, double expected, double tolerance, const std::string& message) {
-  require(std::isfinite(value) && std::abs(value - expected) <= tolerance,
-          message + ": got " + std::to_string(value) + ", expected " + std::to_string(expected));
+  if (std::isfinite(value) && std::abs(value - expected) <= tolerance) return;
+  std::ostringstream error;
+  error << std::setprecision(17) << message << ": got " << value << ", expected " << expected
+        << ", absolute tolerance " << tolerance;
+  throw std::runtime_error(error.str());
 }
 double milliseconds(Clock::time_point start) {
   return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
@@ -160,7 +164,7 @@ Evaluation build(Evaluator& evaluator, const std::string& source) {
   require(value->ok(), "feature evaluation failed");
   return std::move(*value);
 }
-kernel::Measures verify(const Evaluation& result, double waist) {
+kernel::Measures verify(const Evaluation& result, double waist, ir::json::Array* rows = nullptr) {
   const auto expected = volumes(waist);
   kernel::Measures total{};
   std::size_t live = 0;
@@ -168,12 +172,26 @@ kernel::Measures verify(const Evaluation& result, double waist) {
     if (!body.shape) continue;
     ++live;
     const auto& m = body.shape->measures();
+    require(expected.contains(id), "unexpected body " + id);
+    require(body.hash.has_value(), "missing body hash " + id);
     near(m.volume, expected.at(id), .02, id + " independent volume mm3");
     near(m.centroid.x, 500, 1e-6, id + " fourfold centroid x mm");
     near(m.centroid.y, 0, 1e-6, id + " fourfold centroid y mm");
     require(m.solids > 0 && m.faces > 0 && m.edges > 0 && m.area > 0, "empty topology " + id);
     for (const auto& name : body.names)
-      require(name.entity->owner() == body.shape, "stale provenance " + id);
+      require(name.entity && name.entity->owner() == body.shape, "stale provenance " + id);
+    if (rows)
+      rows->push_back(ir::json::Object{
+          {"id", id},
+          {"state_hash", body.hash->hex()},
+          {"volume_mm3", m.volume},
+          {"analytic_volume_mm3", expected.at(id)},
+          {"volume_difference_mm3", m.volume - expected.at(id)},
+          {"area_mm2", m.area},
+          {"centroid_mm", ir::json::Array{m.centroid.x, m.centroid.y, m.centroid.z}},
+          {"solids", static_cast<double>(m.solids)},
+          {"faces", static_cast<double>(m.faces)},
+          {"edges", static_cast<double>(m.edges)}});
     total.volume += m.volume;
     total.area += m.area;
     total.solids += m.solids;
@@ -187,20 +205,26 @@ kernel::Measures verify(const Evaluation& result, double waist) {
 }
 }  // namespace
 int main(int argc, char** argv) {
+  ir::json::Object failure{{"status", "failed"}};
   try {
     require(argc == 2 || argc == 3,
             "usage: nf_eclipse_probe eclipse.nightfall [new-output-directory]");
     const std::filesystem::path path = argv[1];
     const std::string source = read(path);
+    failure.push_back({"fixture_sha256", ir::sha256(source).hex()});
+    failure.push_back({"probe_binary_sha256", ir::sha256(read(argv[0])).hex()});
     const std::filesystem::path folder = argc == 3 ? argv[2] : "";
     if (!folder.empty()) require(!std::filesystem::exists(folder), "output already exists");
     auto backend = kernel::make_occt_kernel().value();
+    failure.push_back({"kernel", std::string(backend->identity())});
     Evaluator evaluator(*backend, {96, 64 * 1024 * 1024});
     auto start = Clock::now();
     const auto original = build(evaluator, source);
     const double cold_ms = milliseconds(start);
+    std::fprintf(stderr, "Eclipse: cold evaluation %.3f ms\n", cold_ms);
     require(original.features.size() == 113, "authored feature coverage");
-    const auto exact = verify(original, 1);
+    ir::json::Array metrics;
+    const auto exact = verify(original, 1, &metrics);
     auto part = ir::read_document(source).value();
     for (auto& p : part.params)
       if (p.name == "rotor_waist") p.value = 1.05;
@@ -301,6 +325,8 @@ int main(int argc, char** argv) {
     }
     require(read(path) == source, "source file changed");
     const std::string receipt = ir::json::write(ir::json::Object{
+        {"status", "passed"},
+        {"body_metrics", std::move(metrics)},
         {"fixture_sha256", ir::sha256(source).hex()},
         {"probe_binary_sha256", ir::sha256(read(argv[0])).hex()},
         {"kernel", std::string(backend->identity())},
@@ -330,7 +356,7 @@ int main(int argc, char** argv) {
          ir::sha256({reinterpret_cast<const char*>(indices), ni * sizeof(*indices)}).hex()},
         {"faces_sha256",
          ir::sha256({reinterpret_cast<const char*>(faces), nf * sizeof(*faces)}).hex()},
-          {"features", 113.},
+        {"features", 113.},
         {"bodies", 32.},
         {"solids", static_cast<double>(exact.solids)},
         {"faces", static_cast<double>(exact.faces)},
@@ -359,7 +385,8 @@ int main(int argc, char** argv) {
     }
     std::puts(receipt.c_str());
   } catch (const std::exception& error) {
-    std::fprintf(stderr, "Eclipse: %s\n", error.what());
+    failure.push_back({"error", std::string(error.what())});
+    std::fprintf(stderr, "%s\n", ir::json::write(std::move(failure)).c_str());
     return 1;
   }
 }

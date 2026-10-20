@@ -41,6 +41,20 @@ preserve the complete geometry and raise the authored count to 113. No limit cha
 
 The next run failed the analytic deck-bolt volume: 21764.035312 mm³ observed versus
 21762.943285 mm³ expected. A minimal translated annulus/chamfer reproduction also differs
-after independent STEP integration. This is an unresolved geometry discrepancy; Eclipse
-is not yet a passing capability milestone. The 0.02 mm³ budget remains unchanged.
-All later results must retain this failed case and state its resolution explicitly.
+after independent STEP integration. The isolated correction in
+[PR #235](https://github.com/wckdboy/nightfall/pull/235) restores the analytic result
+without changing the roundoff bound or existing mesh goldens. Its complete local gate
+passes 890/890; focused ASan/UBSan checks pass 1582 assertions across 15 cases.
+
+The next Eclipse run passes the deck-bolt check and fails the twisted-vane oracle:
+1086259.4812360606 mm³ observed versus 1090379.9332788421 mm³ predicted. That oracle
+assumes fixed correspondence between the three ellipse parameterizations; the loft's
+automatic compatibility matching can split/reparameterize the sections. Investigation
+[#236](https://github.com/wckdboy/nightfall/issues/236) must distinguish that assumption
+from an implementation defect, using independent surface mathematics. The full cold
+evaluation takes 70323.303 ms on an Apple M3 Pro, Release, uncontrolled host load.
+
+Eclipse is **not yet a passing capability milestone**. The complete fixture, 0.02 mm³
+budget, 120-second headless test bound and service deadlines remain unchanged. The probe
+emits source/executable/kernel-bound JSON on failure and publishes no success receipt.
+All later results must retain these failed cases and state their resolution explicitly.
