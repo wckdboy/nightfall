@@ -19,3 +19,7 @@ path = "tests/support/extrude_example.rs"
 [[example]]
 name = "nf-kernel-placement"
 path = "tests/support/placement_example.rs"
+
+[[example]]
+name = "nf-kernel-mesh"
+path = "tests/support/mesh_example.rs"

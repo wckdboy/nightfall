@@ -72,10 +72,10 @@ mm tolerance, returning field coordinates or region/loop/curve locations. Its
 geometry and full solid validation. It never samples or rewrites the NURBS. Retained readers
 use the safe native ownership layer; no raw pointer, client, XPC or model provider is needed.
 `Kernel::info` distinguishes the Rust implementation from the solver and its configuration;
-native solver capabilities do not imply Rust operation parity. Extrusion and rigid
-placement are exposed in the current Rust surface.
+native solver capabilities do not imply Rust operation parity. Extrusion, rigid
+placement and mesh readback are exposed in the current Rust surface.
 CTest also runs `nf-kernel-extrude`, which reports a disconnected-profile diagnostic and
-builds the exact two-hole plate through `Kernel`. To see both examples' receipts/measures:
+builds the exact two-hole plate through `Kernel`. To see the examples' receipts/measures:
 
 ```sh
 ctest --preset occt -R '^native-abi.*\.rust$' -V
@@ -88,6 +88,30 @@ precision floors still apply. `nf-kernel-placement` uses this typed API to build
 two-hole parts, checks all world centroids/measures and 300 history mappings, then verifies
 retained readers after input/source/Kernel/results are dropped. These are placed solids;
 joint constraints and assembly simulation remain separate work.
+
+`Kernel::tessellate` returns retained immutable world-space vertices, outward normals,
+indexed triangles and original-face ranges. `validate_meshing` checks finite mm/radian
+deflections against configured precision floors and the native triangle limit. Structured
+`KernelError::MeshInput` diagnostics identify invalid fields. Mesh clones borrow the same
+native buffers; a cloned picking face stays valid after every mesh/source/facade drops.
+Offsets in derived meshes are transient and never persisted selectors.
+Rust consumers matching `KernelError` exhaustively must handle the new `MeshInput`
+variant; diagnostic receipt consumers update to `policy=extrusion-rigid-mesh-v1`.
+No persisted document or cache migration is needed.
+
+`nf-kernel-mesh` validates six exact rational two-hole plates and exports a derived OBJ,
+receipt and offline viewer with orbit, zoom, wireframe and face selection. After the linked
+native CTest above has built the examples, generate into a new destination:
+
+```sh
+mkdir -p out
+build/occt/rust-nf_native_adapter/aarch64-apple-darwin/release/examples/nf-kernel-mesh --output-dir out/rust-mesh-preview
+open out/rust-mesh-preview/preview.html
+```
+
+The [inspected fixture](docs/images/rust-kernel-mesh.png) has 6 solids, 84 original faces
+and 4,152 triangles, with mesh volume within 0.0086% of exact geometry. This viewer is a
+validation example; production macOS client integration remains a separate migration gate.
 
 Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
 delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.

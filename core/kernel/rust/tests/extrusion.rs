@@ -345,7 +345,7 @@ fn implementation_receipts_are_namespaced_and_include_backend_configuration() {
     let info = kernel.info().unwrap();
     assert!(
         info.identity
-            .starts_with("nightfall-rust/0.0.1;policy=extrusion-rigid-v1;native=occt/7.9.3;")
+            .starts_with("nightfall-rust/0.0.1;policy=extrusion-rigid-mesh-v1;native=occt/7.9.3;")
     );
     assert!(info.identity.ends_with(&info.backend.identity));
     assert_ne!(info.identity, info.backend.identity);

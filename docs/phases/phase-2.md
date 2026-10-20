@@ -27,6 +27,42 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Typed Rust kernel meshing and visual fixture (#218)
+
+The forbid-unsafe `nightfall-kernel` facade now exposes `validate_meshing` and `tessellate`,
+with retained immutable native buffers and original-face picking. Rust policy checks finite
+mm/radian deflections, configured precision floors, the angular upper bound and 1..=1M
+triangles before native access. Solver validation and output budgets remain binding.
+Exhaustive `KernelError` matches must handle `MeshInput`; diagnostic receipt consumers
+update to `policy=extrusion-rigid-mesh-v1`. No persisted document/cache migration is needed.
+
+The executable `nf-kernel-mesh` fixture builds six exact rational two-hole plates through
+the real typed extrusion/rigid-placement/mesh APIs, validates world placement, outward unit
+normals, nondegenerate winding, complete original-face coverage and retained readers after
+facade teardown. Its optional new-directory export produces a derived OBJ, receipt and
+dependency-free offline viewer. The [inspected render](../images/rust-kernel-mesh.png)
+shows six solids, twelve through bores, 84 original faces, 4,272 vertices and 4,152 triangles.
+Exact aggregate measures are **52774.513684086 mm³ / 22326.371578978 mm²**; mesh measures are
+**52779.012202553 mm³ / 22326.933775792 mm²**, errors **0.008524% / 0.002518%**.
+Saved browser evidence covers shaded/wireframe/top views, body/face selection, orbit, zoom
+and fit; inspection confirms the original-face highlight and open bores. Exported OBJ
+object/face-group counts and independent volume/area agree with the native mesh receipt.
+
+The new tests reject the pre-meshing API at baseline `fa17adc`. All **23 Kernel checks**
+and **33 native Rust checks** pass per backend/profile with Debug/Release/fmt/Clippy and
+warnings denied. Cases cover analytic box measures within 1e-7, configured precision
+floors, nonfinite fields, foreign contexts, the exact 12-triangle budget and bounded failure
+recovery. Native adapter ASan/UBSan passes **32/32 in 10.92 s**; Rust and installed OCCT
+remain uninstrumented. The full OCCT gate passes **861/861 in 214.01 s**, plus Rust math,
+schema and hygiene. The sandboxed build first fails in Swift's macro plugin; the complete gate passes
+outside that sandbox. A fresh OBJ/HTML export also rejects invalid arguments and preserves
+every archived output byte when an existing destination is refused.
+Logs: `/tmp/nightfall-218-{baseline,focused,export,asan,check-unsandboxed}.log`.
+
+Rust IR/evaluation and production client cutover remain pending under RFC 0008.
+The fixture contains placed solids; joint constraints and simulation remain separate work.
+Delivery #213 and the Phase 2 gate await their remaining review/sign-off; #185/#195 stay open.
+
 ## Safe Rust retained mesh buffers and picking (#216)
 
 `nightfall-native` now borrows immutable native world-space vertices and triangle indices

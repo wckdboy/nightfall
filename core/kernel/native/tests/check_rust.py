@@ -30,7 +30,8 @@ for profile in ("dev", "release"):
 if expected == "1":
     for package, example in (("nightfall-native", "nf-rust-extrude"),
                              ("nightfall-kernel", "nf-kernel-extrude"),
-                             ("nightfall-kernel", "nf-kernel-placement")):
+                             ("nightfall-kernel", "nf-kernel-placement"),
+                             ("nightfall-kernel", "nf-kernel-mesh")):
         subprocess.run([cargo, "run", "-p", package, "--example", example,
                         "--target", rust_target, "--release", "--locked", "--offline"],
                        cwd=root, env=env, check=True)

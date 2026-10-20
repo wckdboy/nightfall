@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Headless typed kernel policy (RFC 0008); exact geometry remains native C++/OCCT.
 #![forbid(unsafe_code)]
+mod mesh;
 mod transform;
+pub use mesh::{MeshLocation, MeshProblem};
 pub use nightfall_math::{KnotVector, MathError, NurbsCurve2};
 use nightfall_native::Context;
 pub use nightfall_native::extrusion::{
     Entity, EntityKind, Extrusion, Frame, Generated, History, Measures, OperationResult,
     ProfileEdge, Region, Shape,
 };
+pub use nightfall_native::mesh::{Mesh, MeshFace, MeshingOptions, Vertex};
 pub use nightfall_native::transform::RigidTransform;
 pub use nightfall_native::{BackendInfo, NativeError, Operation as NativeOperation};
 pub use transform::{TransformLocation, TransformProblem};
@@ -49,6 +52,10 @@ pub enum KernelError {
         at: TransformLocation,
         problem: TransformProblem,
     },
+    MeshInput {
+        at: MeshLocation,
+        problem: MeshProblem,
+    },
     Native(NativeError),
 }
 impl From<NativeError> for KernelError {
@@ -63,6 +70,7 @@ impl std::fmt::Display for KernelError {
             Self::TransformInput { at, problem } => {
                 write!(f, "transform input {at:?}: {problem:?}")
             }
+            Self::MeshInput { at, problem } => write!(f, "mesh input {at:?}: {problem:?}"),
             Self::Native(error) => write!(f, "native geometry: {error:?}"),
         }
     }
@@ -75,7 +83,7 @@ pub struct KernelInfo {
     pub identity: String,
     pub backend: BackendInfo,
 }
-/// Thread-affine typed facade exposing exact extrusion and rigid placement in this migration slice.
+/// Thread-affine typed facade exposing exact extrusion, rigid placement and mesh readback.
 ///
 /// ```compile_fail
 /// use nightfall_kernel::Kernel;
@@ -85,6 +93,7 @@ pub struct KernelInfo {
 pub struct Kernel {
     native: Context,
     linear_mm: f64,
+    angular_radians: f64,
 }
 impl Kernel {
     /// Finite positive mm/radian tolerances, subject to the selected solver's precision floors.
@@ -92,6 +101,7 @@ impl Kernel {
         Ok(Self {
             native: Context::new(linear_mm, angular_radians)?,
             linear_mm,
+            angular_radians,
         })
     }
     /// Copy an implementation receipt independently of native owner lifetimes.
@@ -99,7 +109,7 @@ impl Kernel {
         let backend = self.native.info()?;
         Ok(KernelInfo {
             identity: format!(
-                "nightfall-rust/{};policy=extrusion-rigid-v1;native={}",
+                "nightfall-rust/{};policy=extrusion-rigid-mesh-v1;native={}",
                 env!("CARGO_PKG_VERSION"),
                 backend.identity
             ),
