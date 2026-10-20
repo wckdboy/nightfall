@@ -12,6 +12,50 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Owned Rust NURBS surfaces (#234)
+
+Under Accepted RFC 0008 the existing std-only, unsafe-free math crate now owns 2D/3D
+tensor-product rational NURBS surfaces, immutable shared control nets, checked row-major
+counts and weight/coordinate invariants, allocation-free point evaluation and caller-sized
+rectangular mixed derivatives. Both knot degrees remain 1..9. Polynomial above-degree
+partials are exactly zero; rational higher mixed derivatives use the full quotient rule.
+Parameters clamp independently with documented one-sided knot derivatives. Active-patch
+weight scaling and relative coordinates handle tiny weights and large translations;
+unrepresentable intermediate arithmetic returns a structured error.
+
+The new API test first fails for missing surface types. Twelve focused cases then pass:
+planes/bilinear patches, quarter cylinder/sphere including collapsed polar edges, analytic
+rational mixed orders through (6,6), independent central differences, repeated knots and
+endpoints, 1e12 translations, geometric scales 1e-150/1e150, power-of-two/subnormal weight
+scales, invalid construction/nonfinite inputs, numerical range and retained cross-thread
+clones. Allocation observation finds zero calls for point/derivative/clone/error paths
+across degrees 1..9 in both axes, polynomial and rational patches. Clippy denies warnings.
+
+The seeded C++ differential harness passes **3564 cases** over all 81 degree pairs,
+repeated knots, endpoints/outside clamping and rational/polynomial controls, through total
+mixed order three. **56 independent 80-digit Decimal checks** pass; maximum directly
+conforming row-scaled difference is **8.99e-12**, with no disagreements needing adjudication.
+Component budgets are 1e-12 for point rows and 1e-10 for derivative rows, with a 16-ulp
+row-norm cancellation floor. These are comparison budgets, not certified error bounds.
+
+An additional adversarial range case after the first **891/891 (263.96 s)** gate pass
+exposes amplified underflow: a rational blend at u=v=1e-160 returns
+4.494182803680613e295 instead of the independent 80-digit 4.494232837153770e295.
+It now returns `NumericalRange` for subnormal basis/product intermediates, before their
+lost precision can be amplified. This conservative unsupported range is documented;
+ordinary endpoints and uniformly tiny active-patch weights still evaluate. A retained
+red test also checks basis terms that underflow before tensor blending. No accuracy
+budget is relaxed. `/tmp/nightfall-234-underflow-red.log` preserves the counterexample.
+
+Production still uses the C++ evaluator/OCCT solver; no Rust solid/evaluator cutover,
+assembly or physics capability is inferred. This surface API supplies the next independent
+mathematical tool for #236's unresolved loft-correspondence investigation. Logs:
+`/tmp/nightfall-234-{red,focused,differential,first-check,underflow-red}.log`.
+After the precision guard, the final complete local gate passes **891/891 in 264.34 s**,
+including Rust Debug/Release, both doctests, zero-allocation observation, Clippy/format,
+schema/hygiene and unchanged native XPC/Metal/concurrency regressions. Final log:
+`/tmp/nightfall-234-check.log`. Remote CI and human review remain pending.
+
 ## Translated circular chamfer regression (#233)
 
 The Eclipse analytic probe (#225) exposes a real geometry discrepancy: 32 deck bolts

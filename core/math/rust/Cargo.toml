@@ -19,3 +19,7 @@ path = "tests/support/curve_probe.rs"
 [[example]]
 name = "nf-rust-curve-bench"
 path = "tests/support/curve_bench.rs"
+
+[[example]]
+name = "nf-rust-surface-probe"
+path = "tests/support/surface_probe.rs"

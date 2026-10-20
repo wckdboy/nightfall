@@ -10,9 +10,11 @@ const SIDE: usize = MAX_DEGREE + 1;
 mod basis;
 mod knot_vector;
 mod nurbs_curve;
+mod nurbs_surface;
 pub use basis::{BasisDerivatives, BasisValues, basis_derivatives, basis_functions};
 pub use knot_vector::KnotVector;
 pub use nurbs_curve::{NurbsCurve, NurbsCurve2, NurbsCurve3};
+pub use nurbs_surface::{NurbsSurface, NurbsSurface2, NurbsSurface3};
 
 /// Checked construction/evaluation failure; errors never allocate diagnostic strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
