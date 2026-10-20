@@ -4,6 +4,7 @@
 #include "snapshot.hpp"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -12,6 +13,7 @@
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <TopExp_Explorer.hxx>
@@ -176,6 +178,51 @@ TEST_CASE("mass integration preserves deterministic moments on shared placed cur
     const auto& m = (*result)->measures();
     CHECK(m.solids == count);
     CHECK_THAT(m.volume, WithinAbs(count * 105 * pi * 15 / 16, 1e-7));
+    CHECK_THAT(m.centroid.x, WithinAbs(expected_center.X(), 1e-8));
+    CHECK_THAT(m.centroid.y, WithinAbs(expected_center.Y(), 1e-8));
+    CHECK_THAT(m.centroid.z, WithinAbs(expected_center.Z(), 1e-8));
+    if (first) {
+      CHECK(m.volume == first->volume);
+      CHECK(m.area == first->area);
+      CHECK(m.centroid == first->centroid);
+    } else {
+      first = m;
+    }
+    std::ostringstream after;
+    BRepTools::Write(compound, after);
+    CHECK(after.str() == saved.str());
+  }
+}
+
+TEST_CASE("parallel face batches retain separate references for shared curved cavity shells",
+          "[surface-mass][mass-parallel]") {
+  const auto seed = BRepAlgoAPI_Cut(BRepPrimAPI_MakeBox(8, 10, 12).Shape(),
+                                    BRepPrimAPI_MakeSphere(gp_Pnt(3, 4, 5), 1).Shape())
+                        .Shape();
+  const double cavity_volume = 4 * pi / 3, volume = 960 - cavity_volume;
+  const gp_Pnt center((960 * gp_XYZ(4, 5, 6) - cavity_volume * gp_XYZ(3, 4, 5)) / volume);
+  BRep_Builder builder;
+  TopoDS_Compound compound;
+  builder.MakeCompound(compound);
+  gp_XYZ expected_center;
+  constexpr int count = 8;
+  for (int i = 0; i < count; ++i) {
+    gp_Trsf placement;
+    placement.SetRotation(gp_Ax1({}, gp_Dir(2, -1, 3)), i * pi / 7);
+    placement.SetTranslationPart(gp_Vec(i * 200, -i * 100, i * 50));
+    builder.Add(compound, BRepBuilderAPI_Transform(seed, placement, false).Shape());
+    expected_center += center.Transformed(placement).XYZ() / count;
+  }
+  std::ostringstream saved;
+  BRepTools::Write(compound, saved);
+  std::optional<Measures> first;
+  for (int pass = 0; pass < 4; ++pass) {
+    const auto result = detail::snapshot(compound);
+    REQUIRE(result);
+    const auto& m = (*result)->measures();
+    CHECK(m.solids == count);
+    CHECK_THAT(m.volume, WithinAbs(count * volume, 1e-7));
+    CHECK_THAT(m.area, WithinAbs(count * (592 + 4 * pi), 1e-7));
     CHECK_THAT(m.centroid.x, WithinAbs(expected_center.X(), 1e-8));
     CHECK_THAT(m.centroid.y, WithinAbs(expected_center.Y(), 1e-8));
     CHECK_THAT(m.centroid.z, WithinAbs(expected_center.Z(), 1e-8));

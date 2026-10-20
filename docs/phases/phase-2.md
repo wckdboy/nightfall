@@ -80,8 +80,34 @@ all **368 evaluator cases / 450420 assertions**, and all **12 bridge cases / 654
 assertions**, with no diagnostics. A separate Debug C++ ThreadSanitizer build passes the
 ten mass/mesh cases / 387735 assertions with halt-on-error and no reported races. Vendor
 OCCT remains Release and is not sanitizer-instrumented; Nightfall code/header callbacks
-are instrumented. Archive GUI QA is in progress.
-Remote CI, review and full phase sign-off remain pending.
+are instrumented. The actual 0.0.12 archive subsequently times out on Undo back to eight
+Asterion modules; it is retained as evidence, not marked visually validated. A scoped
+Foundation user-initiated activity experiment reproduces the timeout and is removed.
+App Nap is not established as a cause.
+
+The next revision batches every shell's face tasks into one pool launch per shape, retaining
+each shell's corner and the original face-then-shell reduction order. A new regression uses
+eight placed instances sharing curved cavity surfaces, checking signed analytic volume,
+area, asymmetric centroid, deterministic measurements and unchanged serialized input. All
+**127 Release kernel cases / 430642 assertions** pass. Three quiet Nocturne samples measure
+cold rebuild **1506–1561 ms**, mesh **296–300 ms**, and separate bridge cold/warm
+**1905.054/302.953 ms**, with identical exact measures, topology, mesh counts and errors.
+Three cold eight-module Asterion samples measure kernel **1088–1130 ms**, mesh **445–452 ms**;
+separate bridge cold/warm is **2005.321/1788.382 ms**, with all 640 solids and 217142 triangles.
+
+Development **0.0.13 (build 13)** passes the full local gate **827/827 in 197.97 s**, including
+schema/hygiene and client TSAN. Quiet native Asterion edits take **1867.156/787.988/1868.508 ms**,
+Nocturne after clean Undo **1935.234 ms**, and cold Nocturne **1972.736 ms**. Actual GUI QA
+completes 1→8→4→8 and Undo→4, then times out on Undo→8. A separate sampled diagnostic
+rebuild times out at the final pattern and temporarily suppresses that feature for recovery;
+it is not counted as a successful full model. The profile still shows substantial exact
+Boolean snapshot validation/bounds/mass work. No 0.0.13 archive is published or declared
+validated. Full batched-revision ASan/UBSan with halt-on-error passes **127 kernel cases /
+430641 assertions**, **368 evaluator cases / 450420 assertions**, and **12 bridge cases /
+65400 assertions**, with no diagnostics. The separate Debug C++ TSAN build passes **11
+mass/mesh cases / 387776 assertions** with halt-on-error and no reported races, subject to
+the same vendor-instrumentation limitation above. Remote CI, review, the native reliability
+fix and full phase sign-off remain pending.
 
 ## Nocturne mixed-tool geometry showcase (#183)
 
