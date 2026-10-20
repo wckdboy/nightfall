@@ -85,6 +85,15 @@ impl Shape {
         }
         Ok(self.0.pointer)
     }
+    pub(crate) fn mesh_entity(
+        &self,
+        pointer: *const c_void,
+        mesh: Rc<crate::mesh::Owner>,
+    ) -> Result<Entity, NativeError> {
+        let mut entity = retained_entity(&self.0, pointer, 1)?;
+        entity._mesh = Some(mesh);
+        Ok(entity)
+    }
 }
 /// Retains the complete originating result/snapshot/backend. Never Send or Sync.
 #[derive(Clone)]
@@ -92,6 +101,7 @@ pub struct Entity {
     owner: Rc<Owner>,
     pointer: NonNull<c_void>,
     kind: EntityKind,
+    _mesh: Option<Rc<crate::mesh::Owner>>,
 }
 impl Entity {
     /// Topology kind copied from the validated native entity.
@@ -276,6 +286,7 @@ fn retained_entity(
 ) -> Result<Entity, NativeError> {
     Ok(Entity {
         owner: owner.clone(),
+        _mesh: None,
         pointer: NonNull::new(pointer.cast_mut()).ok_or(NativeError::NativeFailure)?,
         kind: match kind {
             1 => EntityKind::Face,

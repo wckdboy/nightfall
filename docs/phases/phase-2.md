@@ -27,6 +27,30 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Safe Rust retained mesh buffers and picking (#216)
+
+`nightfall-native` now borrows immutable native world-space vertices and triangle indices
+without a Rust-side geometry copy. Mesh clones share the same allocation; complete face
+ranges reference the original exact snapshot. A cloned picking entity retains both its
+original result and its native mesh, so dropping every facade/shape/mesh cannot leave a
+borrowed face dangling. Ownership has no reference cycle. Calls and paired final release
+stay serialized; native-backed meshes/entities remain neither Send nor Sync. Unsafe C
+bindings/slice access are private to the native crate, with alignment/count/budget/index,
+finite-coordinate and complete range checks before publication. No C++ layout is borrowed.
+
+Five new geometry/lifetime checks first fail against the stub. All **33 native Rust
+checks per backend/profile** pass in Debug/Release with Clippy/warnings denied, alongside
+17 typed Kernel checks. Independent C/Rust layout, malformed buffer metadata, exact box
+6000 mm³ / 2200 mm² within 1e-7, original-face picking, nonunit offset-axis world rotation,
+0.2% rational annulus convergence/inward bore normals, immutable prior buffers/source,
+foreign contexts, bounded failure recovery and independently retained picking are covered.
+Mesh clones expose equal buffer addresses; owned value copies remain ordinary Rust data.
+Native C/C++ ASan/UBSan passes **32/32 in 32.79 s**; Rust/installed OCCT are uninstrumented.
+The full gate passes **861/861 in 208.55 s**, plus Rust math, schema and hygiene.
+Logs: `/tmp/nightfall-216-{red,focused,asan,check}.log`. Typed Kernel meshing and inspectable
+visual output follow under #213. No dependency, persisted IR/cache/client/default switch,
+full Rust-engine/MVP claim or #185/#195 fix.
+
 ## Native retained mesh buffers and picking boundary (#214)
 
 Accepted RFC 0008's mesh readback is split under delivery #213. The private C adapter
