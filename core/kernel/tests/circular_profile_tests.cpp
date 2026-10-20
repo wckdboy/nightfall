@@ -187,3 +187,57 @@ TEST_CASE("circular profiles keep the authored scale of nearly orthonormal plane
   side_types(*result, GeomAbs_Cylinder, 0);
   side_types(*result, GeomAbs_SurfaceOfExtrusion, 4);
 }
+
+TEST_CASE("translated circular annuli retain analytic chamfer geometry",
+          "[analytic-circle][offset-chamfer]") {
+  auto kernel = make_occt_kernel().value();
+  for (const double offset : {0., 610., -610.}) {
+    CAPTURE(offset);
+    const Plane plane{{1110 - offset, 0, -8}, {1, 0, 0}, {0, 0, 1}};
+    const auto source = kernel->extrude(
+        {plane,
+         filled({{make_circle(Vec2{offset, 0}, 6)}, {make_circle(Vec2{offset, 0}, 2.8)}}),
+         {0, 0, 8}});
+    REQUIRE(source);
+    side_types(*source, GeomAbs_Cylinder, 8);
+    const auto cap =
+        std::ranges::find_if(source->generated, [](const auto& g) { return g.role == "cap_end"; });
+    REQUIRE(cap != source->generated.end());
+    const auto boundary = kernel->edges(cap->entity).value();
+    const auto chamfered = kernel->chamfer(source->shape, boundary, 1);
+    REQUIRE(chamfered);
+    const auto& measured = chamfered->shape->measures();
+    CHECK_THAT(measured.volume, WithinAbs(pi * ((36 - 2.8 * 2.8) * 8 - 8.8), 1e-5));
+    const double area = pi * (28.16 + 10.56 + 2 * 8.8 * (7 + std::sqrt(2.)));
+    CHECK_THAT(measured.area, WithinAbs(area, 1e-5));
+    CHECK_THAT(measured.centroid.x, WithinAbs(1110, 1e-8));
+    CHECK_THAT(measured.centroid.y, WithinAbs(0, 1e-8));
+    for (const auto& g : source->generated) CHECK(g.entity->owner() == source->shape);
+  }
+}
+
+TEST_CASE("translated ellipses and perturbed quadratics stay in their NURBS representation",
+          "[analytic-circle][offset-chamfer]") {
+  constexpr Vec2 center{610, 0};
+  for (const double perturbation : {1e-8, 1e-10, 1e-12}) {
+    CAPTURE(perturbation);
+    const auto ellipse = extrude({make_arc(center, 2.8, 2.8 * (1 + perturbation), 0, 0, 2 * pi)});
+    side_types(ellipse, GeomAbs_Cylinder, 0);
+    side_types(ellipse, GeomAbs_SurfaceOfExtrusion, 4);
+    CHECK_THAT(ellipse.shape->measures().volume,
+               WithinAbs(3 * pi * 2.8 * 2.8 * (1 + perturbation), 1e-7));
+  }
+  const auto circle = make_arc(center, 2.8, 2.8, 0, 0, pi / 2);
+  for (const bool move_pole : {false, true}) {
+    auto points = std::vector<Vec2>{circle.points().begin(), circle.points().end()};
+    auto weights = std::vector<double>{circle.weights().begin(), circle.weights().end()};
+    if (move_pole)
+      points[1].y += 1e-8;
+    else
+      weights[1] += 1e-8;
+    const auto arc = NurbsCurve2::make(circle.knots(), points, weights).value();
+    const auto result = extrude({arc, make_line(points.back(), points.front())});
+    side_types(result, GeomAbs_Cylinder, 0);
+    side_types(result, GeomAbs_SurfaceOfExtrusion, 1);
+  }
+}
