@@ -8,6 +8,8 @@ use std::rc::Rc;
 use std::sync::Mutex;
 pub mod extrusion;
 mod extrusion_ffi;
+pub mod mesh;
+mod mesh_ffi;
 pub mod transform;
 const ABI: u32 = 1;
 static NATIVE_CALL: Mutex<()> = Mutex::new(());
