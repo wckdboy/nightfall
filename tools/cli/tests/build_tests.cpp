@@ -655,3 +655,159 @@ TEST_CASE("filleted plate exports exact parameter variants through CLI without s
   CHECK(read(input) == original);
   temp.no_temporary_outputs();
 }
+
+TEST_CASE(
+    "build evidence identifies effective geometry and exact exported "
+    "bytes at full precision",
+    "[cli-build][cli-evidence]") {
+  Temp temp;
+  auto document = part();
+  const auto text = source(document);
+  const auto input = temp.path("evidence.nightfall");
+  const auto output = temp.path("evidence.step");
+  write(input, text);
+  const std::string depth = "30.1234567890123 mm";
+  const auto process =
+      run(temp, {"build", input.string(), "--out", output.string(), "--set", "depth=" + depth});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  const auto value = json(process.output);
+  CHECK(ir::json::canonical(value) + "\n" == process.output);
+  const auto* evidence = value.find("evidence");
+  REQUIRE(evidence);
+  CHECK(*evidence->find("input_sha256")->if_string() == ir::sha256(text).hex());
+  document.params[0].value = depth;
+  CHECK(*evidence->find("effective_source_sha256")->if_string() ==
+        ir::sha256(source(document)).hex());
+  CHECK(*evidence->find("input_sha256") != *evidence->find("effective_source_sha256"));
+  const ir::json::Object request{{"input_sha256", ir::sha256(text).hex()},
+                                 {"overrides", ir::json::Object{{"depth", depth}}}};
+  CHECK(*evidence->find("request_sha256")->if_string() ==
+        ir::sha256(ir::json::canonical(request)).hex());
+  auto kernel = kernel::make_occt_kernel().value();
+  CHECK(*evidence->find("kernel")->if_string() == kernel->identity());
+  const auto& units = *evidence->find("units");
+  CHECK(*units.find("length")->if_string() == "mm");
+  CHECK(*units.find("area")->if_string() == "mm^2");
+  CHECK(*units.find("volume")->if_string() == "mm^3");
+  const auto& tolerances = *evidence->find("comparison_tolerances");
+  CHECK(*tolerances.find("linear_mm")->if_number() == math::Tolerance::standard().linear);
+  CHECK(*tolerances.find("angular_rad")->if_number() == math::Tolerance::standard().angular);
+  const auto& checks = *evidence->find("checks");
+  CHECK(*checks.find("closed_solids")->if_string() == "kernel_validated");
+  CHECK(*checks.find("step_roundtrip")->if_string() == "not_run");
+  CHECK(*checks.find("physics")->if_string() == "not_run");
+  REQUIRE(evidence->find("measurement_error_bounds")->is_null());
+  const auto& metrics = *evidence->find("body_metrics")->if_array();
+  REQUIRE(metrics.size() == 1);
+  const auto& body = metrics.front();
+  CHECK(*body.find("id")->if_string() == "plate");
+  const double volume = *body.find("volume")->if_number();
+  CHECK_THAT(volume, WithinAbs(200 * 30.1234567890123, 1e-8));
+  CHECK(volume != std::round(volume * 1e6) / 1e6);
+  CHECK_THAT(*body.find("area")->if_number(), WithinAbs(400 + 60 * 30.1234567890123, 1e-8));
+  const auto& center = *body.find("centroid")->if_array();
+  CHECK_THAT(*center[0].if_number(), WithinAbs(8, 1e-8));
+  CHECK_THAT(*center[1].if_number(), WithinAbs(10, 1e-8));
+  CHECK_THAT(*center[2].if_number(), WithinAbs(30.1234567890123 / 2, 1e-8));
+  CHECK(*body.find("solids")->if_integer() == 1);
+  CHECK(*body.find("faces")->if_integer() == 6);
+  CHECK(*body.find("edges")->if_integer() == 12);
+  const auto& minimum = *body.find("minimum")->if_array();
+  CHECK_THAT(*minimum[0].if_number(), WithinAbs(3, 1e-8));
+  CHECK_THAT(*minimum[1].if_number(), WithinAbs(0, 1e-8));
+  CHECK_THAT(*minimum[2].if_number(), WithinAbs(0, 1e-8));
+  CHECK_THAT(*body.find("maximum")->if_array()->at(2).if_number(),
+             WithinAbs(30.1234567890123, 1e-8));
+  Evaluator evaluator(*kernel, {96, 64 * 1024 * 1024});
+  const auto evaluated = evaluator.evaluate(source(document)).value();
+  REQUIRE(evaluated.ok());
+  CHECK(*body.find("state_hash")->if_string() == evaluated.bodies.at("plate").hash->hex());
+  CHECK(*body.find("name_records")->if_integer() ==
+        static_cast<std::int64_t>(evaluated.bodies.at("plate").names.size()));
+  const auto& cache = *evidence->find("cache");
+  CHECK(*cache.find("kernel_calls")->if_integer() == 2);
+  CHECK(*cache.find("hits")->if_integer() == 0);
+  CHECK(*cache.find("binding_misses")->if_integer() == 0);
+  const auto& statuses = *evidence->find("feature_status_counts");
+  CHECK(*statuses.find("built")->if_integer() == 3);
+  CHECK(*statuses.find("failed")->if_integer() == 0);
+  const auto& timings = *evidence->find("timing_ms");
+  CHECK(*timings.find("evaluation")->if_number() >= 0);
+  CHECK(*timings.find("step_export")->if_number() >= 0);
+  const auto bytes = read(output);
+  const auto& artifact = *evidence->find("step");
+  CHECK(*artifact.find("sha256")->if_string() == ir::sha256(bytes).hex());
+  CHECK(*artifact.find("bytes")->if_integer() == static_cast<std::int64_t>(bytes.size()));
+  measures(reload(output), 200 * 30.1234567890123, 400 + 60 * 30.1234567890123,
+           {8, 10, 30.1234567890123 / 2});
+  CHECK(read(input) == text);
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE(
+    "rejected build evidence identifies its source without stale "
+    "geometry or artifact claims",
+    "[cli-build][cli-evidence]") {
+  Temp temp;
+  const auto input = temp.path("invalid.nightfall");
+  const auto output = temp.path("preserved.step");
+  write(input, "{}");
+  write(output, "prior artifact");
+  const auto process = run(temp, {"build", input.string(), "--out", output.string()});
+  REQUIRE(process.status != 0);
+  CHECK(process.output.empty());
+  const auto value = json(process.error);
+  REQUIRE_FALSE(value.find("errors")->if_array()->empty());
+  const auto* evidence = value.find("evidence");
+  REQUIRE(evidence);
+  CHECK(*evidence->find("input_sha256")->if_string() == ir::sha256("{}").hex());
+  CHECK(*evidence->find("effective_source_sha256")->if_string() == ir::sha256("{}").hex());
+  CHECK_FALSE(evidence->find("body_metrics"));
+  CHECK_FALSE(evidence->find("step"));
+  CHECK_FALSE(evidence->find("checks"));
+  CHECK(read(output) == "prior artifact");
+  temp.no_temporary_outputs();
+}
+
+TEST_CASE("partial evaluation and publication failures never emit success-only evidence",
+          "[cli-build][cli-evidence]") {
+  for (const bool publication_error : {false, true}) {
+    INFO(publication_error);
+    Temp temp;
+    auto document = part();
+    if (!publication_error) {
+      document.features[2].inputs =
+          ir::json::parse(R"({"bodies":["plate"],"translation":["unknown_length",0,0]})").value();
+      document.features.push_back(feature("independent", "extrude",
+                                          R"({"profile":{"sketch":"outline"},"distance":5,
+            "result":{"new":"other","body_type":"brep"}})"));
+    }
+    const auto text = source(document);
+    const auto input = temp.path("input.nightfall");
+    const auto output = temp.path("prior.step");
+    write(input, text);
+    if (publication_error)
+      REQUIRE(fs::create_directory(output));
+    else
+      write(output, "prior artifact");
+    const auto process = run(temp, {"build", input.string(), "--out", output.string()});
+    REQUIRE(process.status != 0);
+    CHECK(process.output.empty());
+    const auto value = json(process.error);
+    REQUIRE_FALSE(value.find("errors")->if_array()->empty());
+    const auto* evidence = value.find("evidence");
+    REQUIRE(evidence);
+    CHECK(*evidence->find("input_sha256")->if_string() == ir::sha256(text).hex());
+    CHECK(*evidence->find("feature_status_counts")->find("failed")->if_integer() ==
+          (publication_error ? 0 : 1));
+    CHECK_FALSE(evidence->find("body_metrics"));
+    CHECK_FALSE(evidence->find("step"));
+    CHECK_FALSE(evidence->find("checks"));
+    if (publication_error)
+      CHECK(fs::is_directory(output));
+    else
+      CHECK(read(output) == "prior artifact");
+    temp.no_temporary_outputs();
+  }
+}
