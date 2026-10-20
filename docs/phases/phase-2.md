@@ -27,6 +27,32 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Typed Rust rigid placement and exact fixture (#211)
+
+The forbid-unsafe `nightfall-kernel` API now exposes explicit rigid placement, finite-field
+and zero-axis diagnostics, native normalization/configured precision-floor checks and full
+retained operation history. Rotation about the supplied axis/origin precedes translation.
+The diagnostic receipt uses `policy=extrusion-rigid-v1`; it is not a persisted IR/cache key
+or a claim of other native-operation parity. All prior extrusion contracts remain in force.
+Rust consumers matching `KernelError` exhaustively must handle the new `TransformInput`
+variant; receipt consumers update the diagnostic policy tag. No persisted migration is needed.
+
+The receipt test and all five transform tests first fail before implementation. The new
+cases cover precise nonfinite field coordinates, zero/tolerance-boundary axes, source and
+foreign owners, retained history, offset/nonunit/out-of-plane axes and transform order.
+For example, X-axis rotation about [0,2,3] followed by [-4,3,7] translation gives box centroid
+**[1,-7,18] mm** at 1e-8, unchanged 6000 mm³ / 2200 mm² and bounds within 2e-7.
+The real headless consumer builds six exact two-hole placed solids through Kernel, checks
+all world centroids/invariants and 300 face/edge mappings, and retains shape/history readers
+after every source/input/Kernel/result facade is dropped. Exact aggregate measures are
+**52774.513684086 mm³ / 22326.371578978 mm² / six solids / 84 faces / 216 edges**.
+All **17 kernel checks** and **23 native Rust checks** pass per backend/profile with
+Debug/Release/fmt/Clippy/warnings denied. Native ASan/UBSan passes **26/26 in 22.99 s**;
+Rust and installed OCCT remain uninstrumented. The full gate passes **855/855 in 214.47 s**,
+plus Rust math, schema and hygiene. Logs: `/tmp/nightfall-211-{red,transform-red,focused,example,asan,check}.log`.
+No constrained assembly, simulation, production cutover, full Rust engine or #185/#195 fix
+is claimed. Delivery #206 remains open pending remote CI and human review of the stack.
+
 ## Safe Rust rigid transforms and retained history (#209)
 
 The safe native crate now exposes exact `RigidTransform` / `Context::transform(&Shape, ...)`

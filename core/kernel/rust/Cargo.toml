@@ -15,3 +15,7 @@ nightfall-native = { path = "../native" }
 [[example]]
 name = "nf-kernel-extrude"
 path = "tests/support/extrude_example.rs"
+
+[[example]]
+name = "nf-kernel-placement"
+path = "tests/support/placement_example.rs"
