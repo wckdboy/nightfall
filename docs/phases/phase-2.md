@@ -27,6 +27,43 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Exact Rust solid booleans (#222)
+
+Accepted RFC 0008 operation parity now exposes exact union/subtraction/intersection through
+the private C ABI, safe native `Context` and forbid-unsafe typed `Kernel`. Tools form a
+union and repeated snapshots are deduplicated for geometry/history. Complete operand lists,
+mode values, output alignment and pointer/count arithmetic are checked before geometry
+access; all inputs stay immutable and native full closed-solid validation remains binding.
+Failures publish no partial result. The existing allocator-paired result owner retains all
+before/modified/generated entities after sources/context/facade end. Safe Rust entry/release
+is serialized and thread-affine; adoption/error cleanup stays outside native guard scopes.
+
+The scaffold fails **8 native ABI checks**, **5 safe Rust integration checks** and **3 typed
+Kernel checks** before implementation. The implemented focused gate passes **51/51 in
+51.73 s**, including C17, linked/unavailable Rust Debug/Release, fmt, Clippy and warnings
+denied. Rust totals are **51 native / 31 Kernel checks** per backend/profile. Checks cover
+unknown modes, null/misaligned/overflow/foreign/malformed inputs, empty/non-solid/solver
+failures and recovery, exact box booleans, multi/duplicate tools, cavities, split solids,
+separated/identical bodies, immutable source bytes/measures/meshes/prior STEP, full retained
+history, generated intersection provenance, mesh/STEP readers and independent caller threads.
+
+Analytic box union: **1500 mm³ / 800 mm²**; subtraction/intersection: **500 mm³ / 400 mm²**,
+each one solid / six faces / twelve edges at 1e-7 absolute mm³/mm² tolerance. Tool-union cuts
+retain three solids (**600/840**) and intersections two (**400/560**); duplicate cuts
+**800/720**, enclosed cavities **784/816**, separated unions **2000/1200**, with the same
+1e-7 tolerances. Exact rational radius-2 through holes retain **1000−40π mm³ / 600+32π mm²**
+at 1e-5 absolute tolerance, analytic cylinders and generated intersection edges.
+
+Diagnostic receipt consumers migrate to `policy=extrusion-rigid-mesh-step-boolean-v1`.
+Native capability/solver identity and persisted document/cache formats are unchanged.
+Production client/engine cutover, remaining operation parity and #185/#195 stay separate.
+
+Native ASan/UBSan passes **51/51 in 64.93 s**, including C17 and safe Rust callers with
+retained boolean/history/mesh/STEP readers. Rust and installed OCCT remain uninstrumented.
+The full OCCT gate passes **880/880 in 208.19 s**, plus Rust math/schema/hygiene, including
+native XPC/Metal/CLI, packaged document sequences/Nocturne and client ThreadSanitizer.
+Logs: `/tmp/nightfall-222-{native-red,rust-red,kernel-red,boolean,focused,asan,check}.log`.
+
 ## Typed Rust STEP export and headless fixture (#221)
 
 The forbid-unsafe `nightfall-kernel` facade now exposes `Kernel::export_step(&[Shape])`

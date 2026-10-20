@@ -226,7 +226,7 @@ fn six_placed_rational_parts_have_complete_original_face_coverage_and_converged_
         return;
     }
     let (identity, parts) = fixture::build().unwrap();
-    assert!(identity.contains("policy=extrusion-rigid-mesh-step-v1;"));
+    assert!(identity.contains("policy=extrusion-rigid-mesh-step-boolean-v1;"));
     assert_eq!(parts.len(), 6);
     assert_eq!(
         parts.iter().map(|p| p.mesh.faces().len()).sum::<usize>(),

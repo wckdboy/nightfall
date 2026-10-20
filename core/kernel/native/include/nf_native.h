@@ -22,6 +22,7 @@ typedef struct nf_native_result nf_native_result;
 typedef struct nf_native_entity nf_native_entity;
 typedef struct nf_native_mesh nf_native_mesh;
 typedef struct nf_native_step nf_native_step;
+enum { NF_NATIVE_UNION, NF_NATIVE_SUBTRACT, NF_NATIVE_INTERSECT };
 typedef struct {
   const uint8_t* bytes;
   uint64_t byte_count;
@@ -122,6 +123,15 @@ uint32_t nf_native_extrude(nf_native_context*, const nf_native_extrusion*,
 uint32_t nf_native_transform(nf_native_context*, const nf_native_result* source,
                              const nf_native_rigid_transform*,
                              nf_native_result** out) NF_NATIVE_NOEXCEPT;
+// Exact union/subtract/intersect; tools form a union. Duplicate handles are deduplicated
+// by native geometry/history. All inputs stay immutable; result retains complete history.
+// Same-context nonempty aligned tools are borrowed for this call. Unknown modes, null/foreign
+// owners and malformed ranges return INVALID before geometry access. Native full-solid
+// validation stays binding; empty/non-solid results return FAILURE, never a partial owner.
+// Failure clears an aligned valid *out; success uses the existing result release.
+uint32_t nf_native_boolean(nf_native_context*, const nf_native_result* target,
+                           const nf_native_result* const* tools, uint64_t tool_count, uint32_t mode,
+                           nf_native_result** out) NF_NATIVE_NOEXCEPT;
 // Tessellate an immutable COPY, using mm/radian deflections and the native precision floors.
 // At most 1M triangles / 3M vertices. Foreign contexts return INVALID; native failures publish
 // no mesh. Success retains the original snapshot/backend independently of source/context.

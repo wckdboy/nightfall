@@ -143,7 +143,7 @@ fn six_placed_rational_plates_export_through_the_typed_facade() {
         return;
     }
     let (identity, step) = fixture::build().unwrap();
-    assert!(identity.contains("policy=extrusion-rigid-mesh-step-v1;"));
+    assert!(identity.contains("policy=extrusion-rigid-mesh-step-boolean-v1;"));
     inspect(step.bytes(), 6);
 }
 #[test]

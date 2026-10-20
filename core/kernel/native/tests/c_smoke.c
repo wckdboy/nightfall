@@ -3,6 +3,8 @@
 #include <string.h>
 #include "nf_native.h"
 _Static_assert(sizeof(uint32_t) == 4, "status width");
+_Static_assert(NF_NATIVE_UNION == 0 && NF_NATIVE_SUBTRACT == 1 && NF_NATIVE_INTERSECT == 2,
+               "boolean modes");
 _Static_assert(offsetof(nf_native_info, identity) == 8, "identity layout");
 _Static_assert(sizeof(nf_native_curve2) == 56, "curve layout");
 _Static_assert(sizeof(nf_native_result_info) == 136, "result layout");
@@ -50,6 +52,11 @@ int main(void) {
     nf_native_step* step = NULL;
     const nf_native_result* bodies[] = {result, moved, result};
     if (nf_native_export_step(context, bodies, 3, &step) != NF_NATIVE_OK || !step) return 13;
+    const nf_native_result* tools[] = {result, result};
+    nf_native_result* united = NULL;
+    if (nf_native_boolean(context, result, tools, 2, NF_NATIVE_UNION, &united) != NF_NATIVE_OK ||
+        !united)
+      return 15;
     nf_native_context_release(context);
     context = NULL;
     nf_native_result_info measures = {0};
@@ -97,6 +104,11 @@ int main(void) {
         encoded.byte_count < 13 || memcmp(encoded.bytes, "ISO-10303-21;", 13) != 0)
       return 14;
     nf_native_step_release(step);
+    if (nf_native_result_query(united, &measures) != NF_NATIVE_OK || measures.solids != 1 ||
+        measures.history_count != 18 || measures.volume < 6000 - 1e-8 ||
+        measures.volume > 6000 + 1e-8)
+      return 16;
+    nf_native_result_release(united);
   } else if (status != NF_NATIVE_UNAVAILABLE || context)
     return 3;
   nf_native_context_release(context);

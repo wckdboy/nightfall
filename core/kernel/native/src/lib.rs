@@ -6,6 +6,8 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Mutex;
+pub mod boolean;
+mod boolean_ffi;
 pub mod extrusion;
 mod extrusion_ffi;
 pub mod mesh;

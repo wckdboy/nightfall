@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Headless typed kernel policy (RFC 0008); exact geometry remains native C++/OCCT.
 #![forbid(unsafe_code)]
+mod boolean;
 mod mesh;
 mod step;
 mod transform;
 pub use mesh::{MeshLocation, MeshProblem};
 pub use nightfall_math::{KnotVector, MathError, NurbsCurve2};
 use nightfall_native::Context;
+pub use nightfall_native::boolean::BooleanOp;
 pub use nightfall_native::extrusion::{
     Entity, EntityKind, Extrusion, Frame, Generated, History, Measures, OperationResult,
     ProfileEdge, Region, Shape,
@@ -85,7 +87,7 @@ pub struct KernelInfo {
     pub identity: String,
     pub backend: BackendInfo,
 }
-/// Thread-affine typed facade for exact extrusion, rigid placement, mesh and STEP readback.
+/// Thread-affine typed facade for exact extrusion, rigid placement, booleans, mesh and STEP.
 ///
 /// ```compile_fail
 /// use nightfall_kernel::Kernel;
@@ -111,7 +113,7 @@ impl Kernel {
         let backend = self.native.info()?;
         Ok(KernelInfo {
             identity: format!(
-                "nightfall-rust/{};policy=extrusion-rigid-mesh-step-v1;native={}",
+                "nightfall-rust/{};policy=extrusion-rigid-mesh-step-boolean-v1;native={}",
                 env!("CARGO_PKG_VERSION"),
                 backend.identity
             ),
