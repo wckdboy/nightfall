@@ -12,6 +12,17 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Kernel-first direction (#226)
+
+The maintainer redirects development on 2026-10-20 toward a headless industrial geometry
+and engineering engine, explicitly including assemblies, simulation and CFD. New UI/UX
+and showcase presentation work is deferred; existing clients and regression checks stay.
+[RFC 0009](../rfcs/0009-kernel-engineering-program.md) outlines the hard problems,
+dependencies and proposed exit gates, beginning with persistent topology/reference tests.
+It is a proposal: current gates and Accepted RFCs remain binding, and no assembly/physics
+implementation, new dependency or study format is claimed. #169/#194 retain their related
+requirements; #225's presentation work is deferred by this direction.
+
 ## Consolidated integration review (#223)
 
 On 2026-10-20 the maintainer explicitly authorizes the consolidated integration through
@@ -67,7 +78,9 @@ gates; #185 remains open. Logs: `/tmp/nightfall-223-{eight.sample.txt,eight-befo
 eight-grouped.jsonl,naming-native.log,naming-asan.log}`.
 The scoped final native ASan/UBSan kernel/evaluator/bridge/adapter gate passes
 **564/564 in 203.51 s**, including retained Rust callers. Nightfall code is instrumented;
-Rust/installed OCCT remain uninstrumented. The complete local gate is rerunning before merge.
+Rust/installed OCCT remain uninstrumented. The complete local gate on the published
+performance candidate passes **884/884 in 250.54 s**, plus Rust math/schema/hygiene;
+remote checks and conversation resolution remain separate merge gates.
 
 ## Rust kernel and engine migration decision (#188)
 

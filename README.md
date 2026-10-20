@@ -10,6 +10,12 @@ by any AI agent.
 > editable parameters, feature history and a Metal viewport. Phase 2 and the complete
 > modeling workflow remain in progress. See the [phase tracker](docs/phases/phase-2.md).
 
+Current development focuses on the headless kernel: persistent topology, robust geometry,
+assemblies, simulation and CFD. New UI/UX work is deferred. The proposed
+[engineering program](docs/rfcs/0009-kernel-engineering-program.md) outlines the hard
+problems, dependency order, existing capabilities and validation gates; it does not
+claim assembly or physics implementation.
+
 ## Principles
 
 1. **Open by default.** Apache-2.0, permissive dependencies, open file formats.
