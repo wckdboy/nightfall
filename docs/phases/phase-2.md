@@ -27,6 +27,30 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Native retained mesh buffers and picking boundary (#214)
+
+Accepted RFC 0008's mesh readback is split under delivery #213. The private C adapter
+now owns world-space double position/normal records, indexed triangles and contiguous
+ranges referring to original faces. Buffers and entities are borrowed until the paired
+mesh release; the mesh retains its source snapshot and solver after source/context
+release. C++ containers never cross the boundary. Vertex records are explicitly copied
+once into C-layout storage; the solver's immutable-copy meshing, winding/normal checks,
+precision floors and 1M-triangle/3M-vertex limits remain unchanged. Foreign contexts fail
+before geometry access; exceptions and failures publish no partial owner.
+
+Tests first fail **7/32** against the scaffold. The implemented boundary passes **32/32**
+focused checks in **21.93 s**: C17/C++ ABI, analytic box (24 vertices / 12 triangles /
+6 original faces), offset-axis rotation, rational annular convergence and inward bore
+normals, prior-buffer/source immutability, retained buffers/picking after facade teardown,
+invalid options/indices/foreign contexts, exact 12-triangle budget and failure recovery.
+Box mesh volume/area are 6000 mm³ / 2200 mm² within 1e-7; the fine annulus agrees with
+2250π mm³ / 1050π mm² within 0.2%, with strictly better volume than the coarse mesh.
+Native ASan/UBSan passes **32/32 in 27.26 s**; Rust and installed OCCT are uninstrumented.
+The full gate passes **861/861 in 205.53 s**, plus Rust math, schema and hygiene.
+Logs: `/tmp/nightfall-214-{red,focused,asan,check}.log`. Safe Rust buffer/picking ownership
+and typed Kernel meshing/visual output remain the next two slices. No production
+client/default/IR/cache change, MVP, simulation or #185/#195 fix is claimed.
+
 ## Typed Rust rigid placement and exact fixture (#211)
 
 The forbid-unsafe `nightfall-kernel` API now exposes explicit rigid placement, finite-field
