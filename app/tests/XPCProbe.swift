@@ -199,6 +199,9 @@ func nativeBenchmark(_ path: String, samples: Int) throws {
       case "preview": try await previewIntegration(CommandLine.arguments[2])
       case "history": try await historyIntegration(CommandLine.arguments[2])
       case "drafts": try await draftsIntegration(CommandLine.arguments[2])
+      case "document-sequences":
+        try await documentSequenceIntegration(
+          CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "sheets": try sheetLifecycle()
       case "fillets": try await filletIntegration(CommandLine.arguments[2])
       case "sweeps":

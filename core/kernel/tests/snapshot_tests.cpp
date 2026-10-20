@@ -5,9 +5,13 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepCheck_Analyzer.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Pln.hxx>
 
@@ -75,6 +79,29 @@ TEST_CASE("entity handles retain their snapshot and distinguish owning snapshots
   CHECK(weak.expired());
 }
 
+TEST_CASE("compound validation rejects a malformed solid at every position") {
+  for (const int malformed : {0, 32, 63}) {
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (int i = 0; i < 64; ++i) {
+      const auto solid = BRepPrimAPI_MakeBox(gp_Pnt(i * 30, 0, 0), 10, 20, 30).Shape();
+      if (i == malformed) {
+        // Keep closed topology but break the edge/vertex geometry relationship.
+        TopExp_Explorer vertices(solid, TopAbs_VERTEX);
+        REQUIRE(vertices.More());
+        builder.UpdateVertex(TopoDS::Vertex(vertices.Current()), gp_Pnt(-100, -100, -100), 1e-7);
+        TopExp_Explorer shells(solid, TopAbs_SHELL);
+        REQUIRE(shells.More());
+        REQUIRE(BRep_Tool::IsClosed(shells.Current()));
+        REQUIRE_FALSE(BRepCheck_Analyzer(solid).IsValid());
+      }
+      builder.Add(compound, solid);
+    }
+    CHECK_FALSE(detail::snapshot(compound));
+  }
+}
+
 TEST_CASE("solid snapshots allow internal cavities") {
   const auto outer = BRepPrimAPI_MakeBox(10, 20, 30).Shape();
   const auto inner = BRepPrimAPI_MakeBox(gp_Pnt(1, 1, 1), 8, 18, 28).Shape();
@@ -98,6 +125,13 @@ TEST_CASE("snapshot mass properties retain translated and rotated tori", "[mass-
     CHECK_THAT(m.centroid.x, WithinAbs(center.X(), 1e-7));
     CHECK_THAT(m.centroid.y, WithinAbs(center.Y(), 1e-7));
     CHECK_THAT(m.centroid.z, WithinAbs(center.Z(), 1e-7));
+    // A torus has support R * sqrt(1 - normal[i]^2) + r along each world axis.
+    CHECK_THAT(m.minimum.x, WithinAbs(center.X() - 20 * std::sqrt(13.0 / 14) - 3, 1e-6));
+    CHECK_THAT(m.maximum.x, WithinAbs(center.X() + 20 * std::sqrt(13.0 / 14) + 3, 1e-6));
+    CHECK_THAT(m.minimum.y, WithinAbs(center.Y() - 20 * std::sqrt(10.0 / 14) - 3, 1e-6));
+    CHECK_THAT(m.maximum.y, WithinAbs(center.Y() + 20 * std::sqrt(10.0 / 14) + 3, 1e-6));
+    CHECK_THAT(m.minimum.z, WithinAbs(center.Z() - 20 * std::sqrt(5.0 / 14) - 3, 1e-6));
+    CHECK_THAT(m.maximum.z, WithinAbs(center.Z() + 20 * std::sqrt(5.0 / 14) + 3, 1e-6));
   }
 }
 
@@ -125,4 +159,10 @@ TEST_CASE("snapshot mass reference preserves cavities and separated unequal soli
              WithinAbs((6000 * (-2e6 + 10) - 48 * (-2e6 + 4) + 6 * (2e6 + 1)) / 5958, 1e-7));
   CHECK_THAT(m.centroid.z,
              WithinAbs((6000 * (3e6 + 15) - 48 * (3e6 + 6) + 6 * (-3e6 + 1.5)) / 5958, 1e-7));
+  CHECK_THAT(m.minimum.x, WithinAbs(-1e6, 1e-6));
+  CHECK_THAT(m.minimum.y, WithinAbs(-2e6, 1e-6));
+  CHECK_THAT(m.minimum.z, WithinAbs(-3e6, 1e-6));
+  CHECK_THAT(m.maximum.x, WithinAbs(1e6 + 10, 1e-6));
+  CHECK_THAT(m.maximum.y, WithinAbs(2e6 + 2, 1e-6));
+  CHECK_THAT(m.maximum.z, WithinAbs(3e6 + 30, 1e-6));
 }

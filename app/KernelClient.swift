@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
+import Synchronization
 
 struct KernelDiagnostic: Codable, Sendable, Equatable {
   let code: String, message: String
@@ -94,6 +95,18 @@ struct KernelResponse: Sendable {
   }
   func invalidate() { connection.invalidate() }
 }
+/// Claim on the transport callback queue, before validation hops to another executor.
+private final class ReplyReceipt: Sendable {
+  private let state = Mutex(false)
+  var received: Bool { state.withLock { $0 } }
+  func claim() -> Bool {
+    state.withLock {
+      guard !$0 else { return false }
+      $0 = true
+      return true
+    }
+  }
+}
 /// One rebuild per client; complete IR is replayed after any connection failure.
 /// Call shutdown when the owner closes; close(id) releases one document's service cache.
 @MainActor final class KernelClient {
@@ -102,6 +115,7 @@ struct KernelResponse: Sendable {
   private struct Pending {
     let token: UUID
     let continuation: CheckedContinuation<KernelResponse, Never>
+    let receipt: ReplyReceipt
   }
   private let deadline: Duration
   private let makeTransport: TransportFactory
@@ -166,13 +180,16 @@ struct KernelResponse: Sendable {
     if retire { self.retire() }
     current.continuation.resume(returning: response)
   }
-  private func disconnected(_ serial: UUID, _ code: String) {
+  private func disconnected(
+    _ serial: UUID?, _ code: String,
+    message: String = "kernel service disconnected; rebuild to replay the document"
+  ) {
     guard generation == serial else { return }
-    if let token = pending?.token {
-      finish(
-        token, .failure(code, "kernel service disconnected; rebuild to replay the document"),
-        retire: true)
+    if let current = pending, !current.receipt.received {
+      finish(current.token, .failure(code, message), retire: true)
     } else {
+      // A received reply still must pass validation and the existing backstop. A
+      // following disconnect retires the connection without discarding that packet.
       retire()
     }
   }
@@ -188,7 +205,8 @@ struct KernelResponse: Sendable {
           continuation.resume(returning: .failure("bounds", "document exceeds 16 MiB"))
           return
         }
-        pending = Pending(token: token, continuation: continuation)
+        let receipt = ReplyReceipt()
+        pending = Pending(token: token, continuation: continuation, receipt: receipt)
         if transport == nil {
           let serial = UUID()
           generation = serial
@@ -196,6 +214,7 @@ struct KernelResponse: Sendable {
             Task { @MainActor [weak self] in self?.disconnected(serial, code) }
           }
         }
+        let serial = generation
         let duration = deadline
         timer = Task { [weak self] in
           do { try await Task.sleep(for: duration) } catch { return }
@@ -204,6 +223,7 @@ struct KernelResponse: Sendable {
             retire: true)
         }
         transport?.send(id, source: source) { [weak self] response in
+          guard receipt.claim() else { return }
           Task.detached { [weak self] in
             let result = response.validated()
             await self?.finish(
@@ -212,7 +232,7 @@ struct KernelResponse: Sendable {
           }
         } failure: { [weak self] message in
           Task { @MainActor [weak self] in
-            self?.finish(token, .failure("kernel_unavailable", message), retire: true)
+            self?.disconnected(serial, "kernel_unavailable", message: message)
           }
         }
       }

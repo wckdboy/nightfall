@@ -162,6 +162,59 @@ An additional oblique-cylinder volume-integration stall is tracked separately in
 [#168](https://github.com/wckdboy/nightfall/issues/168), with a profile and reproduction.
 This surface-area change does not resolve that existing volume path.
 
+## GUI sequence profiling and reply ordering (#171)
+
+The actual GUI-owned service was sampled during the previously failing conduit return
+and an eight-module Asterion rebuild. The conduit spent 2491/4162 worker samples in two
+exact `AddOptimal` bound searches; Asterion spent 1402/3947 in the full compound validity
+analyzer's construction. Process CPU advanced throughout both requests; these profiles
+identify geometry work, without attributing the difference from probes to App Nap or QoS.
+
+Single-shell snapshots now reuse their already computed exact bound as the local mass
+reference. Multiple shells, cavities and separate components retain per-shell references.
+Compound snapshots use OCCT's parallel geometric analyzer with all validity checks enabled.
+The backend identity records both options. Analytic translated/rotated torus bounds and
+unequal cavity/component measures remain checked; a malformed solid at the beginning,
+middle or end of a 64-solid compound is rejected. The kernel suite passes 124 cases /
+158552 assertions, retaining 1e-9 relative integration accuracy and immutable snapshots.
+
+A separate client regression failed with `received reply lost to disconnect`: a subsequent
+connection event could beat off-actor packet validation and discard a received timeout
+culprit. A thread-safe receipt now claims a packet on its callback queue. Disconnects still
+retire the transport; packet validation, cancellation and the original seven-second
+backstop still apply. The eight-MiB regression covers both connection/proxy errors, success
+and timeout recovery, the original source and fresh connection reuse. All 18 client/TSAN
+cases pass. No additional retry, deadline increase or protocol/schema change is introduced.
+
+The native document test executes Asterion then two conduit/edit/Undo/loft/edit/Undo rounds
+and a final conduit reload, checking exact measures, source bytes and real Metal rendering.
+It improved from 14.71 s to 11.23 s; the final conduit changed from 2210.832 to 1637.484 ms.
+The large native test now exercises 1→8→4→8 and every Undo step, with exact per-body measures
+at 1e-5 absolute tolerance and 27172/217142/108582/217142 display triangles. Its focused run
+passes in 9.99 s. Both sequences, including clean Undo, were also completed in the live app.
+These are bounded local regressions, not a universal complexity or latency guarantee.
+The parent sweep PR's [OCCT run](https://github.com/wckdboy/nightfall/actions/runs/39340711080)
+also reproduces #171: 817/818 pass, with the eight-module test disconnecting after 5.66 s.
+That older run does not contain these fixes.
+
+The final required local gate passes **822/822 in 200.57 s**, including schema/hygiene,
+real XPC/Metal sequences and client TSAN. ASan/UBSan with halt-on-error also passes the
+complete kernel (124 cases / 158551 assertions), evaluator (367 / 444301) and C bridge
+(12 / 65400) suites without sanitizer diagnostics. Preview 0.0.10 contains these fixes;
+its packaging and extracted-GUI verification are recorded separately below.
+
+Preview archive: `out/Nightfall-0.0.10-preview-arm64-macos.zip` (17401190 bytes), source
+`60279fee433d99d41362ae3d22920d2bba8c4afc`, SHA-256
+`1895e58689a723a6f4732082ef1e6490ab6b22c1f740488b3ca40e9c12b0868d`.
+The receipt pins that source independently of this documentation follow-up. The extracted
+app is byte-identical to the tested build; strict signatures, deployment target, dependency
+closure, 26 service-local OCCT dylibs and all 24 example sources pass verification.
+The actual extracted app completes 1→8→4→8 and all three Undo steps, followed by
+conduit/edit/Undo/loft/edit/Undo/conduit without errors or recovery notices. Both the
+217142-triangle Asterion and final 23494-triangle conduit were visually inspected.
+The app remains open on the clean conduit. This is an ad-hoc arm64/macOS 15+ development
+preview, without notarization or a tagged-main/MVP release; earlier previews are preserved.
+
 ## Sweep document and native integration (#179)
 
 The existing v1 sweep operation now binds the current profile and named open sketch path,

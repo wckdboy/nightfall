@@ -238,11 +238,20 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
   // Use each shell's bounds so distant components and cavities integrate locally.
   // Signed face integrals use exact surfaces; non-polynomial faces keep the GK tolerance.
   math::Vec3 moment;
-  for (TopExp_Explorer shells(shape, TopAbs_SHELL); shells.More(); shells.Next()) {
-    Bnd_Box bounds;
-    BRepBndLib::AddOptimal(shells.Current(), bounds, false, false);
-    if (bounds.IsVoid() || bounds.IsOpen()) return false;
-    const auto reference = bounds.CornerMax();
+  TopExp_Explorer shells(shape, TopAbs_SHELL);
+  if (!shells.More()) return false;
+  shells.Next();
+  const bool single_shell = !shells.More();
+  for (shells.Init(shape, TopAbs_SHELL); shells.More(); shells.Next()) {
+    // A single shell already has exactly these optimal bounds. Reusing its corner
+    // avoids a second global surface-extrema search on spline faces.
+    gp_Pnt reference(measured.maximum.x, measured.maximum.y, measured.maximum.z);
+    if (!single_shell) {
+      Bnd_Box bounds;
+      BRepBndLib::AddOptimal(shells.Current(), bounds, false, false);
+      if (bounds.IsVoid() || bounds.IsOpen()) return false;
+      reference = bounds.CornerMax();
+    }
     if (!finite(point(reference))) return false;
     BRepGProp_VinertGK integral;
     integral.SetLocation(reference);
@@ -287,7 +296,9 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
 
 std::expected<SnapshotPtr, KernelError> snapshot(TopoDS_Shape geometry) {
   try {
-    if (geometry.IsNull() || !solid_tree(geometry) || !BRepCheck_Analyzer(geometry).IsValid())
+    // Large patterns keep full geometric checks, distributed by OCCT's compound analyzer.
+    if (geometry.IsNull() || !solid_tree(geometry) ||
+        !BRepCheck_Analyzer(geometry, true, geometry.ShapeType() != TopAbs_SOLID).IsValid())
       return std::unexpected(KernelError{"kernel", "output is not valid closed solid geometry"});
     auto result = std::make_shared<Snapshot>();
     result->geometry = std::move(geometry);

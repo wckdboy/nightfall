@@ -206,6 +206,60 @@ func errorCode(_ response: KernelResponse) -> String? { response.diagnostics.fir
   }
   try check(factory.transports.count == 100, "race generations")
 }
+@MainActor func clientReplyOrdering() async throws {
+  // A bounded large packet makes off-actor validation overlap the following disconnect.
+  let padding = String(repeating: "x", count: 8 * 1024 * 1024)
+  for timeout in [false, true] {
+    for proxyFailure in [false, true] {
+      let factory = Factory()
+      let client = KernelClient(makeTransport: factory.make)
+      defer { client.shutdown() }
+      var completed = false
+      let task = Task {
+        let result = await client.build(UUID(), source: plate())
+        completed = true
+        return result
+      }
+      try await until { factory.transports.first?.packets.count == 1 }
+      let old = factory.transports[0]
+      let response =
+        timeout
+        ? KernelResponse.failure("timeout", padding, feature: 1)
+        : KernelResponse(
+          manifest: Data("{\"errors\":[],\"padding\":\"\(padding)\"}".utf8), processID: 123)
+      old.packets[0].reply(response)
+      if proxyFailure {
+        old.packets[0].failure("service exited after replying")
+      } else {
+        old.event("kernel_restarted")
+      }
+      if timeout {
+        try await until { factory.transports.count == 2 || completed }
+        try check(
+          factory.transports.count == 2, "disconnect discarded the received timeout culprit")
+        let retry = factory.transports[1].packets[0]
+        let document = try JSONSerialization.jsonObject(with: retry.source) as! [String: Any]
+        let features = document["features"] as! [[String: Any]]
+        try check(features[1]["suppressed"] as? Bool == true, "wrong recovery culprit")
+        try check(features[0]["suppressed"] == nil, "unrelated recovery edit")
+        retry.reply(success(456))
+      }
+      let result = await task.value
+      try check(result.processID == (timeout ? 456 : 123), "received reply lost to disconnect")
+      try check(result.recovery?.featureIndex == (timeout ? 1 : nil), "received culprit lost")
+      try check(old.packets[0].source == plate(), "authored source changed during recovery")
+      // Even a preserved success must retire a connection known to have failed.
+      let next = Task { await client.build(UUID(), source: plate()) }
+      let packets = timeout ? 2 : 1
+      try await until {
+        factory.transports.count == 2 && factory.transports[1].packets.count == packets
+      }
+      factory.transports[1].packets[packets - 1].reply(success(789))
+      let subsequent = await next.value
+      try check(subsequent.processID == 789, "disconnected transport was reused")
+    }
+  }
+}
 @main enum ClientTests {
   @MainActor static func main() async {
     do {
@@ -218,6 +272,7 @@ func errorCode(_ response: KernelResponse) -> String? { response.diagnostics.fir
       case "invalid-recovery": try await clientInvalidRecovery()
       case "validation": try await clientValidation()
       case "races": try await clientRaces()
+      case "reply-ordering": try await clientReplyOrdering()
       default: throw Failure(description: "unknown client case")
       }
       print("client \(CommandLine.arguments[1]): passed")
