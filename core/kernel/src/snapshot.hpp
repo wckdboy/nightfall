@@ -35,6 +35,7 @@ struct Subshape final : Entity {
 /// Checks all descendants belong to closed solids and computes finite measurements.
 /// Planar faces with analytic line pcurves use exact polynomial Gaussian quadrature;
 /// other faces retain adaptive Gauss–Kronrod integration at kMassRelativeAccuracy.
+/// Face integrators/adaptors are private; reduction follows original traversal order.
 /// Areas on planes/cylinders with line/circle/ellipse pcurves use analytic UV integrals;
 /// rectangular extrusion/B-spline/Bezier patches use positive adaptive metric integration
 /// (1D for extrusions, nested 2D split at surface knots otherwise). Other surface areas

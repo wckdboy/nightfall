@@ -12,6 +12,7 @@
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -20,6 +21,7 @@
 
 #include <chrono>
 #include <numbers>
+#include <sstream>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -136,4 +138,56 @@ TEST_CASE("surface integration uses consistent seam orientation after mirror and
   const auto all = kernel->boolean_operation(pair.shape, {y.shape}, BooleanOp::kUnion).value();
   CHECK_THAT(all.shape->measures().volume, WithinAbs(640 * pi, 1e-6));
   CHECK_THAT(all.shape->measures().area, WithinAbs(800 * pi, 1e-6));
+}
+
+TEST_CASE("mass integration preserves deterministic moments on shared placed curved surfaces",
+          "[surface-mass][mass-parallel]") {
+  const gp_Ax2 frame(gp_Pnt(13, -17, 21), gp_Dir(1, 2, 3));
+  gp_Ax2 hole = frame;
+  const gp_Vec offset(frame.XDirection());
+  hole.SetLocation(frame.Location().Translated(offset));
+  const auto outer =
+      BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Elips(frame, 5, 3)).Edge()).Wire();
+  const auto inner =
+      BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Elips(hole, 1.25, 0.75)).Edge()).Wire();
+  BRepBuilderAPI_MakeFace face(outer);
+  face.Add(TopoDS::Wire(inner.Reversed()));
+  const auto seed = BRepPrimAPI_MakePrism(face.Face(), gp_Vec(frame.Direction()) * 7).Shape();
+  const auto local_center =
+      frame.Location().XYZ() - offset.XYZ() / 15 + frame.Direction().XYZ() * 3.5;
+  BRep_Builder builder;
+  TopoDS_Compound compound;
+  builder.MakeCompound(compound);
+  gp_XYZ expected_center;
+  constexpr int count = 12;
+  for (int i = 0; i < count; ++i) {
+    gp_Trsf placement;
+    placement.SetRotation(gp_Ax1({}, gp_Dir(2, -1, 3)), i * pi / 7);
+    placement.SetTranslationPart(gp_Vec(i * 200, -i * 100, i * 50));
+    builder.Add(compound, BRepBuilderAPI_Transform(seed, placement, false).Shape());
+    expected_center += gp_Pnt(local_center).Transformed(placement).XYZ() / count;
+  }
+  std::ostringstream saved;
+  BRepTools::Write(compound, saved);
+  std::optional<Measures> first;
+  for (int pass = 0; pass < 4; ++pass) {
+    const auto result = detail::snapshot(compound);
+    REQUIRE(result);
+    const auto& m = (*result)->measures();
+    CHECK(m.solids == count);
+    CHECK_THAT(m.volume, WithinAbs(count * 105 * pi * 15 / 16, 1e-7));
+    CHECK_THAT(m.centroid.x, WithinAbs(expected_center.X(), 1e-8));
+    CHECK_THAT(m.centroid.y, WithinAbs(expected_center.Y(), 1e-8));
+    CHECK_THAT(m.centroid.z, WithinAbs(expected_center.Z(), 1e-8));
+    if (first) {
+      CHECK(m.volume == first->volume);
+      CHECK(m.area == first->area);
+      CHECK(m.centroid == first->centroid);
+    } else {
+      first = m;
+    }
+    std::ostringstream after;
+    BRepTools::Write(compound, after);
+    CHECK(after.str() == saved.str());
+  }
 }

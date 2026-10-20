@@ -14,6 +14,7 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
+#include <OSD_Parallel.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
@@ -253,37 +254,62 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
       reference = bounds.CornerMax();
     }
     if (!finite(point(reference))) return false;
-    BRepGProp_VinertGK integral;
-    integral.SetLocation(reference);
-    BRepGProp_Vinert polynomial;
-    polynomial.SetLocation(reference);
+    std::vector<TopoDS_Face> faces;
+    for (TopExp_Explorer found(shells.Current(), TopAbs_FACE); found.More(); found.Next()) {
+      // Preserve multiplicity and traversal order, including oppositely oriented faces.
+      faces.push_back(TopoDS::Face(found.Current()));
+    }
+    struct Contribution {
+      double volume = 0;
+      math::Vec3 moment;
+      bool valid = false;
+    };
+    std::vector<Contribution> contributions(faces.size());
+    OSD_Parallel::For(
+        0, static_cast<int>(faces.size()),
+        [&](int index) {
+          const auto& face = faces[static_cast<std::size_t>(index)];
+          auto& result = contributions[static_cast<std::size_t>(index)];
+          if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED) {
+            result.valid = true;
+            return;
+          }
+          // Integrators/adaptors are private to a face. Only the immutable B-rep is shared.
+          BRepGProp_VinertGK integral;
+          integral.SetLocation(reference);
+          BRepGProp_Vinert polynomial;
+          polynomial.SetLocation(reference);
+          BRepGProp_Face surface(true);
+          surface.Load(face);
+          BRepGProp_Domain domain(face);
+          const GProp_GProps* properties = &integral;
+          if (polynomial_face(face)) {
+            // Affine plane/line parameterizations make the integrands polynomial. OCCT's
+            // fixed Gaussian rule integrates them exactly (up to roundoff), avoiding
+            // relative-error refinement of almost-zero face contributions.
+            polynomial.Perform(surface, domain);
+            properties = &polynomial;
+          } else {
+            const auto error =
+                face.NbChildren() == 0
+                    ? integral.Perform(surface, kMassRelativeAccuracy, true, false)
+                    : integral.Perform(surface, domain, kMassRelativeAccuracy, true, false);
+            if (error < 0 || !std::isfinite(error)) return;
+          }
+          result.volume = properties->Mass();
+          result.moment = point(properties->CentreOfMass().XYZ() - reference.XYZ()) * result.volume;
+          result.valid = true;
+        },
+        faces.size() < 4);
     double shell_volume = 0;
     math::Vec3 shell_moment;
-    BRepGProp_Face surface(true);
-    for (TopExp_Explorer faces(shells.Current(), TopAbs_FACE); faces.More(); faces.Next()) {
-      const auto face = TopoDS::Face(faces.Current());
-      if (face.Orientation() != TopAbs_FORWARD && face.Orientation() != TopAbs_REVERSED) continue;
-      surface.Load(face);
-      BRepGProp_Domain domain(face);
-      const GProp_GProps* properties = &integral;
-      if (polynomial_face(face)) {
-        // Affine plane/line parameterizations make the integrands polynomial. OCCT's
-        // fixed Gaussian rule integrates them exactly (up to roundoff), avoiding
-        // relative-error refinement of almost-zero face contributions.
-        polynomial.Perform(surface, domain);
-        properties = &polynomial;
-      } else {
-        const auto error =
-            face.NbChildren() == 0
-                ? integral.Perform(surface, kMassRelativeAccuracy, true, false)
-                : integral.Perform(surface, domain, kMassRelativeAccuracy, true, false);
-        if (error < 0 || !std::isfinite(error)) return false;
-      }
+    for (const auto& result : contributions) {
+      if (!result.valid) return false;
       // GProps::Add normalizes after each face and drops first moments whenever a
       // partial signed sum is zero. Keep unnormalized moments until the shell is complete.
-      shell_volume += properties->Mass();
-      shell_moment = shell_moment +
-                     point(properties->CentreOfMass().XYZ() - reference.XYZ()) * properties->Mass();
+      // Reduce in original traversal order so scheduling cannot change rounding.
+      shell_volume += result.volume;
+      shell_moment = shell_moment + result.moment;
     }
     measured.volume += shell_volume;
     moment = moment + shell_moment + (point(reference) - measured.maximum) * shell_volume;
