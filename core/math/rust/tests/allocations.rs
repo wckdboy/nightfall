@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 #![deny(unsafe_op_in_unsafe_fn)]
-use nightfall_math::{KnotVector, NurbsCurve3, basis_derivatives, basis_functions};
+use nightfall_math::{KnotVector, NurbsCurve3, NurbsSurface3, basis_derivatives, basis_functions};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::hint::black_box;
@@ -97,6 +97,49 @@ fn curve_points_derivatives_clones_and_errors_allocate_nothing() {
                 CALLS.with(Cell::get),
                 0,
                 "degree {degree}, rational={rational}"
+            );
+        }
+    }
+}
+
+#[test]
+fn surface_points_mixed_derivatives_clones_and_errors_allocate_nothing() {
+    for p in 1..=9 {
+        let q = 10 - p;
+        let knots = |degree: usize| {
+            let mut values = vec![0.; degree + 1];
+            values.extend(std::iter::repeat_n(0.5, degree));
+            values.extend(std::iter::repeat_n(1., degree + 1));
+            KnotVector::new(degree, values).unwrap()
+        };
+        for rational in [false, true] {
+            let ku = knots(p);
+            let kv = knots(q);
+            let count = ku.control_point_count() * kv.control_point_count();
+            let points = (0..count).map(|i| [i as f64, (i % 5) as f64, 0.]).collect();
+            let weights = if rational {
+                (0..count).map(|i| (i % 5 + 1) as f64).collect()
+            } else {
+                vec![]
+            };
+            let surface = NurbsSurface3::new(ku, kv, points, weights).unwrap();
+            CALLS.with(|v| v.set(0));
+            TRACK.with(|v| v.set(true));
+            for i in 0..=32 {
+                let u = black_box(i as f64 / 32.);
+                let retained = black_box(surface.clone());
+                black_box(retained.point(u, 1. - u).unwrap());
+                black_box(retained.derivatives::<7>(u, 1. - u).unwrap());
+                black_box(retained.derivatives::<0>(u, 1. - u).unwrap());
+                black_box(retained.derivatives::<1>(u, 1. - u).unwrap());
+                black_box(retained.point(u, f64::NAN)).unwrap_err();
+                black_box(retained.derivatives::<7>(f64::NAN, u)).unwrap_err();
+            }
+            TRACK.with(|v| v.set(false));
+            assert_eq!(
+                CALLS.with(Cell::get),
+                0,
+                "degrees {p}/{q}, rational={rational}"
             );
         }
     }
