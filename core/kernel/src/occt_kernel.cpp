@@ -175,11 +175,12 @@ class OcctKernel final : public IKernel {
                 "face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
                 "fillet=copy-contour-vertex-boundaries-v1;"
-                "mesh=indexed-faces-copy-v1;"
+                "mesh=indexed-faces-copy-parallel-v2;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v3;names=2;validation=parallel-compounds-v1;"
                 "bounds=single-shell-reuse-v1;"
                 "mass-reference=shell-corner-v1;"
+                "mass-evaluation=parallel-face-batch-v2;"
                 "mass-integrator=planar-gauss-v1;area-integrator=analytic-uv-rectangle-gk-v2;mass="
              << detail::kMassRelativeAccuracy
              << std::setprecision(std::numeric_limits<double>::max_digits10)
@@ -243,6 +244,7 @@ class OcctKernel final : public IKernel {
       parameters.Deflection = parameters.DeflectionInterior = options.linear_deflection;
       parameters.Angle = parameters.AngleInterior = options.angular_deflection;
       parameters.EnableControlSurfaceDeflectionAllSurfaces = true;
+      parameters.InParallel = true;
       BRepMesh_IncrementalMesh mesher(copy.Shape(), parameters);
       if (!mesher.IsDone()) fail("solid tessellation failed");
       Mesh result;

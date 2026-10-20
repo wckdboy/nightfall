@@ -275,3 +275,55 @@ TEST_CASE("mesh face associations retain original geometry after facade destruct
   CHECK_THAT(approximate.volume, WithinAbs(6000, 1e-7));
   for (const auto& range : retained.faces) CHECK(kernel->edges(range.face));
 }
+
+TEST_CASE("repeated compound meshing preserves curved seams cavities and original face bindings",
+          "[mesh-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 3)},
+                                                    {make_circle(Vec2{}, 2)}};
+  const auto sleeve =
+      kernel->extrude({{}, regions(paths, FillRule::kEvenOdd).value(), {0, 0, 6}}).value().shape;
+  const auto cavity =
+      kernel
+          ->boolean_operation(box(*kernel, {50, 0, 0}).shape,
+                              {box(*kernel, {51, 2, 3}, {2, 3, 4}).shape}, BooleanOp::kSubtract)
+          .value()
+          .shape;
+  std::vector<ShapePtr> tools{
+      cavity, detail::snapshot(BRepPrimAPI_MakeSphere(gp_Pnt(-10, 0, 0), 3).Shape()).value()};
+  for (int i = 1; i < 8; ++i)
+    tools.push_back(
+        kernel->transform(sleeve, {{0, i * 10., 0}, {}, {1, 0, 0}, i * kPi / 8}).value().shape);
+  const auto compound = kernel->boolean_operation(sleeve, tools, BooleanOp::kUnion).value().shape;
+  const auto reflected = kernel->mirror(compound, {{}, {0, 1, 0}, {1, 0, 0}}).value().shape;
+  for (const auto& source : {compound, reflected}) {
+    REQUIRE(source->measures().solids == 10);
+    const auto saved = serialized(source);
+    const auto baseline = kernel->tessellate(source, {0.05, 0.2}).value();
+    const auto a = inspect(*kernel, source, baseline);
+    CHECK_THAT(a.volume, WithinAbs(source->measures().volume, source->measures().volume * 0.002));
+    CHECK_THAT(a.area, WithinAbs(source->measures().area, source->measures().area * 0.002));
+    for (int pass = 0; pass < 3; ++pass) {
+      const auto repeated = kernel->tessellate(source, {0.05, 0.2}).value();
+      REQUIRE(repeated.vertices.size() == baseline.vertices.size());
+      REQUIRE(repeated.indices == baseline.indices);
+      REQUIRE(repeated.faces.size() == baseline.faces.size());
+      for (std::size_t i = 0; i < repeated.vertices.size(); ++i) {
+        CHECK(repeated.vertices[i].position == baseline.vertices[i].position);
+        CHECK(repeated.vertices[i].normal == baseline.vertices[i].normal);
+      }
+      for (std::size_t i = 0; i < repeated.faces.size(); ++i) {
+        CHECK(repeated.faces[i].face->same_as(*baseline.faces[i].face));
+        CHECK(repeated.faces[i].first_index == baseline.faces[i].first_index);
+        CHECK(repeated.faces[i].index_count == baseline.faces[i].index_count);
+      }
+    }
+    CHECK_FALSE(kernel->tessellate(source, {0.05, 0.2, baseline.indices.size() / 3 - 1}));
+    CHECK(serialized(source) == saved);
+    unmeshed(source);
+  }
+  CHECK_THAT(sleeve->measures().volume, WithinAbs(30 * kPi, 1e-7));
+  CHECK_THAT(cavity->measures().volume, WithinAbs(5976, 1e-7));
+  unmeshed(sleeve);
+  unmeshed(cavity);
+}

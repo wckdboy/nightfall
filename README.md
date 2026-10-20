@@ -50,7 +50,11 @@ open build/occt/app/Nightfall.app
 The app starts with the Asterion multi-body showcase and includes twenty reference parts
 plus five modeling showcases in **Examples**. Choose **Nocturne** for the posed robotic
 manipulator combining lofts, a spline harness, joint hardware and a two-finger gripper;
-the saved model also opens in preview 0.0.10 through **Open…**. Choose **Lofted Link** for a smooth
+development build 0.0.13 bundles it and parallelizes copied-geometry meshing and exact face
+integrals. Large-pattern Undo still has an intermittent native timeout under investigation
+in [#185](https://github.com/wckdboy/nightfall/issues/185); this build is not a validated release.
+The saved model also
+opens in preview 0.0.10 through **Open…**. Choose **Lofted Link** for a smooth
 three-section elliptic housing with a flange and five drilled holes; change `waist_scale`
 or `height` to explore its shape. Choose **Swept Conduit** for a hollow cubic-spline
 sweep; edit `reach`, `lift`, `radius` or `wall` to reshape it.

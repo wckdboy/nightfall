@@ -60,5 +60,17 @@ import MetalKit
       && model.mesh?.triangleCount == 27_172, "large-model undo did not restore the clean source")
   try check(model.program?.source == original, "large-model undo changed source bytes")
   try check(try Data(contentsOf: url) == original, "large-model test changed the example")
-  print("scalability: three real XPC/client/Metal rebuilds and clean undo passed")
+  let nocturne = URL(fileURLWithPath: directory).appendingPathComponent("nocturne.nightfall")
+  let start = ContinuousClock.now
+  model.load(nocturne)
+  try await waitForDocument(model)
+  try check(
+    model.errors.isEmpty && !model.stale && model.notice.isEmpty && model.bodies.count == 21
+      && model.mesh?.triangleCount == 201_808 && !model.hasUnsavedChanges,
+    "Nocturne switch after large-model undo failed: \(model.errors), \(model.notice)")
+  try check(model.program?.source == Data(contentsOf: nocturne), "Nocturne switch changed source")
+  try renderer.setMesh(model.mesh!)
+  _ = try renderPNG(renderer, to: folder.appendingPathComponent("nocturne-after-asterion.png"))
+  print("Nocturne after Asterion: \((ContinuousClock.now - start) / .milliseconds(1)) ms")
+  print("scalability: three real XPC/client/Metal rebuilds, clean undo and document switch passed")
 }

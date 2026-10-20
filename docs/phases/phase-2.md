@@ -12,6 +12,103 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Parallel exact integration and copied-geometry tessellation (#185)
+
+The overnight OCCT CI run for #184 passed 822/824 tests, with `bundle.scalability` and
+`bundle.nocturne` reporting the unchanged five-second service timeout without an active
+feature index. That index alone does not locate the stalled phase. Local sampling and
+separate rebuild/mesh/bridge measurements identified substantial serial face-discretization
+work in `BRepMesh_IncrementalMesh`.
+
+The existing deep-copy meshing path now enables OCCT's per-request `InParallel` option.
+Source geometry, existing triangulations, original-face binding, deflections, normal/winding
+checks and return budgets are unchanged. Backend identity records the option change;
+service entry remains serialized. No new dependency, interface, file format or recovery
+retry is introduced. Both large native tests retain their full models and edit/Undo paths.
+
+On an Apple M3 Pro (12 logical CPUs, 36 GiB), arm64 Release, macOS 27.2, the quiet native
+before/after Nocturne cold build measures **3279.449 / 2410.806 ms**. Asterion's 1→8→4→8
+sequence measures **2480.834→1985.141**, **1095.647→836.041**, **2471.871→1979.270 ms**
+for the three edits. Both complete clean Undo and real XPC/Metal rendering. These are local
+observations, not a guarantee for other hardware or loaded CI runners. The five-second
+service watchdog and seven-second client backstop remain unchanged.
+
+The three-sample headless Nocturne meshing range changes from 1258–1313 ms to 295–301 ms
+(the baseline run includes a sampled interval and is not wholly quiet). Separate cold/warm
+bridge samples change from 3225.729/1237.750 to 2219.310/304.917 ms. All 201808 triangles,
+131485 vertices, 763 original-face ranges and exact summed component measures are identical;
+mesh volume/area errors remain 0.16390%/0.06380%.
+
+A new compound regression exercises ten separated solids, curved seams/poles, a cavity and
+a reflection. Repeated calls preserve exact vertex/index/face bindings and serialized source,
+reject a smaller output budget and leave all inputs unmeshed. The focused mesh suite passes
+387698 assertions / 9 cases. The initial meshing-only commit `8cb9754` passes the full local
+gate **825/825 in 202.16 s**, including schema/hygiene, all native cases and client TSAN.
+Candidate **0.0.11 (build 11)** includes all 25 examples, but subsequent actual GUI QA finds
+a Nocturne timeout after Asterion 1→8→4→8/Undo. That archive is retained as evidence, not
+marked visually validated. Profiling a further failed cold request shows substantial
+`BRepGProp_VinertGK` work, including B-spline faces, on the serial worker.
+
+That initial commit's ASan/UBSan with halt-on-error passes all 125 kernel cases / 430563
+assertions, the three
+Nocturne/Asterion evaluator cases / 15494 assertions, and all 12 bridge cases / 65400
+assertions, with no sanitizer diagnostics. The dynamically linked vendor OCCT build is
+Release; Nightfall code and compiled header callbacks are instrumented. This is the scoped
+evaluator sanitizer run, not a claim that its entire suite was rerun.
+
+The follow-up gives each face private mass integrators/adaptors, executes independent
+contributions through OCCT's existing pool, then sums in the original traversal order.
+The shell-corner reference, polynomial/Gauss–Kronrod algorithms, 1e-9 requested accuracy,
+validation and five/seven-second policy stay unchanged. Backend identity records this
+execution option. A new repeated placed-surface regression verifies analytic volume and
+asymmetric-hole centroid, deterministic measurements and unchanged source geometry. All
+126 Release kernel cases / 430601 assertions pass.
+
+Three quiet headless Nocturne samples now measure cold rebuild 1616–1703 ms and mesh
+304–314 ms; separate bridge cold/warm is 1945.701/314.279 ms, with identical component
+measures, topology, mesh counts and errors. The development app loads Nocturne, applies
+waist/jaw edits (202032 triangles), then restores the clean 201808-triangle source with
+Undo. The native scalability regression now loads/renders Nocturne after all large-model
+edits and three Undo operations. The focused three native cases pass in 24.34 s. Replacement
+preview **0.0.12 (build 12)** passes the full local gate **826/826 in 201.26 s**, including
+schema/hygiene and client TSAN. Its quiet native Nocturne cold build takes **2098.604 ms**;
+the Asterion edit sequence takes **1936.871/814.309/1920.008 ms**, then Nocturne loads in
+**1983.361 ms** after clean Undo. The baseline Metal render remains byte-identical to the
+checked-in Nocturne PNG (SHA-256 `d058cbe70424f87b70cd04cb57a03033b4738b0d8f5d48cd532adf82a80dc743`).
+Final ASan/UBSan with halt-on-error passes all **126 kernel cases / 430600 assertions**,
+all **368 evaluator cases / 450420 assertions**, and all **12 bridge cases / 65400
+assertions**, with no diagnostics. A separate Debug C++ ThreadSanitizer build passes the
+ten mass/mesh cases / 387735 assertions with halt-on-error and no reported races. Vendor
+OCCT remains Release and is not sanitizer-instrumented; Nightfall code/header callbacks
+are instrumented. The actual 0.0.12 archive subsequently times out on Undo back to eight
+Asterion modules; it is retained as evidence, not marked visually validated. A scoped
+Foundation user-initiated activity experiment reproduces the timeout and is removed.
+App Nap is not established as a cause.
+
+The next revision batches every shell's face tasks into one pool launch per shape, retaining
+each shell's corner and the original face-then-shell reduction order. A new regression uses
+eight placed instances sharing curved cavity surfaces, checking signed analytic volume,
+area, asymmetric centroid, deterministic measurements and unchanged serialized input. All
+**127 Release kernel cases / 430642 assertions** pass. Three quiet Nocturne samples measure
+cold rebuild **1506–1561 ms**, mesh **296–300 ms**, and separate bridge cold/warm
+**1905.054/302.953 ms**, with identical exact measures, topology, mesh counts and errors.
+Three cold eight-module Asterion samples measure kernel **1088–1130 ms**, mesh **445–452 ms**;
+separate bridge cold/warm is **2005.321/1788.382 ms**, with all 640 solids and 217142 triangles.
+
+Development **0.0.13 (build 13)** passes the full local gate **827/827 in 197.97 s**, including
+schema/hygiene and client TSAN. Quiet native Asterion edits take **1867.156/787.988/1868.508 ms**,
+Nocturne after clean Undo **1935.234 ms**, and cold Nocturne **1972.736 ms**. Actual GUI QA
+completes 1→8→4→8 and Undo→4, then times out on Undo→8. A separate sampled diagnostic
+rebuild times out at the final pattern and temporarily suppresses that feature for recovery;
+it is not counted as a successful full model. The profile still shows substantial exact
+Boolean snapshot validation/bounds/mass work. No 0.0.13 archive is published or declared
+validated. Full batched-revision ASan/UBSan with halt-on-error passes **127 kernel cases /
+430641 assertions**, **368 evaluator cases / 450420 assertions**, and **12 bridge cases /
+65400 assertions**, with no diagnostics. The separate Debug C++ TSAN build passes **11
+mass/mesh cases / 387776 assertions** with halt-on-error and no reported races, subject to
+the same vendor-instrumentation limitation above. Remote CI, review, the native reliability
+fix and full phase sign-off remain pending.
+
 ## Nocturne mixed-tool geometry showcase (#183)
 
 The user-requested final design/build test combines existing operations in
