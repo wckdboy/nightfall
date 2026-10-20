@@ -6,6 +6,8 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Mutex;
+pub mod extrusion;
+mod extrusion_ffi;
 const ABI: u32 = 1;
 static NATIVE_CALL: Mutex<()> = Mutex::new(());
 fn with_native<T>(operation: impl FnOnce() -> T) -> T {
