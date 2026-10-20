@@ -58,6 +58,18 @@ typedef struct {
   uint32_t has_from, kind;  // kind: 1 face, 2 edge
 } nf_native_generated;
 typedef struct {
+  double translation[3], axis_origin[3], axis_direction[3], angle;
+} nf_native_rigid_transform;
+typedef struct {
+  const nf_native_entity* entity;
+  uint32_t kind;  // 1 face, 2 edge
+} nf_native_entity_view;
+typedef struct {
+  const nf_native_entity* before;
+  uint64_t modified_count, generated_count;
+  uint32_t before_kind, deleted;  // deleted is 0 or 1
+} nf_native_history;
+typedef struct {
   uint32_t abi_version, capabilities;
   const uint8_t* identity;
   size_t identity_bytes;
@@ -81,6 +93,13 @@ void nf_native_context_release(nf_native_context*) NF_NATIVE_NOEXCEPT;  // NULL-
 // Failure clears *out. Success owns the COMPLETE result and backend after context release.
 uint32_t nf_native_extrude(nf_native_context*, const nf_native_extrusion*,
                            nf_native_result** out) NF_NATIVE_NOEXCEPT;
+// Rotate about a finite nonzero axis/origin, then translate (mm/radians). Direction need
+// not be unit. Source is borrowed for this call; result retains every history snapshot.
+// Foreign contexts return INVALID before geometry access. Native validation stays binding.
+// Input stays immutable; failure clears *out. Success uses the existing result release.
+uint32_t nf_native_transform(nf_native_context*, const nf_native_result* source,
+                             const nf_native_rigid_transform*,
+                             nf_native_result** out) NF_NATIVE_NOEXCEPT;
 // Queries clear outputs on failure. Exact measures use mm units; estimates are not RSS limits.
 uint32_t nf_native_result_query(const nf_native_result*,
                                 nf_native_result_info* out) NF_NATIVE_NOEXCEPT;
@@ -88,6 +107,14 @@ uint32_t nf_native_result_query(const nf_native_result*,
 // release. Source indices address this call's regions/loops/curves; section is 0 for extrusion.
 uint32_t nf_native_result_generated(const nf_native_result*, uint64_t index,
                                     nf_native_generated* out) NF_NATIVE_NOEXCEPT;
+// Complete native history; borrowed entities stay valid until this RESULT is released,
+// even after the original source/context is released. Indices are never persisted selectors.
+uint32_t nf_native_result_history(const nf_native_result*, uint64_t index,
+                                  nf_native_history* out) NF_NATIVE_NOEXCEPT;
+// list: 0 modified, 1 generated. Bounds/invalid lists clear *out and return INVALID.
+uint32_t nf_native_result_history_entity(const nf_native_result*, uint64_t history, uint32_t list,
+                                         uint64_t index,
+                                         nf_native_entity_view* out) NF_NATIVE_NOEXCEPT;
 uint32_t nf_native_entities_same(const nf_native_entity*, const nf_native_entity*,
                                  uint32_t* out) NF_NATIVE_NOEXCEPT;
 void nf_native_result_release(nf_native_result*) NF_NATIVE_NOEXCEPT;  // NULL-safe

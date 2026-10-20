@@ -2,13 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <limits>
 #include <span>
-#include "context.hpp"
 #include "guard.hpp"
+#include "result.hpp"
 #if NF_NATIVE_OCCT
-struct nf_native_result {
-  std::shared_ptr<nf::kernel::IKernel> backend;
-  nf::kernel::OperationResult operation;
-};
 namespace {
 struct Invalid {};
 template <class T>
@@ -59,8 +55,6 @@ nf::kernel::Extrusion decode(const nf_native_extrusion* pointer) {
   return result;
 }
 }  // namespace
-#else
-struct nf_native_result {};
 #endif
 uint32_t nf_native_extrude(nf_native_context* context, const nf_native_extrusion* input,
                            nf_native_result** out) noexcept {
