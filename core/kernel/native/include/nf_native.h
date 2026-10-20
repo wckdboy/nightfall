@@ -17,6 +17,17 @@ enum {
   NF_NATIVE_FAILURE,
   NF_NATIVE_ABI_MISMATCH
 };
+typedef struct {
+  const uint8_t* code;
+  size_t code_bytes;
+  const uint8_t* message;
+  size_t message_bytes;
+} nf_native_error_info;
+// Last structured solver/exception failure on this OS thread. Query does not clear it.
+// Counted bytes are borrowed until the next adapter operation; copy before any other call.
+// Empty fields mean no diagnostic (including allocation failure). Status codes remain binding.
+// An aligned valid output is cleared on failure; null/misaligned outputs return INVALID.
+uint32_t nf_native_last_error(nf_native_error_info* out) NF_NATIVE_NOEXCEPT;
 typedef struct nf_native_context nf_native_context;
 typedef struct nf_native_result nf_native_result;
 typedef struct nf_native_entity nf_native_entity;

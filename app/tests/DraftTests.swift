@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
-import Foundation
+import AppKit
 
 @MainActor func draftsIntegration(_ directory: String) async throws {
   let input = URL(fileURLWithPath: directory).appendingPathComponent("mounting_plate.nightfall")
@@ -157,6 +157,54 @@ import Foundation
       && (try PartProgram(Data(contentsOf: invalid))).parameters[0].value == "0 mm",
     "invalid geometry source was lost or last-valid result was unmarked")
   try check(try Data(contentsOf: url) == source, "draft editing overwrote its original input")
+  var choices = 0
+  func choose(_ choice: CloseChoice) -> CloseChoice {
+    choices += 1
+    return choice
+  }
+  try check(
+    model.canClose(choose: { choose(.cancel) }, destination: { nil }), "clean close blocked")
+  try check(choices == 0, "clean document prompted")
+  model.drafts["thickness"] = "11 mm"
+  let pending = model.drafts
+  try check(
+    !model.canClose(choose: { choose(.cancel) }, destination: { nil }), "cancel closed document")
+  try check(model.drafts == pending && model.hasUnsavedChanges, "cancel lost edits")
+  try check(
+    model.canClose(choose: { choose(.discard) }, destination: { nil }), "discard blocked close")
+  try check(model.drafts == pending && model.hasUnsavedChanges, "discard check mutated document")
+  try check(
+    !model.canClose(choose: { .save }, destination: { nil }), "cancelled save closed document")
+  try check(
+    !model.canClose(choose: { .save }, destination: { missing }), "failed save closed document")
+  try check(model.drafts == pending && model.hasUnsavedChanges, "failed close save lost edits")
+  let closing = folder.appendingPathComponent("Closing.nightfall")
+  try check(
+    model.canClose(choose: { .save }, destination: { closing }), "successful save blocked close")
+  try check(
+    !model.hasUnsavedChanges
+      && (try PartProgram(Data(contentsOf: closing))).parameters[0].value == "11 mm",
+    "close save omitted pending text")
+  let lifecycle = DocumentLifecycle()
+  lifecycle.document = model
+  var approvals = 0
+  lifecycle.approveClose = { _ in
+    approvals += 1
+    return false
+  }
+  try check(
+    lifecycle.applicationShouldTerminate(NSApplication.shared) == .terminateCancel,
+    "quit bypassed close approval")
+  let window = NSWindow()
+  try check(!lifecycle.windowShouldClose(window), "window close bypassed approval")
+  lifecycle.approveClose = { _ in
+    approvals += 1
+    return true
+  }
+  try check(
+    lifecycle.applicationShouldTerminate(NSApplication.shared) == .terminateNow,
+    "approved quit blocked")
+  try check(lifecycle.windowShouldClose(window) && approvals == 4, "approved window close blocked")
   print(
     "drafts: dependent batch volume \(expected) mm³; atomic save/failure, baseline, history and pending undo/redo passed"
   )

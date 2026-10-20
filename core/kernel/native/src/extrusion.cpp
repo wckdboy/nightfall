@@ -58,13 +58,14 @@ nf::kernel::Extrusion decode(const nf_native_extrusion* pointer) {
 #endif
 uint32_t nf_native_extrude(nf_native_context* context, const nf_native_extrusion* input,
                            nf_native_result** out) noexcept {
+  nf::native::clear_error();
   if (out) *out = nullptr;
   if (!context || !input || !out) return NF_NATIVE_INVALID;
   return nf::native::guarded([&]() -> uint32_t {
 #if NF_NATIVE_OCCT
     try {
       auto result = context->kernel->extrude(decode(input));
-      if (!result) return NF_NATIVE_FAILURE;
+      if (!result) return nf::native::failure(result.error().code, result.error().message);
       *out = new nf_native_result{context->kernel, std::move(*result)};
       return NF_NATIVE_OK;
     } catch (const Invalid&) {

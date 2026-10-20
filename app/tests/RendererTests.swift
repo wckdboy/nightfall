@@ -108,6 +108,9 @@ func meshValidation() throws {
     )
     try geometry(packet(response))
     let mesh = try await Task.detached { try DisplayMesh(response) }.value
+    if part == parts[0] {
+      try viewportUploadFailures(response, device: device, output: folder)
+    }
     try renderer.setMesh(mesh)
     _ = try renderPNG(renderer, to: folder.appendingPathComponent(part + ".png"))
     print("\(part): \(mesh.triangleCount) indexed triangles rendered")
@@ -120,4 +123,42 @@ func meshValidation() throws {
   renderer.camera.zoom = 0.7
   let zoom = try renderPNG(renderer, to: folder.appendingPathComponent("zoom.png"))
   try check(zoom != iso, "camera zoom did not change the image")
+}
+
+@MainActor func viewportUploadFailures(_ response: KernelResponse, device: MTLDevice, output: URL)
+  throws
+{
+  let mesh = try DisplayMesh(response)
+  let replacement = try DisplayMesh(response)
+  var allocations = 0
+  var failAt: Int?
+  let renderer = try MetalRenderer(device: device) { bytes, length in
+    allocations += 1
+    if allocations == failAt { return nil }
+    return device.makeBuffer(bytes: bytes, length: length, options: .storageModeShared)
+  }
+  let view = OrbitView(renderer: renderer)
+  let empty = try renderPNG(
+    renderer, to: output.appendingPathComponent("viewport-empty.png"), allowEmpty: true)
+  for allocation in 1...3 {
+    view.updateMesh(mesh)
+    try check(view.meshID == mesh.id && view.uploadError == nil, "successful viewport upload")
+    allocations = 0
+    failAt = allocation
+    view.updateMesh(replacement)
+    try check(
+      view.meshID == nil && view.uploadError != nil, "failed upload published mesh identity")
+    let failed = try renderPNG(
+      renderer, to: output.appendingPathComponent("upload-failed-\(allocation).png"),
+      allowEmpty: true)
+    try check(failed == empty, "failed upload displayed the previous geometry")
+    failAt = nil
+    view.updateMesh(replacement)
+    try check(
+      view.meshID == replacement.id && view.uploadError == nil, "same source did not recover")
+    view.updateMesh(nil)
+  }
+  view.updateMesh(nil)
+  try check(view.meshID == nil && view.uploadError == nil, "empty viewport retained upload status")
+  print("viewport: vertex/index/edge allocation failures publish no ID; same source recovers")
 }

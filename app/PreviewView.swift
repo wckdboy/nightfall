@@ -11,14 +11,7 @@ struct CADViewport: NSViewRepresentable {
   func makeNSView(context: Context) -> OrbitView { OrbitView() }
   func updateNSView(_ view: OrbitView, context: Context) {
     view.renderer?.hiddenBodies = hiddenBodies
-    if let mesh, view.meshID != mesh.id {
-      try? view.renderer?.setMesh(mesh)
-      view.meshID = mesh.id
-    }
-    if mesh == nil, view.meshID != nil {
-      view.renderer?.clearMesh()
-      view.meshID = nil
-    }
+    view.updateMesh(mesh)
     if context.coordinator.pose != pose {
       view.renderer?.camera.preset(pose)
       context.coordinator.pose = pose

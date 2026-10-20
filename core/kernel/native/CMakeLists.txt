@@ -7,6 +7,7 @@ function(nf_native_adapter name occt directory)
   target_link_libraries(${name} PRIVATE nf::warnings)
   if(APPLE)
     target_link_options(${name} PRIVATE
+      "LINKER:-exported_symbol,_nf_native_last_error"
       "LINKER:-exported_symbol,_nf_native_context_create"
       "LINKER:-exported_symbol,_nf_native_context_info"
       "LINKER:-exported_symbol,_nf_native_context_release"

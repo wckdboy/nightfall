@@ -34,6 +34,33 @@ fn box_input() -> Extrusion {
         }],
     }
 }
+#[test]
+fn solver_diagnostics_are_owned_and_survive_recovery_context_drop_and_threads() {
+    let Some(context) = context() else { return };
+    let mut input = box_input();
+    input.frame.normal = [0., 0., 2.];
+    let error = match context.extrude(&input) {
+        Err(error) => error,
+        Ok(_) => panic!("invalid plane accepted"),
+    };
+    let NativeError::Geometry { code, message } = &error else {
+        panic!("lost solver diagnostic: {error:?}")
+    };
+    assert_eq!(code, "kernel");
+    assert_eq!(message, "sketch plane must have finite orthonormal axes");
+    input.frame = Frame::default();
+    assert!(context.extrude(&input).is_ok());
+    drop(context);
+    std::thread::spawn(move || {
+        let NativeError::Geometry { code, message } = error else {
+            unreachable!()
+        };
+        assert_eq!(code, "kernel");
+        assert_eq!(message, "sketch plane must have finite orthonormal axes");
+    })
+    .join()
+    .unwrap();
+}
 fn circle(radius: f64, clockwise: bool) -> NurbsCurve2 {
     let sign = if clockwise { -1.0 } else { 1.0 };
     let w = std::f64::consts::FRAC_1_SQRT_2;

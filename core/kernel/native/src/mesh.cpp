@@ -17,6 +17,7 @@ struct nf_native_mesh {};
 uint32_t nf_native_tessellate(nf_native_context* context, const nf_native_result* source,
                               const nf_native_meshing_options* options,
                               nf_native_mesh** out) noexcept {
+  nf::native::clear_error();
   if (out) *out = nullptr;
   if (!context || !source || !options || !out ||
       reinterpret_cast<uintptr_t>(options) % alignof(nf_native_meshing_options))
@@ -28,7 +29,7 @@ uint32_t nf_native_tessellate(nf_native_context* context, const nf_native_result
     auto mesh = context->kernel->tessellate(
         source->operation.shape, {options->linear_deflection, options->angular_deflection,
                                   static_cast<size_t>(options->max_triangles)});
-    if (!mesh) return NF_NATIVE_FAILURE;
+    if (!mesh) return nf::native::failure(mesh.error().code, mesh.error().message);
     auto owner = std::make_unique<nf_native_mesh>();
     owner->backend = context->kernel;
     owner->source = source->operation.shape;

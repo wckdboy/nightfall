@@ -46,7 +46,12 @@ struct CADCamera {
   private var draws: [DisplayMesh.Draw] = []
   var hiddenBodies: Set<String> = []
   var camera = CADCamera()
-  init(device: MTLDevice) throws {
+  private let makeBuffer: (UnsafeRawPointer, Int) -> MTLBuffer?
+  init(device: MTLDevice, makeBuffer: ((UnsafeRawPointer, Int) -> MTLBuffer?)? = nil) throws {
+    self.makeBuffer =
+      makeBuffer ?? { bytes, length in
+        device.makeBuffer(bytes: bytes, length: length, options: .storageModeShared)
+      }
     let library = try device.makeLibrary(source: Self.shader, options: nil)
     guard let queue = device.makeCommandQueue(),
       let vertex = library.makeFunction(name: "vertexMain"),
@@ -78,17 +83,17 @@ struct CADCamera {
   }
   func setMesh(_ mesh: DisplayMesh) throws {
     let vertex = mesh.vertices.withUnsafeBytes {
-      device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
+      makeBuffer($0.baseAddress!, $0.count)
     }
     let index = mesh.indices.withUnsafeBytes {
-      device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
+      makeBuffer($0.baseAddress!, $0.count)
     }
     guard let vertex, let index else { throw DisplayMesh.Invalid() }
     let edge =
       mesh.edges.isEmpty
       ? nil
       : mesh.edges.withUnsafeBytes {
-        device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
+        makeBuffer($0.baseAddress!, $0.count)
       }
     guard mesh.edges.isEmpty || edge != nil else { throw DisplayMesh.Invalid() }
     vertices = vertex

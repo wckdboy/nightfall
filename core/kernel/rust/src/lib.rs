@@ -46,7 +46,7 @@ pub enum InputProblem {
     Evaluation(MathError),
 }
 /// A complete failure, with source location for Rust input checks; never a partial solid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KernelError {
     Input {
         at: InputLocation,

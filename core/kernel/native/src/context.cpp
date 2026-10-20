@@ -8,8 +8,18 @@
 #include <array>
 #endif
 
+uint32_t nf_native_last_error(nf_native_error_info* out) noexcept {
+  if (!out || reinterpret_cast<uintptr_t>(out) % alignof(nf_native_error_info))
+    return NF_NATIVE_INVALID;
+  *out = {reinterpret_cast<const uint8_t*>(nf::native::error_code.data()),
+          nf::native::error_code.size(),
+          reinterpret_cast<const uint8_t*>(nf::native::error_message.data()),
+          nf::native::error_message.size()};
+  return NF_NATIVE_OK;
+}
 uint32_t nf_native_context_create(uint32_t abi, double linear, double angular,
                                   nf_native_context** out) noexcept {
+  nf::native::clear_error();
   if (!out) return NF_NATIVE_INVALID;
   *out = nullptr;
   if (abi != NF_NATIVE_ABI_VERSION) return NF_NATIVE_ABI_MISMATCH;

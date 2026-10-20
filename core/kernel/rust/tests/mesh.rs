@@ -104,7 +104,7 @@ fn deflection_checks_report_nonfinite_values_and_configured_precision_floors_bef
             ),
         ] {
             let expected = failure(at, MeshProblem::NonFinite);
-            assert_eq!(kernel.validate_meshing(&options), Err(expected));
+            assert_eq!(kernel.validate_meshing(&options), Err(expected.clone()));
             assert!(matches!(kernel.tessellate(&source.shape,&options),Err(e) if e == expected));
         }
     }
@@ -169,7 +169,7 @@ fn mesh_limits_preserve_native_budget_errors_and_recover_at_the_exact_boundary()
             ..MeshingOptions::default()
         };
         let expected = failure(MeshLocation::TriangleLimit, MeshProblem::OutOfRange);
-        assert_eq!(kernel.validate_meshing(&options), Err(expected));
+        assert_eq!(kernel.validate_meshing(&options), Err(expected.clone()));
         assert!(matches!(kernel.tessellate(&source.shape,&options),Err(e) if e == expected));
     }
     assert_eq!(
@@ -190,7 +190,7 @@ fn mesh_limits_preserve_native_budget_errors_and_recover_at_the_exact_boundary()
                 ..MeshingOptions::default()
             }
         ),
-        Err(KernelError::Native(NativeError::NativeFailure))
+        Err(KernelError::Native(NativeError::Geometry { .. }))
     ));
     let options = MeshingOptions {
         linear_deflection: 1e-6,

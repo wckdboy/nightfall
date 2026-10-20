@@ -79,6 +79,29 @@ Result extrude(nf_native_context* owner, const nf_native_extrusion& input) {
 }
 #endif
 }  // namespace
+TEST_CASE("native solver diagnostics preserve the exact error and clear on recovery") {
+#if NF_EXPECT_OCCT
+  auto owner = context();
+  auto source = box();
+  source.plane.normal = {0, 0, 2};
+  Input input(source);
+  nf_native_result* output = nullptr;
+  REQUIRE(nf_native_extrude(owner.get(), &input.value, &output) == NF_NATIVE_FAILURE);
+  REQUIRE(output == nullptr);
+  nf_native_error_info error{};
+  REQUIRE(nf_native_last_error(&error) == NF_NATIVE_OK);
+  const std::string code(reinterpret_cast<const char*>(error.code), error.code_bytes);
+  const std::string message(reinterpret_cast<const char*>(error.message), error.message_bytes);
+  REQUIRE(code == "kernel");
+  REQUIRE(message == "sketch plane must have finite orthonormal axes");
+  const auto valid_source = box();
+  Input valid(valid_source);
+  auto recovered = extrude(owner.get(), valid.value);
+  REQUIRE(nf_native_last_error(&error) == NF_NATIVE_OK);
+  REQUIRE(error.code_bytes == 0);
+  REQUIRE(error.message_bytes == 0);
+#endif
+}
 TEST_CASE("extrusion ABI layouts and null outputs are deterministic") {
   STATIC_REQUIRE(sizeof(nf_native_result_info) == 136);
   STATIC_REQUIRE(sizeof(nf_native_generated) == 64);

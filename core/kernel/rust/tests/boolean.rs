@@ -97,7 +97,7 @@ fn typed_native_errors_reject_empty_and_foreign_tools_and_preserve_recovery() {
             std::slice::from_ref(&b.shape),
             BooleanOp::Intersect
         ),
-        Err(KernelError::Native(NativeError::NativeFailure))
+        Err(KernelError::Native(NativeError::Geometry { .. }))
     ));
     let recovered = kernel
         .boolean_operation(

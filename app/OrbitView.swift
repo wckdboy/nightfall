@@ -6,10 +6,12 @@ import MetalKit
 /// Draws only on changes. Drag to orbit, Shift-drag/right-drag to pan, scroll/pinch to zoom.
 @MainActor final class OrbitView: MTKView {
   let renderer: MetalRenderer?
-  var meshID: UUID?
-  init() {
-    let device = MTLCreateSystemDefaultDevice()
-    renderer = device.flatMap { try? MetalRenderer(device: $0) }
+  private(set) var meshID: UUID?
+  private let uploadStatus = NSTextField(wrappingLabelWithString: "")
+  var uploadError: String? { uploadStatus.isHidden ? nil : uploadStatus.stringValue }
+  init(renderer supplied: MetalRenderer? = nil) {
+    let device = supplied?.device ?? MTLCreateSystemDefaultDevice()
+    renderer = supplied ?? device.flatMap { try? MetalRenderer(device: $0) }
     super.init(frame: .zero, device: device)
     colorPixelFormat = .bgra8Unorm
     depthStencilPixelFormat = .depth32Float
@@ -19,6 +21,41 @@ import MetalKit
     setAccessibilityElement(true)
     setAccessibilityRole(.image)
     setAccessibilityLabel("CAD viewport")
+    uploadStatus.isHidden = true
+    uploadStatus.textColor = .systemOrange
+    uploadStatus.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(uploadStatus)
+    NSLayoutConstraint.activate([
+      uploadStatus.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      uploadStatus.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+      uploadStatus.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
+    ])
+  }
+  func updateMesh(_ mesh: DisplayMesh?) {
+    guard let renderer else {
+      uploadStatus.stringValue = "The graphics renderer is unavailable."
+      uploadStatus.isHidden = false
+      return
+    }
+    guard let mesh else {
+      renderer.clearMesh()
+      meshID = nil
+      uploadStatus.isHidden = true
+      needsDisplay = true
+      return
+    }
+    guard meshID != mesh.id else { return }
+    do {
+      try renderer.setMesh(mesh)
+      meshID = mesh.id
+      uploadStatus.isHidden = true
+    } catch {
+      renderer.clearMesh()
+      meshID = nil
+      uploadStatus.stringValue = "Unable to display the model. Try Rebuild."
+      uploadStatus.isHidden = false
+    }
+    needsDisplay = true
   }
   required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
   override var acceptsFirstResponder: Bool { true }

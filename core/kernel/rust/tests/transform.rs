@@ -142,7 +142,7 @@ fn transform_input_diagnostics_identify_every_nonfinite_field_and_zero_axis() {
                 at,
                 problem: TransformProblem::NonFinite,
             };
-            assert_eq!(kernel.validate_transform(&input), Err(expected));
+            assert_eq!(kernel.validate_transform(&input), Err(expected.clone()));
             assert!(
                 matches!(kernel.transform(&source.shape, &input), Err(error) if error == expected)
             );
@@ -158,7 +158,7 @@ fn transform_input_diagnostics_identify_every_nonfinite_field_and_zero_axis() {
             at: TransformLocation::Axis,
             problem: TransformProblem::ZeroAxis,
         };
-        assert_eq!(kernel.validate_transform(&input), Err(expected));
+        assert_eq!(kernel.validate_transform(&input), Err(expected.clone()));
         assert!(matches!(kernel.transform(&source.shape, &input), Err(error) if error == expected));
     }
 }
@@ -176,7 +176,7 @@ fn native_axis_precision_floor_stays_configured_and_input_direction_is_preserved
         if length == 1e-6 {
             assert!(matches!(
                 result,
-                Err(KernelError::Native(NativeError::NativeFailure))
+                Err(KernelError::Native(NativeError::Geometry { .. }))
             ));
         } else {
             assert!((result.unwrap().shape.measures().volume - 6000.).abs() <= 1e-8);
@@ -191,7 +191,7 @@ fn native_axis_precision_floor_stays_configured_and_input_direction_is_preserved
     };
     assert!(matches!(
         larger.transform(&source.shape, &pose),
-        Err(KernelError::Native(NativeError::NativeFailure))
+        Err(KernelError::Native(NativeError::Geometry { .. }))
     ));
 }
 #[test]

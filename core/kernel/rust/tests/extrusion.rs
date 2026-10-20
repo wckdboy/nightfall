@@ -66,7 +66,7 @@ fn failure(at: InputLocation, problem: InputProblem) -> KernelError {
     KernelError::Input { at, problem }
 }
 fn assert_failure(kernel: &Kernel, input: &Extrusion, expected: KernelError) {
-    assert_eq!(kernel.validate_extrusion(input), Err(expected));
+    assert_eq!(kernel.validate_extrusion(input), Err(expected.clone()));
     assert!(matches!(kernel.extrude(input), Err(error) if error == expected));
 }
 #[test]
@@ -315,7 +315,7 @@ fn native_geometry_rejection_publishes_nothing_and_does_not_damage_snapshots() {
         assert_eq!(kernel.validate_extrusion(&input), Ok(()));
         assert!(matches!(
             kernel.extrude(&input),
-            Err(KernelError::Native(NativeError::NativeFailure))
+            Err(KernelError::Native(NativeError::Geometry { .. }))
         ));
     }
     assert!((original.shape.measures().volume - 6000.).abs() <= 1e-8);

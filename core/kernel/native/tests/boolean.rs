@@ -223,7 +223,7 @@ fn invalid_empty_and_foreign_operands_and_solver_failures_recover_atomically() {
             std::slice::from_ref(&a.shape),
             BooleanOp::Subtract
         ),
-        Err(NativeError::NativeFailure)
+        Err(NativeError::Geometry { .. })
     ));
     assert!(matches!(
         context.boolean_operation(
@@ -231,7 +231,7 @@ fn invalid_empty_and_foreign_operands_and_solver_failures_recover_atomically() {
             std::slice::from_ref(&b.shape),
             BooleanOp::Intersect
         ),
-        Err(NativeError::NativeFailure)
+        Err(NativeError::Geometry { .. })
     ));
     let recovered = context
         .boolean_operation(&a.shape, std::slice::from_ref(&b.shape), BooleanOp::Union)

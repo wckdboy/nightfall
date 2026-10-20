@@ -5,6 +5,7 @@
 uint32_t nf_native_transform(nf_native_context* context, const nf_native_result* source,
                              const nf_native_rigid_transform* input,
                              nf_native_result** out) noexcept {
+  nf::native::clear_error();
   if (out) *out = nullptr;
   if (!context || !source || !input || !out ||
       reinterpret_cast<uintptr_t>(input) % alignof(nf_native_rigid_transform))
@@ -16,7 +17,7 @@ uint32_t nf_native_transform(nf_native_context* context, const nf_native_result*
     auto result = context->kernel->transform(source->operation.shape,
                                              {vec(input->translation), vec(input->axis_origin),
                                               vec(input->axis_direction), input->angle});
-    if (!result) return NF_NATIVE_FAILURE;
+    if (!result) return nf::native::failure(result.error().code, result.error().message);
     *out = new nf_native_result{context->kernel, std::move(*result)};
     return NF_NATIVE_OK;
 #else

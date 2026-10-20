@@ -12,6 +12,39 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Consolidated integration review (#223)
+
+On 2026-10-20 the maintainer explicitly authorizes the consolidated integration through
+#222: “yes merge, then run a test like before, where you create the most advanced/complex
+thing you can with the engine, and show it to me.” This is the one-time size/single-issue
+and agent-merge exception for PR #224. Required CI and conversation resolution still apply.
+Original per-issue branches, PRs and numerical evidence remain the audit trail. Script RFC
+#148 is excluded; #185/#195 and the incomplete Phase 2 gates remain open.
+
+Codex/Greptile review fixes add visible viewport upload failure/retry, Save/Discard/Cancel
+protection on both quit and window close, retained native solver code/message in Rust,
+modeling-example CI triggers, and clean incremental example packaging. Buffer-failure
+checks exercise vertex/index/edge allocation failure and same-UUID recovery with actual
+Metal images. Close checks retain pending edits on Cancel, cancelled/failed saves and
+Discard inspection, save pending text atomically, and cover both AppKit close entry points.
+The private additive diagnostic ABI retains counted bytes on the calling OS thread; Rust
+copies them under the native guard before another operation. `NativeError::Geometry`
+owns code/message strings and both Rust error enums are now Clone rather than Copy.
+Callers handle the new variant and explicitly clone errors they previously copied.
+
+The initial local integration baseline passes **880/880 in 261.05 s**. The first reviewed
+full run passes 882/884; two Rust gates catch callers that need explicit error clones.
+After migration both linked/unavailable Rust gates pass **2/2 in 57.39 s** and native
+ASan/UBSan passes **55/55 in 65.93 s** (Rust/installed OCCT remain uninstrumented).
+The live app prompts on Command-Q and window close, with Cancel preserving pending text.
+An incremental add/remove packaging probe verifies exactly **25** current examples and no
+stale file. The final full run and fresh remote results are merge gates recorded in PR #224.
+Logs: `/tmp/nightfall-223-{diagnostics-red,review-check,rust,asan,packaging,final-check}.log`.
+Initial
+combined-backend CI fails the existing eight-module native deadline in `bundle.scalability`
+([run](https://github.com/wckdboy/nightfall/actions/runs/39487655639)); five/seven-second
+deadlines and the fixture stay unchanged. This failure is retained as evidence under #185.
+
 ## Rust kernel and engine migration decision (#188)
 
 The maintainer requests Rust for Nightfall's own kernel/engine implementation.

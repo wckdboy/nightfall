@@ -16,6 +16,7 @@ bool aligned(const T* pointer) {
 }  // namespace
 uint32_t nf_native_export_step(nf_native_context* context, const nf_native_result* const* sources,
                                uint64_t source_count, nf_native_step** out) noexcept {
+  nf::native::clear_error();
   if (!aligned(out)) return NF_NATIVE_INVALID;
   *out = nullptr;
   if (!aligned(context) || !aligned(sources) || !source_count ||
@@ -37,7 +38,8 @@ uint32_t nf_native_export_step(nf_native_context* context, const nf_native_resul
     inputs.reserve(count);
     for (size_t i = 0; i < count; ++i) inputs.push_back(sources[i]->operation.shape);
     auto encoded = context->kernel->export_step(inputs);
-    if (!encoded || encoded->empty() ||
+    if (!encoded) return nf::native::failure(encoded.error().code, encoded.error().message);
+    if (encoded->empty() ||
         encoded->size() > static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()))
       return NF_NATIVE_FAILURE;
     auto owner = std::make_unique<nf_native_step>();

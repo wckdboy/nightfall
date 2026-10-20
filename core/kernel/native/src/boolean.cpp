@@ -13,6 +13,7 @@ bool aligned(const T* pointer) {
 uint32_t nf_native_boolean(nf_native_context* context, const nf_native_result* target,
                            const nf_native_result* const* tools, uint64_t tool_count, uint32_t mode,
                            nf_native_result** out) noexcept {
+  nf::native::clear_error();
   if (!aligned(out)) return NF_NATIVE_INVALID;
   *out = nullptr;
   if (!aligned(context) || !aligned(target) || !aligned(tools) || !tool_count ||
@@ -47,7 +48,7 @@ uint32_t nf_native_boolean(nf_native_context* context, const nf_native_result* t
         break;
     }
     auto result = context->kernel->boolean_operation(target->operation.shape, inputs, op);
-    if (!result) return NF_NATIVE_FAILURE;
+    if (!result) return nf::native::failure(result.error().code, result.error().message);
     *out = new nf_native_result{context->kernel, std::move(*result)};
     return NF_NATIVE_OK;
 #else

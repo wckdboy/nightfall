@@ -170,6 +170,37 @@ struct BodyMeasure: Decodable, Identifiable, Sendable {
     client.shutdown()
     busy = false
   }
+  func canClose(choose: () -> CloseChoice, destination: () -> URL?) -> Bool {
+    guard !presentingSheet else { return false }
+    guard hasUnsavedChanges else { return true }
+    switch choose() {
+    case .cancel: return false
+    case .discard: return true
+    case .save:
+      guard let url = destination() else { return false }
+      return saveCopy(to: url) && !hasUnsavedChanges
+    }
+  }
+  func confirmClose() -> Bool {
+    canClose {
+      let alert = NSAlert()
+      alert.messageText = "Save changes before closing?"
+      alert.informativeText = "Save a copy to keep your parameter and history edits."
+      alert.addButton(withTitle: "Save copy…")
+      alert.addButton(withTitle: "Discard")
+      alert.addButton(withTitle: "Cancel")
+      switch alert.runModal() {
+      case .alertFirstButtonReturn: return .save
+      case .alertSecondButtonReturn: return .discard
+      default: return .cancel
+      }
+    } destination: {
+      let panel = NSSavePanel()
+      panel.nameFieldStringValue = "Part.nightfall"
+      panel.allowedContentTypes = [UTType(filenameExtension: "nightfall") ?? .json]
+      return panel.runModal() == .OK ? panel.url : nil
+    }
+  }
   func open() {
     let panel = NSOpenPanel()
     panel.allowedContentTypes = [UTType(filenameExtension: "nightfall") ?? .json, .json]

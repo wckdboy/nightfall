@@ -263,6 +263,11 @@ TEST_CASE("native STEP solver failures clear outputs and preserve prior retained
   nf_native_step* output = retained.get();
   CHECK(nf_native_export_step(owner.get(), inputs, 2, &output) == NF_NATIVE_FAILURE);
   CHECK(output == nullptr);
+  nf_native_error_info diagnostic{};
+  REQUIRE(nf_native_last_error(&diagnostic) == NF_NATIVE_OK);
+  CHECK(std::string(reinterpret_cast<const char*>(diagnostic.code), diagnostic.code_bytes) ==
+        "kernel");
+  CHECK(diagnostic.message_bytes > 0);
   CHECK(text(retained.get()) == bytes);
   auto foreign = context();
   auto foreign_source = solid(foreign.get());

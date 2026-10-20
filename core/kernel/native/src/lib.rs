@@ -33,6 +33,7 @@ struct RawInfo {
     identity_bytes: usize,
 }
 unsafe extern "C" {
+    fn nf_native_last_error(out: *mut RawError) -> u32;
     fn nf_native_context_create(abi: u32, linear: f64, angular: f64, out: *mut *mut c_void) -> u32;
     fn nf_native_context_info(context: *const c_void, out: *mut RawInfo) -> u32;
     fn nf_native_context_release(context: *mut c_void);
@@ -42,17 +43,61 @@ fn status(value: u32) -> Result<(), NativeError> {
         0 => Ok(()),
         1 => Err(NativeError::InvalidArgument),
         2 => Err(NativeError::Unavailable),
-        3 => Err(NativeError::NativeFailure),
+        3 => Err(read_error()),
         _ => Err(NativeError::AbiMismatch),
     }
 }
 /// Complete native failures; no partially initialized context is returned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeError {
     InvalidArgument,
     Unavailable,
     NativeFailure,
     AbiMismatch,
+    /// Owned native solver code/message, retained after later calls or context teardown.
+    Geometry {
+        code: String,
+        message: String,
+    },
+}
+#[repr(C)]
+#[derive(Default)]
+struct RawError {
+    code: *const u8,
+    code_bytes: usize,
+    message: *const u8,
+    message_bytes: usize,
+}
+fn read_error() -> NativeError {
+    let mut raw = RawError::default();
+    // SAFETY: called inside the native guard immediately after a failed adapter operation.
+    // Query borrows this thread's immutable diagnostic until the next adapter operation.
+    if unsafe { nf_native_last_error(&mut raw) } != 0 {
+        return NativeError::AbiMismatch;
+    }
+    if raw.code_bytes == 0 && raw.message_bytes == 0 {
+        return NativeError::NativeFailure;
+    }
+    let copy = |pointer: *const u8, count: usize| {
+        if count == 0 {
+            return Some(String::new());
+        }
+        if pointer.is_null() || count > isize::MAX as usize {
+            return None;
+        }
+        // SAFETY: adapter owns the counted bytes; this guard/thread retain them through copy.
+        Some(
+            String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(pointer, count) })
+                .into_owned(),
+        )
+    };
+    match (
+        copy(raw.code, raw.code_bytes),
+        copy(raw.message, raw.message_bytes),
+    ) {
+        (Some(code), Some(message)) => NativeError::Geometry { code, message },
+        _ => NativeError::AbiMismatch,
+    }
 }
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]

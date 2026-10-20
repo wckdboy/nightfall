@@ -204,7 +204,7 @@ fn foreign_contexts_and_invalid_transform_inputs_leave_the_source_usable() {
             };
             assert!(matches!(
                 context.transform(&source.shape, &input),
-                Err(NativeError::NativeFailure)
+                Err(NativeError::Geometry { .. })
             ));
         }
     }
@@ -214,7 +214,7 @@ fn foreign_contexts_and_invalid_transform_inputs_leave_the_source_usable() {
     };
     assert!(matches!(
         context.transform(&source.shape, &zero),
-        Err(NativeError::NativeFailure)
+        Err(NativeError::Geometry { .. })
     ));
     assert_measures(&source.shape, [5., 10., 15.]);
     assert_measures(

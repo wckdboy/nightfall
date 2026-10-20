@@ -297,7 +297,7 @@ fn foreign_mesh_contexts_invalid_deflections_and_budgets_recover_without_input_c
         ] {
             assert!(matches!(
                 context.tessellate(&source.shape, &options),
-                Err(NativeError::NativeFailure)
+                Err(NativeError::Geometry { .. })
             ));
         }
     }
@@ -310,7 +310,7 @@ fn foreign_mesh_contexts_invalid_deflections_and_budgets_recover_without_input_c
                     ..MeshingOptions::default()
                 }
             ),
-            Err(NativeError::NativeFailure)
+            Err(NativeError::Geometry { .. })
         ));
     }
     let mesh = context
