@@ -17,6 +17,10 @@ on:
       - "tools/bakeoff/**"
       - "tools/cli/**"
       - "core/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - "services/kernel/**"
       - "app/**"
       - "tools/embed_service.py"
@@ -32,6 +36,10 @@ on:
       - "tools/bakeoff/**"
       - "tools/cli/**"
       - "core/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - "services/kernel/**"
       - "app/**"
       - "tools/embed_service.py"
@@ -61,6 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: brew install ninja python@3.14
+      - run: rustup show
       - name: Install schema test tooling
         run: |
           python3.14 -m venv "$RUNNER_TEMP/tools"

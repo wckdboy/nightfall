@@ -27,6 +27,23 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Rust math foundation (#190)
+
+Accepted RFC 0008 now has a pinned Rust 1.99.1, std-only Cargo workspace and a safe
+`nightfall-math` crate. Checked immutable clamped knots and stack-only basis evaluation /
+derivatives cover degrees 1–9; nonfinite inputs and unrepresentable arithmetic return
+structured errors. The library forbids unsafe code; the test allocator alone uses unsafe
+forwarding to the system allocator. No production engine or IR switch is made.
+
+Nine analytic/property cases first fail against empty implementations, then pass along
+with a zero-allocation observer in debug/release. Seeded differential tests compare 3,456
+cases / 380,160 values with C++; 109 cases additionally use an independent 80-digit
+Cox-de Boor recurrence. Maximum row-scaled difference is 7.62e-16. Cancellation-sensitive
+derivatives use an explicit ulp row-norm floor. fmt/Clippy pass; the full native gate passes
+**828/828 in 235.72 s**, plus all ten Rust tests in Debug and Release, schema and hygiene.
+CI and the local gate now include the pinned, locked/offline Rust checks.
+Rational curves and production integration follow separately; #185 remains open.
+
 ## Parallel exact integration and copied-geometry tessellation (#185)
 
 The overnight OCCT CI run for #184 passed 822/824 tests, with `bundle.scalability` and

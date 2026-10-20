@@ -39,6 +39,9 @@ jobs:
 
       - name: Toolchain versions
         run: |
+          rustup show
+          rustc --version
+          cargo --version
           xcodebuild -version
           cmake --version | head -1
           clang-format --version

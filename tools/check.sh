@@ -29,7 +29,7 @@ fail=0
 step "License headers"
 # Every tracked or new source file must carry an SPDX license identifier.
 missing=$(git ls-files --cached --others --exclude-standard \
-  '*.c' '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
+  '*.c' '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.rs' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
   | while read -r f; do
       [[ -f "$f" ]] || continue
       head -n 5 "$f" | grep -q 'SPDX-License-Identifier:' || echo "$f"
@@ -45,7 +45,7 @@ step "Layering"
 # AppKit/Cocoa only inside app/ (WORKFLOW.md §6): everything else must stay portable to
 # iPadOS and visionOS. Catches Swift/ObjC imports, C/C++ includes and CMake framework links.
 appkit=$(git ls-files --cached --others --exclude-standard \
-  '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*CMakeLists.txt' '*.cmake' \
+  '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*.rs' '*CMakeLists.txt' '*.cmake' \
   | { grep -v '^app/' || true; } \
   | while read -r f; do
       [[ -f "$f" ]] || continue
@@ -75,6 +75,12 @@ else
     echo "ok"
   fi
 fi
+
+step "Rust math (pinned toolchain; locked, offline dependencies)"
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+cargo test --workspace --locked --offline
+cargo test --workspace --locked --offline --release
 
 step "IR schema"
 python3 core/ir/schema/build_schema.py --check

@@ -35,6 +35,12 @@ if(NF_BUILD_TESTS)
   # Fixed seed so property-test failures reproduce exactly; run the binary directly with
   # --rng-seed time to explore new samples.
   catch_discover_tests(nf_math_tests TEST_PREFIX "math." EXTRA_ARGS --rng-seed=20261016)
+  add_executable(nf_rust_basis_oracle tests/rust_basis_oracle.cpp)
+  target_link_libraries(nf_rust_basis_oracle PRIVATE nf::math nf::warnings)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME math.rust-basis-differential
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/rust_basis_differential.py
+      $<TARGET_FILE:nf_rust_basis_oracle> ${CMAKE_SOURCE_DIR})
 endif()
 
 # Benchmark for the Phase 1 gate (cubic evaluation ≤ 50 ns); built, not run by ctest.
