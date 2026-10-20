@@ -25,7 +25,9 @@ block downstream geometry; unique caps attach the probe at (5,10,31) mm.
 
 Sequential edits, warm hits and forced cold builds retain correct ownership and earlier
 readers. The focused case passes **950 assertions in 0.23 s**. The first full gate passes
-884/885 in 274.43 s; the existing #185 Nocturne deadline recurs at 5.84 s. A scoped recheck
+884/885 in 274.43 s; the existing #185 Nocturne deadline recurs at 5.84 s. That run also
+detects project-format violations from formatting the new test outside the repository;
+formatting is corrected with the pinned formatter and repository configuration. A scoped recheck
 passes naming plus unchanged Nocturne **2/2 in 6.20 s** (cold build 2725.291 ms). This is
 not a latency fix; deadlines, fixture and tolerances are unchanged. Final complete checks
 remain required. Logs: `/tmp/nightfall-227-{naming,check,recheck}.log`.
