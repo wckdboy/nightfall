@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Headless typed kernel policy (RFC 0008); exact geometry remains native C++/OCCT.
 #![forbid(unsafe_code)]
+mod transform;
 pub use nightfall_math::{KnotVector, MathError, NurbsCurve2};
 use nightfall_native::Context;
 pub use nightfall_native::extrusion::{
     Entity, EntityKind, Extrusion, Frame, Generated, History, Measures, OperationResult,
     ProfileEdge, Region, Shape,
 };
+pub use nightfall_native::transform::RigidTransform;
 pub use nightfall_native::{BackendInfo, NativeError, Operation as NativeOperation};
+pub use transform::{TransformLocation, TransformProblem};
 /// Position in an extrusion input. Loop zero is outer; holes start at one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputLocation {
@@ -42,6 +45,10 @@ pub enum KernelError {
         at: InputLocation,
         problem: InputProblem,
     },
+    TransformInput {
+        at: TransformLocation,
+        problem: TransformProblem,
+    },
     Native(NativeError),
 }
 impl From<NativeError> for KernelError {
@@ -53,6 +60,9 @@ impl std::fmt::Display for KernelError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Input { at, problem } => write!(f, "extrusion input {at:?}: {problem:?}"),
+            Self::TransformInput { at, problem } => {
+                write!(f, "transform input {at:?}: {problem:?}")
+            }
             Self::Native(error) => write!(f, "native geometry: {error:?}"),
         }
     }
@@ -65,7 +75,7 @@ pub struct KernelInfo {
     pub identity: String,
     pub backend: BackendInfo,
 }
-/// Thread-affine typed facade. Only extrusion is exposed in this initial migration slice.
+/// Thread-affine typed facade exposing exact extrusion and rigid placement in this migration slice.
 ///
 /// ```compile_fail
 /// use nightfall_kernel::Kernel;
@@ -89,7 +99,7 @@ impl Kernel {
         let backend = self.native.info()?;
         Ok(KernelInfo {
             identity: format!(
-                "nightfall-rust/{};policy=extrusion-v1;native={}",
+                "nightfall-rust/{};policy=extrusion-rigid-v1;native={}",
                 env!("CARGO_PKG_VERSION"),
                 backend.identity
             ),

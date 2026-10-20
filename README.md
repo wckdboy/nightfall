@@ -72,13 +72,22 @@ mm tolerance, returning field coordinates or region/loop/curve locations. Its
 geometry and full solid validation. It never samples or rewrites the NURBS. Retained readers
 use the safe native ownership layer; no raw pointer, client, XPC or model provider is needed.
 `Kernel::info` distinguishes the Rust implementation from the solver and its configuration;
-native solver capabilities do not imply Rust operation parity. Only extrusion is exposed.
+native solver capabilities do not imply Rust operation parity. Extrusion and rigid
+placement are exposed in the current Rust surface.
 CTest also runs `nf-kernel-extrude`, which reports a disconnected-profile diagnostic and
 builds the exact two-hole plate through `Kernel`. To see both examples' receipts/measures:
 
 ```sh
 ctest --preset occt -R '^native-abi.*\.rust$' -V
 ```
+
+`Kernel::transform` places exact solids by rotating about an arbitrary axis/origin, then
+translating, with complete retained face/edge history. `validate_transform` reports precise
+nonfinite field coordinates and a zero axis; native normalization and configured axis
+precision floors still apply. `nf-kernel-placement` uses this typed API to build six placed
+two-hole parts, checks all world centroids/measures and 300 history mappings, then verifies
+retained readers after input/source/Kernel/results are dropped. These are placed solids;
+joint constraints and assembly simulation remain separate work.
 
 Mathematical curves come from `nightfall-math`; exact solid construction/validation remain
 delegated to C++/OCCT. Rust IR/evaluation and production client cutover remain pending.
