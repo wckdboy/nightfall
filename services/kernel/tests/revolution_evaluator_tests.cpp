@@ -224,19 +224,10 @@ TEST_CASE("revolution feature unsupported axes and body types have precise diagn
   for (const auto* text : {
            R"({"profile":{"sketch":"outline"},"axis":{"created_by":"outline"},
       "angle":360,"result":{"new":"plate","body_type":"brep"}})",
-           R"({"profile":{"sketch":"outline"},"axis":{"sketch":"outline","entity":"r"},
-      "angle":360,"result":{"new":"plate","body_type":"brep"}})",
            R"({"profile":{"sketch":"outline"},"axis":{"origin":[0,0,0],"direction":"z"},
       "angle":360,"result":{"new":"plate","body_type":"mesh"}})"}) {
     auto document = turned_part();
     document.features[1].inputs = ir::json::parse(text).value();
-    if (document.features[1].inputs.find("axis")->find("sketch"))
-      document.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"zx"},"entities":[
-        {"id":"r","type":"line","start":[0,5],"end":[30,5]},
-        {"id":"b","type":"line","start":[30,5],"end":[30,10]},
-        {"id":"c","type":"line","start":[30,10],"end":[0,10]},
-        {"id":"d","type":"line","start":[0,10],"end":[0,5]}],"constraints":[]})")
-                                        .value();
     auto evaluated = evaluator.evaluate(source(document));
     REQUIRE(evaluated);
     const auto& result = *evaluated;

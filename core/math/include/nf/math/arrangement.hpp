@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <span>
@@ -18,11 +19,18 @@
 
 namespace nf::math {
 
+/// Original input path/curve, before decomposition or splitting. A merged span may have
+/// several sources; synthetic closing edges have none. Indices refer to this call's inputs.
+struct CurveSource {
+  std::size_t path, curve;
+  bool operator==(const CurveSource&) const = default;
+};
 struct Arrangement {
   struct HalfEdge {
     NurbsCurve2 curve;  // from origin to target; the twin runs the same edge backwards
     int origin, target, twin, next, face;
     int direction;  // signed sum of input traversals; coincident opposite paths can cancel
+    std::vector<CurveSource> sources{};
   };
   struct Face {
     std::vector<int> half_edges;  // the boundary cycle, the face on the left of each
@@ -45,7 +53,11 @@ struct Arrangement {
 /// Coincident degree-1 spans are split at overlap endpoints and merged with summed signed
 /// traversal counts, including rational lines and multi-span polylines. Their curves retain
 /// the original parameterization; zero-count internal seams remain in the arrangement.
-/// Shared stretches involving higher-degree curves remain an explicit error (#74).
+/// Shared curved Bezier spans are certified by homogeneous polynomial coefficients,
+/// including reversed/partial spans, degree elevation and Mobius reparameterizations.
+/// Their pointwise discrepancy is bounded by 1e-12 of local control extent plus eight
+/// machine epsilons of coordinate magnitude, independently of drawing-wide vertex welding.
+/// Uncertifiable shared parameterizations remain an explicit error (#74).
 /// A single curve's own self-intersections (a cubic with a loop) are not split.
 [[nodiscard]] std::expected<Arrangement, std::string> arrange(
     std::span<const std::vector<NurbsCurve2>> paths);
@@ -60,6 +72,9 @@ enum class FillRule { kNonZero, kEvenOdd };
 /// A closed chain of curves: each starts where the previous ends, the last ends at the first.
 struct Loop {
   std::vector<NurbsCurve2> curves;
+  /// regions() supplies one source set per curve, including reversed hole boundaries.
+  /// Callers constructing loops directly may leave this metadata empty.
+  std::vector<std::vector<CurveSource>> sources{};
 };
 
 /// A connected filled area: its outer boundary (counter-clockwise) and holes (clockwise).

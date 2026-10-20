@@ -1,0 +1,78 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Elliptic duct",
+    "doc": "Nested 10 x 6 mm and 8 x 4 mm semiaxes, rotated 30 degrees; exact elliptical extrusion."
+  },
+  "params": [
+    {
+      "name": "length",
+      "value": "20 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Length"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              10,
+              6
+            ],
+            "rotation": 30
+          },
+          {
+            "id": "inner",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              8,
+              4
+            ],
+            "rotation": 30
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "duct",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "length",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

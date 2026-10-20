@@ -1,0 +1,76 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {"length": "mm", "angle": "deg"},
+  "meta": {
+    "name": "Lofted actuator link",
+    "doc": "Three exact elliptic sections, a mounting flange, central bore and four through mounting holes. Geometry prototype for the robotic-arm milestone; no strength or motion validation."
+  },
+  "params": [
+    {"name": "height", "value": "160 mm", "min": "40 mm", "max": "240 mm"},
+    {"name": "waist_scale", "value": 1, "min": 0.8, "max": 1.2},
+    {"name": "bore_radius", "value": "8 mm", "min": "2 mm", "max": "8 mm"},
+    {"name": "flange_thickness", "value": "6 mm", "min": "3 mm", "max": "12 mm"}
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "flange_outline", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, "-flange_thickness"], "normal": "z", "x_direction": "x"},
+        "entities": [{"id": "rim", "type": "ellipse", "center": [0, 0], "radii": [40, 30]}], "constraints": []}
+    },
+    {
+      "id": "flange", "type": "extrude",
+      "inputs": {"profile": {"sketch": "flange_outline"}, "distance": "flange_thickness",
+        "result": {"new": "link", "body_type": "brep"}}
+    },
+    {
+      "id": "root_section", "type": "sketch",
+      "inputs": {"plane": {"datum": "xy"},
+        "entities": [{"id": "rim", "type": "ellipse", "center": [0, 0], "radii": [32, 20]}], "constraints": []}
+    },
+    {
+      "id": "waist_section", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, "height / 2"], "normal": "z", "x_direction": "x"},
+        "entities": [{"id": "rim", "type": "ellipse", "center": [0, 0],
+          "radii": ["22 mm * waist_scale", "12 mm * waist_scale"]}], "constraints": []}
+    },
+    {
+      "id": "tip_section", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, "height"], "normal": "z", "x_direction": "x"},
+        "entities": [{"id": "rim", "type": "ellipse", "center": [0, 0], "radii": [24, 16]}], "constraints": []}
+    },
+    {
+      "id": "housing_loft", "type": "loft",
+      "inputs": {"profiles": [{"sketch": "root_section"}, {"sketch": "waist_section"}, {"sketch": "tip_section"}],
+        "result": {"join": "link"}}
+    },
+    {
+      "id": "bore_outline", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, "-flange_thickness"], "normal": "z", "x_direction": "x"},
+        "entities": [{"id": "bore", "type": "circle", "center": [0, 0], "radius": "bore_radius"}], "constraints": []}
+    },
+    {
+      "id": "bore", "type": "extrude",
+      "inputs": {"profile": {"sketch": "bore_outline"}, "distance": "height + flange_thickness",
+        "result": {"cut": "link"}}
+    },
+    {
+      "id": "mount_outline", "type": "sketch",
+      "inputs": {"plane": {"origin": [0, 0, "-flange_thickness"], "normal": "z", "x_direction": "x"},
+        "entities": [
+          {"id": "mount_0", "type": "circle", "center": [-30, -13], "radius": 2.5},
+          {"id": "mount_1", "type": "circle", "center": [30, -13], "radius": 2.5},
+          {"id": "mount_2", "type": "circle", "center": [30, 13], "radius": 2.5},
+          {"id": "mount_3", "type": "circle", "center": [-30, 13], "radius": 2.5}
+        ], "constraints": []}
+    },
+    {
+      "id": "mount_holes", "type": "extrude",
+      "inputs": {"profile": {"sketch": "mount_outline"}, "distance": "flange_thickness",
+        "result": {"cut": "link"}}
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

@@ -50,6 +50,62 @@ TEST_CASE("evaluated sketch profiles preserve holes and point-selected regions")
   CHECK_FALSE(boundary);
 }
 
+TEST_CASE("direct sketch values can omit authored curve source metadata", "[source-faces]") {
+  for (const auto* text : {
+           R"({"plane":{"datum":"xy"},"entities":[{"id":"r","type":"rect",
+        "corner":[0,0],"size":[10,20]}],"constraints":[]})",
+           R"({"plane":{"datum":"xy"},"entities":[
+        {"id":"a","type":"line","start":[0,0],"end":[10,0]},
+        {"id":"b","type":"line","start":[10,0],"end":[10,20]},
+        {"id":"c","type":"line","start":[10,20],"end":[0,20]},
+        {"id":"d","type":"line","start":[0,20],"end":[0,0]}],"constraints":[]})"}) {
+    const auto prepared = prepare_sketch(inputs("sketch", text)).value();
+    Sketch sketch;
+    sketch.paths = prepared.paths;
+    sketch.segments = prepared.segments;
+    ProfileSources sources;
+    auto extrusion = prepare_extrusion(inputs("extrude",
+                                              R"({"profile":{"sketch":"s"},"distance":30,
+          "result":{"new":"b","body_type":"brep"}})"),
+                                       sketch, &sources);
+    REQUIRE(extrusion);
+    REQUIRE(sources.size() == 4);
+    for (const auto& [edge, ids] : sources) {
+      CHECK(edge[0] == 0);
+      CHECK(edge[1] == 0);
+      CHECK(ids.empty());
+    }
+    const auto solid = kernel::make_occt_kernel().value()->extrude(*extrusion);
+    REQUIRE(solid);
+    CHECK_THAT(solid->shape->measures().volume, WithinAbs(6000, 1e-8));
+  }
+}
+
+TEST_CASE("tolerance connectors never inherit adjacent authored entity names", "[source-faces]") {
+  const auto sketch = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
+    {"id":"a","type":"line","start":[0,0],"end":[10,0]},
+    {"id":"b","type":"line","start":[10,0.0000005],"end":[10,20]},
+    {"id":"c","type":"line","start":[10,20],"end":[0,20]},
+    {"id":"d","type":"line","start":[0,19.9999995],"end":[0,0]}],"constraints":[]})"))
+                          .value();
+  ProfileSources sources;
+  const auto extrusion = prepare_extrusion(inputs("extrude",
+                                                  R"({"profile":{"sketch":"s"},"distance":30,
+        "result":{"new":"b","body_type":"brep"}})"),
+                                           sketch, &sources);
+  REQUIRE(extrusion);
+  REQUIRE(sources.size() == 6);
+  std::size_t connectors = 0;
+  for (const auto& [edge, ids] : sources) {
+    CHECK(edge[0] == 0);
+    if (ids.empty())
+      ++connectors;
+    else
+      CHECK(ids.size() == 1);
+  }
+  CHECK(connectors == 2);
+}
+
 TEST_CASE("line sketches join unordered reversed edges without silently closing gaps") {
   auto sketch = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"yz"},"entities":[
     {"id":"a","type":"line","start":[0,0],"end":[10,0]},
@@ -68,20 +124,26 @@ TEST_CASE("line sketches join unordered reversed edges without silently closing 
   CHECK_THAT(result->shape->measures().centroid.y, WithinAbs(5, 1e-8));
   auto open = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"line","start":[0,0],"end":[10,0]}],"constraints":[]})"));
-  REQUIRE_FALSE(open);
-  CHECK(open.error().code == "kernel");
+  REQUIRE(open);
+  const auto open_profile = prepare_extrusion(inputs("extrude", R"({"profile":{"sketch":"s"},
+    "distance":30,"result":{"new":"b","body_type":"brep"}})"),
+                                              *open);
+  REQUIRE_FALSE(open_profile);
+  CHECK(open_profile.error().code == "kernel");
+  CHECK(open_profile.error().pointer == "/inputs/profile");
 }
 
 TEST_CASE("unsupported sketch semantics are errors with field pointers") {
   auto constraints = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"circle","center":[0,0],"radius":10}],
-    "constraints":[{"type":"radius","entities":["a"],"value":10}]})"));
+    "constraints":[{"type":"fixed","entities":[{"entity":"a","point":"start"}]}]})"));
   REQUIRE_FALSE(constraints);
-  CHECK(constraints.error().pointer == "/inputs/constraints");
+  CHECK(constraints.error().pointer == "/inputs/constraints/0/entities/0/point");
   auto point = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"point","at":[0,0]}],"constraints":[]})"));
-  REQUIRE_FALSE(point);
-  CHECK(point.error().pointer == "/inputs/entities/0/type");
+  REQUIRE(point);
+  CHECK(point->points.at("a") == math::Vec2{0, 0});
+  CHECK(point->paths.empty());
   auto radius = prepare_sketch(inputs("sketch", R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"circle","center":[0,0],"radius":-1}],"constraints":[]})"));
   CHECK_FALSE(radius);

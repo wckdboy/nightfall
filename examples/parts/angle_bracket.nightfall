@@ -1,0 +1,101 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Angle bracket",
+    "doc": "4 mm walls with 40 mm horizontal and 30 mm vertical legs; joined orthogonal extrusions."
+  },
+  "params": [
+    {
+      "name": "width",
+      "value": "30 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Width"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "foot",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "base",
+            "type": "rect",
+            "corner": [
+              0,
+              0
+            ],
+            "size": [
+              "width",
+              40
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "base",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "foot"
+        },
+        "distance": 4,
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "upright",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "yz"
+        },
+        "entities": [
+          {
+            "id": "wall",
+            "type": "rect",
+            "corner": [
+              0,
+              4
+            ],
+            "size": [
+              4,
+              26
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "wall",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "upright"
+        },
+        "distance": "width",
+        "result": {
+          "join": "part"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

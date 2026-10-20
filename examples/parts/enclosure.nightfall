@@ -1,0 +1,107 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Open enclosure",
+    "doc": "60 x 40 mm open box with 3 mm side walls and floor, cut from a solid blank."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "20 mm",
+      "min": "6 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outside",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "blank",
+            "type": "rect",
+            "corner": [
+              -30,
+              -20
+            ],
+            "size": [
+              60,
+              40
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outside"
+        },
+        "distance": "height",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "inside",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            3
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "cavity",
+            "type": "rect",
+            "corner": [
+              -27,
+              -17
+            ],
+            "size": [
+              54,
+              34
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "pocket",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "inside"
+        },
+        "distance": "height",
+        "result": {
+          "cut": "part"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

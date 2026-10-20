@@ -1,0 +1,101 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Trimmed rail",
+    "doc": "Intersect a 40 x 20 mm blank with a 20 x 30 mm extrusion to retain its central rail."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "10 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "stock",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "blank",
+            "type": "rect",
+            "corner": [
+              0,
+              0
+            ],
+            "size": [
+              40,
+              20
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "stock"
+        },
+        "distance": "height",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "window",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "trim",
+            "type": "rect",
+            "corner": [
+              10,
+              -5
+            ],
+            "size": [
+              20,
+              30
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "trim",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "window"
+        },
+        "distance": "height",
+        "result": {
+          "intersect": "part"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

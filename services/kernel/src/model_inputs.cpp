@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "model_inputs.hpp"
 
+#include <algorithm>
+#include <map>
 #include <numbers>
+#include <numeric>
 #include <set>
 
 #include "nf/math/constructors.hpp"
@@ -50,6 +53,63 @@ Vec3 unit(const Value& value, const std::string& pointer) {
   if (!result) fail(pointer, "direction must be nonzero and finite");
   return *result;
 }
+void pattern_targets(const Value& inputs, std::size_t count) {
+  if (inputs.find("features")) fail("/features", "feature-target patterns are not implemented");
+  const auto& targets = *field(inputs, "bodies").if_array();
+  if (targets.size() > 64 / count)
+    fail("/bodies", "body pattern exceeds the initial 64-total-instance work limit");
+  std::set<std::string> bodies;
+  for (std::size_t i = 0; i < targets.size(); ++i)
+    if (!bodies.insert(*targets[i].if_string()).second)
+      fail("/bodies/" + std::to_string(i), "body targets must be unique");
+}
+std::size_t pattern_count(const Value& inputs) {
+  const double evaluated_count = number(field(inputs, "count"));
+  if (evaluated_count > 64) fail("/count", "body pattern exceeds the initial 64-instance limit");
+  const auto count = static_cast<std::size_t>(evaluated_count);
+  pattern_targets(inputs, count);
+  return count;
+}
+kernel::Plane prepare_plane(const Value& plane) {
+  kernel::Plane result;
+  if (const auto* datum = plane.find("datum")) {
+    if (*datum->if_string() == "yz") result = {{}, {0, 1, 0}, {1, 0, 0}};
+    if (*datum->if_string() == "zx") result = {{}, {0, 0, 1}, {0, 1, 0}};
+  } else if (plane.find("origin")) {
+    result = {vector3(field(plane, "origin")),
+              unit(field(plane, "x_direction"), "/plane/x_direction"),
+              unit(field(plane, "normal"), "/plane/normal")};
+    if (!math::near(math::dot(result.x_axis, result.normal), 0, kTolerance.angular))
+      fail("/plane", "plane axes must be perpendicular");
+  } else {
+    fail("/plane", "selector-based planes are not implemented");
+  }
+  return result;
+}
+std::pair<Vec3, Vec3> prepare_axis(const Value& axis, const Sketch* sketch,
+                                   const std::string& pointer,
+                                   const kernel::Axis* selected = nullptr) {
+  if (selected) return {selected->origin, selected->direction};
+  if (axis.find("origin"))
+    return {vector3(field(axis, "origin")), unit(field(axis, "direction"), pointer + "/direction")};
+  if (!axis.find("sketch")) fail(pointer, "selector axes are not implemented");
+  if (!sketch) fail(pointer + "/sketch", "axis sketch is unavailable");
+  const auto found = sketch->lines.find(*field(axis, "entity").if_string());
+  if (found == sketch->lines.end()) fail(pointer + "/entity", "axis must name a sketch line");
+  const auto& line = found->second;
+  const auto local = math::normalized(line.end - line.start, kTolerance);
+  if (!local) fail(pointer + "/entity", "axis line must be finite and nonzero");
+  const auto& plane = sketch->plane;
+  const auto y = math::cross(plane.normal, plane.x_axis);
+  const auto origin = plane.origin + plane.x_axis * line.start.x + y * line.start.y;
+  // Transform the local direction before placement; subtracting placed endpoints can
+  // erase short lines when a sketch is far from the world origin.
+  const auto direction = math::normalized(plane.x_axis * local->x + y * local->y, kTolerance);
+  if (!direction || !std::isfinite(origin.x) || !std::isfinite(origin.y) ||
+      !std::isfinite(origin.z))
+    fail(pointer + "/entity", "axis exceeds finite world coordinates");
+  return {origin, *direction};
+}
 std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::string& pointer) {
   if (math::near(points.front(), points.back(), kTolerance)) points.pop_back();
   if (points.size() < 3) fail(pointer, "polygon needs three distinct vertices");
@@ -61,7 +121,10 @@ std::vector<math::NurbsCurve2> polygon(std::vector<Vec2> points, const std::stri
   }
   return result;
 }
-void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
+void join_curves(std::vector<math::NurbsCurve2> curves,
+                 std::vector<std::vector<math::NurbsCurve2>>& paths,
+                 std::vector<std::string> entities,
+                 std::vector<std::vector<std::string>>& path_entities) {
   // Check both ends before walking: stopping at the first closed loop could hide a
   // multi-way junction at its starting vertex. Closed single curves are separate paths.
   std::vector<std::pair<Vec2, Vec2>> ends;
@@ -75,15 +138,17 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
         matches += math::near(p, ends[j].first, kTolerance);
         matches += math::near(p, ends[j].second, kTolerance);
       }
-      if (matches == 0) fail("/entities", "curve chain is open");
-      if (matches != 1) fail("/entities", "curve junction is ambiguous");
+      if (matches == 0) fail("/profile", "curve chain is open");
+      if (matches != 1) fail("/profile", "curve junction is ambiguous");
     }
   }
   while (!curves.empty()) {
     const auto start = curves.back().point(curves.back().domain_start());
     auto end = curves.back().point(curves.back().domain_end());
     std::vector<math::NurbsCurve2> path{std::move(curves.back())};
+    std::vector<std::string> source{std::move(entities.back())};
     curves.pop_back();
+    entities.pop_back();
     while (!math::near(start, end, kTolerance)) {
       auto found = curves.end();
       bool reverse = false;
@@ -91,22 +156,32 @@ void join_curves(std::vector<math::NurbsCurve2> curves, Sketch& sketch) {
         const bool a = math::near(it->point(it->domain_start()), end, kTolerance),
                    b = math::near(it->point(it->domain_end()), end, kTolerance);
         if (!a && !b) continue;
-        if (found != curves.end()) fail("/entities", "curve junction is ambiguous");
+        if (found != curves.end()) fail("/profile", "curve junction is ambiguous");
         found = it;
         reverse = b;
       }
-      if (found == curves.end()) fail("/entities", "curve chain is open");
+      if (found == curves.end()) fail("/profile", "curve chain is open");
       auto next = reverse ? math::reverse(*found) : *found;
       const auto next_start = next.point(next.domain_start());
       // Keep the original curves exact and explicitly connect tolerance-matched ends.
       // Arrangement vertex welding may use a tighter, drawing-relative tolerance.
-      if (end != next_start) path.push_back(math::make_line(end, next_start));
+      if (end != next_start) {
+        path.push_back(math::make_line(end, next_start));
+        source.emplace_back();
+      }
       path.push_back(std::move(next));
+      const auto index = static_cast<std::size_t>(found - curves.begin());
+      source.push_back(std::move(entities[index]));
+      entities.erase(entities.begin() + static_cast<std::ptrdiff_t>(index));
       end = path.back().point(path.back().domain_end());
       curves.erase(found);
     }
-    if (end != start) path.push_back(math::make_line(end, start));
-    sketch.paths.push_back(std::move(path));
+    if (end != start) {
+      path.push_back(math::make_line(end, start));
+      source.emplace_back();
+    }
+    paths.push_back(std::move(path));
+    path_entities.push_back(std::move(source));
   }
 }
 math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
@@ -138,42 +213,249 @@ math::NurbsCurve2 spline(const Value& entity, const std::string& pointer,
     fail(pointer + (entity.find("weights") ? "/weights" : "/control_points"), curve.error());
   return std::move(*curve);
 }
+
+void verify_constraints(const Value& inputs) {
+  const auto& constraints = *field(inputs, "constraints").if_array();
+  if (constraints.empty()) return;
+  if (constraints.size() > 4096)
+    fail("/constraints", "sketch exceeds the initial 4096-constraint work limit");
+  const auto& entities = *field(inputs, "entities").if_array();
+  if (entities.size() > 4096)
+    fail("/entities/4096", "sketch exceeds the initial 4096-curve work limit");
+  std::map<std::string_view, const Value*> by_id;
+  for (const auto& entity : entities) by_id.emplace(*field(entity, "id").if_string(), &entity);
+  for (std::size_t i = 0; i < constraints.size(); ++i) {
+    const auto& constraint = constraints[i];
+    const auto& kind = *field(constraint, "type").if_string();
+    const auto pointer = "/constraints/" + std::to_string(i);
+    if (kind != "horizontal" && kind != "vertical" && kind != "parallel" &&
+        kind != "perpendicular" && kind != "equal" && kind != "radius" && kind != "coincident" &&
+        kind != "distance" && kind != "midpoint" && kind != "symmetric" && kind != "tangent" &&
+        kind != "angle" && kind != "fixed")
+      fail(pointer + "/type", "constraint is not implemented: " + kind);
+    const auto reference = [&](std::size_t index) {
+      return pointer + "/entities/" + std::to_string(index);
+    };
+    const auto operand = [&](std::size_t index) -> const Value& {
+      return field(constraint, "entities").if_array()->at(index);
+    };
+    const auto entity = [&](std::size_t index) -> const Value& {
+      const auto& r = operand(index);
+      const auto& id = r.if_string() ? *r.if_string() : *field(r, "entity").if_string();
+      const auto found = by_id.find(id);
+      if (found == by_id.end())
+        fail(reference(index) + (r.if_string() ? "" : "/entity"),
+             "unknown constraint entity: " + id);
+      return *found->second;
+    };
+    const auto whole = [&](std::size_t index) -> const Value& {
+      if (!operand(index).if_string())
+        fail(reference(index) + "/point", kind + " constraint requires an entire entity");
+      return entity(index);
+    };
+    const auto line = [&](std::size_t index) {
+      const auto& e = whole(index);
+      if (*field(e, "type").if_string() != "line")
+        fail(reference(index), kind + " constraint requires a line");
+      const auto delta = point2(field(e, "end")) - point2(field(e, "start"));
+      const double length = math::length(delta);
+      if (!(length > kTolerance.linear && std::isfinite(length)))
+        fail(reference(index), "constraint requires a finite nonzero line");
+      return delta;
+    };
+    const auto radius = [&](std::size_t index) {
+      const auto& e = whole(index);
+      const auto& type = *field(e, "type").if_string();
+      if (type != "circle" && type != "arc")
+        fail(reference(index), kind + " constraint requires a circle or arc");
+      const double r = number(field(e, "radius"));
+      if (!(r > kTolerance.linear && std::isfinite(r)))
+        fail(reference(index), "constraint requires a finite positive radius");
+      return r;
+    };
+    const auto point = [&](std::size_t index) -> Vec2 {
+      const auto& e = entity(index);
+      const auto& type = *field(e, "type").if_string();
+      const auto* role = operand(index).find("point");
+      if (!role) {
+        if (type == "point") return point2(field(e, "at"));
+        fail(reference(index), "point reference must specify start/end/center or name a point");
+      }
+      const auto& name = *role->if_string();
+      if (name == "center" && (type == "circle" || type == "arc" || type == "ellipse"))
+        return point2(field(e, "center"));
+      if (name != "center" && type == "line") return point2(field(e, name));
+      if (name != "center" && type == "arc") {
+        constexpr double turn = 2 * std::numbers::pi;
+        const double r = number(field(e, "radius")), sweep = number(field(e, "sweep_angle"));
+        if (!(r > kTolerance.linear && std::abs(sweep) > kTolerance.angular &&
+              std::abs(sweep) <= turn))
+          fail(reference(index) + "/point",
+               "arc point reference requires a valid radius and sweep");
+        const double angle =
+            std::remainder(number(field(e, "start_angle")), turn) + (name == "end" ? sweep : 0);
+        const auto p = point2(field(e, "center")) + Vec2{std::cos(angle), std::sin(angle)} * r;
+        if (!std::isfinite(p.x) || !std::isfinite(p.y))
+          fail(reference(index) + "/point", "point reference exceeds finite coordinates");
+        return p;
+      }
+      fail(reference(index) + "/point", name + " point is not supported for " + type);
+    };
+    const auto midpoint = [](Vec2 a, Vec2 b) {
+      return Vec2{std::midpoint(a.x, b.x), std::midpoint(a.y, b.y)};
+    };
+    double residual = 0, tolerance = kTolerance.linear;
+    if (kind == "fixed") {
+      // Coordinates are already authored values; fixing them does not freeze parameter edits.
+      // Resolve the reference now; all whole entities still undergo geometry validation below.
+      if (operand(0).if_string())
+        (void)whole(0);
+      else
+        (void)point(0);
+    } else if (kind == "tangent") {
+      const Value* curves[] = {&whole(0), &whole(1)};
+      bool lines[2]{};
+      constexpr double turn = 2 * std::numbers::pi;
+      for (std::size_t j = 0; j < 2; ++j) {
+        const auto& type = *field(*curves[j], "type").if_string();
+        lines[j] = type == "line";
+        if (!lines[j] && type != "circle" && type != "arc")
+          fail(reference(j), "tangent constraint requires a line, circle or arc");
+        if (type == "arc") {
+          const double sweep = number(field(*curves[j], "sweep_angle"));
+          if (!(std::abs(sweep) > kTolerance.angular && std::abs(sweep) <= turn))
+            fail(reference(j), "tangent arc requires a nonzero sweep of at most one full turn");
+        }
+      }
+      const auto on_arc = [&](std::size_t j, Vec2 radial) {
+        if (*field(*curves[j], "type").if_string() != "arc") return;
+        const double start = std::remainder(number(field(*curves[j], "start_angle")), turn),
+                     sweep = number(field(*curves[j], "sweep_angle"));
+        double angle = std::copysign(1.0, sweep) *
+                       std::remainder(std::atan2(radial.y, radial.x) - start, turn);
+        if (angle < -kTolerance.angular) angle += turn;
+        if (angle > std::abs(sweep) + kTolerance.angular)
+          fail(reference(j), "tangent contact lies outside the arc");
+      };
+      if (lines[0] && lines[1])
+        fail(pointer, "tangent constraint requires at least one circle or arc");
+      if (lines[0] || lines[1]) {
+        const std::size_t l = lines[0] ? 0 : 1, c = 1 - l;
+        const auto delta = line(l);
+        const double length = math::length(delta), r = radius(c);
+        const auto direction = delta / length;
+        const auto offset =
+            point2(field(*curves[c], "center")) - point2(field(*curves[l], "start"));
+        const double along = math::dot(offset, direction),
+                     distance = math::cross(direction, offset);
+        if (!std::isfinite(along) || !std::isfinite(distance))
+          fail(pointer, "tangent calculation exceeds finite coordinates");
+        const double outside = along < 0 ? -along : std::max(0.0, along - length);
+        residual = std::max(std::abs(std::abs(distance) - r), outside);
+        on_arc(c, Vec2{direction.y, -direction.x} * std::copysign(1.0, distance));
+      } else {
+        const double a = radius(0), b = radius(1);
+        const auto delta =
+            point2(field(*curves[1], "center")) - point2(field(*curves[0], "center"));
+        const double distance = math::length(delta);
+        if (!std::isfinite(distance))
+          fail(pointer, "tangent calculation exceeds finite coordinates");
+        if (!(distance > kTolerance.linear))
+          fail(pointer, "tangent circles require distinct centers beyond linear tolerance");
+        // Subtract before summing radii to avoid overflow for large internal tangencies.
+        const double external = std::abs((distance - a) - b),
+                     internal = std::abs(distance - std::abs(a - b));
+        const auto direction = delta / distance;
+        const bool outside = external <= internal;
+        residual = outside ? external : internal;
+        const auto radial = direction * (outside || a >= b ? 1.0 : -1.0);
+        on_arc(0, radial);
+        on_arc(1, outside ? -radial : radial);
+      }
+    } else if (kind == "coincident" || kind == "distance") {
+      const double expected = kind == "distance" ? number(field(constraint, "value")) : 0;
+      if (expected < 0) fail(pointer + "/value", "distance dimension must be nonnegative");
+      const auto a = point(0), b = point(1);
+      residual = std::abs(math::length(a - b) - expected);
+    } else if (kind == "midpoint") {
+      const std::size_t l =
+          operand(0).if_string() && *field(entity(0), "type").if_string() == "line" ? 0 : 1;
+      (void)line(l);
+      const auto& e = entity(l);
+      residual =
+          math::length(point(1 - l) - midpoint(point2(field(e, "start")), point2(field(e, "end"))));
+    } else if (kind == "symmetric") {
+      const auto direction = *math::normalized(line(2), kTolerance);
+      const auto a = point(0), b = point(1), anchor = point2(field(entity(2), "start"));
+      // Components of b minus the reflection of a; midpoint avoids adding huge coordinates.
+      residual = std::hypot(math::dot(b - a, direction),
+                            2 * math::cross(direction, midpoint(a, b) - anchor));
+    } else if (kind == "radius") {
+      const double expected = number(field(constraint, "value"));
+      if (!(expected > 0)) fail(pointer + "/value", "radius dimension must be positive");
+      residual = std::abs(radius(0) - expected);
+    } else if (kind == "equal") {
+      residual = *field(whole(0), "type").if_string() == "line"
+                     ? std::abs(math::length(line(0)) - math::length(line(1)))
+                     : std::abs(radius(0) - radius(1));
+    } else {
+      // Compare directions, not endpoint offsets: the angular bound is independent of size.
+      const auto a = *math::normalized(line(0), kTolerance);
+      tolerance = kTolerance.angular;
+      if (kind == "horizontal")
+        residual = std::atan2(std::abs(a.y), std::abs(a.x));
+      else if (kind == "vertical")
+        residual = std::atan2(std::abs(a.x), std::abs(a.y));
+      else {
+        const auto b = *math::normalized(line(1), kTolerance);
+        const double cross = std::abs(math::cross(a, b)), dot = math::dot(a, b);
+        if (kind == "angle") {
+          const double expected = number(field(constraint, "value"));
+          if (!(expected >= 0 && expected <= std::numbers::pi))
+            fail(pointer + "/value", "angle dimension must be between zero and pi radians");
+          residual = std::abs(std::atan2(cross, dot) - expected);
+        } else {
+          residual = kind == "parallel" ? std::atan2(cross, std::abs(dot))
+                                        : std::atan2(std::abs(dot), cross);
+        }
+      }
+    }
+    if (!std::isfinite(residual))
+      fail(pointer, "constraint calculation exceeds finite coordinates");
+    if (!(residual <= tolerance)) {
+      const auto unit = tolerance == kTolerance.linear ? " mm" : " rad";
+      fail(pointer, kind + " constraint is not satisfied: residual " +
+                        ir::json::format_number(residual) + unit + ", tolerance " +
+                        ir::json::format_number(tolerance) + unit);
+    }
+  }
+}
 }  // namespace
 
-std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
+std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
+                                                const kernel::Plane* selected_plane) {
   return guarded([&] {
-    if (!field(inputs, "constraints").if_array()->empty())
-      fail("/constraints", "constraint verification is not implemented");
+    verify_constraints(inputs);
     Sketch sketch;
-    const auto& plane = field(inputs, "plane");
-    if (const auto* datum = plane.find("datum")) {
-      if (*datum->if_string() == "yz") sketch.plane = {{}, {0, 1, 0}, {1, 0, 0}};
-      if (*datum->if_string() == "zx") sketch.plane = {{}, {0, 0, 1}, {0, 1, 0}};
-    } else if (plane.find("origin")) {
-      sketch.plane = {vector3(field(plane, "origin")),
-                      unit(field(plane, "x_direction"), "/plane/x_direction"),
-                      unit(field(plane, "normal"), "/plane/normal")};
-      if (!math::near(math::dot(sketch.plane.x_axis, sketch.plane.normal), 0, kTolerance.angular))
-        fail("/plane", "plane axes must be perpendicular");
-    } else {
-      fail("/plane", "selector-based sketch planes are not implemented");
-    }
-    std::vector<math::NurbsCurve2> segments;
+    sketch.plane = selected_plane ? *selected_plane : prepare_plane(field(inputs, "plane"));
     const auto add_curve = [&](math::NurbsCurve2 curve) {
       if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
                      kTolerance))
         sketch.paths.push_back({std::move(curve)});
       else
-        segments.push_back(std::move(curve));
+        sketch.segments.push_back(std::move(curve));
     };
     const auto& entities = *field(inputs, "entities").if_array();
     std::size_t curves = 0, control_points = 0;
     for (std::size_t i = 0; i < entities.size(); ++i) {
       const auto& entity = entities[i];
+      const auto previous_paths = sketch.paths.size(), previous_segments = sketch.segments.size();
       const auto pointer = "/entities/" + std::to_string(i);
       const auto& type = *field(entity, "type").if_string();
       if (++curves > 4096) fail(pointer, "sketch exceeds the initial 4096-curve work limit");
-      if (type == "circle") {
+      if (type == "point") {
+        sketch.points.emplace(*field(entity, "id").if_string(), point2(field(entity, "at")));
+      } else if (type == "circle") {
         const auto radius = number(field(entity, "radius"));
         if (!(radius > kTolerance.linear)) fail(pointer + "/radius", "radius is too small");
         sketch.paths.push_back({math::make_circle(point2(field(entity, "center")), radius)});
@@ -217,38 +499,55 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs) {
       } else if (type == "line") {
         const auto a = point2(field(entity, "start")), b = point2(field(entity, "end"));
         if (math::near(a, b, kTolerance)) fail(pointer, "zero-length line");
-        segments.push_back(math::make_line(a, b));
+        sketch.segments.push_back(math::make_line(a, b));
+        sketch.lines.emplace(*field(entity, "id").if_string(), Sketch::Line{a, b});
       } else {
         fail(pointer + "/type", "sketch entity is not implemented: " + type);
       }
+      const auto& id = *field(entity, "id").if_string();
+      for (std::size_t p = previous_paths; p < sketch.paths.size(); ++p)
+        sketch.path_entities.emplace_back(sketch.paths[p].size(), id);
+      for (std::size_t s = previous_segments; s < sketch.segments.size(); ++s)
+        sketch.segment_entities.push_back(id);
     }
-    join_curves(std::move(segments), sketch);
     return sketch;
   });
 }
 
 namespace {
-std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value& inputs,
-                                                                    const Sketch& sketch) {
+std::expected<std::vector<math::Region>, ir::Error> prepare_regions(
+    const Value& inputs, const Sketch& sketch, ProfileSources* sources,
+    const Value* profile_override = nullptr) {
   return guarded([&] {
     const auto& result = field(inputs, "result");
     if (result.find("new") && *field(result, "body_type").if_string() != "brep")
       fail("/result/body_type", "only B-rep bodies are implemented", "unsupported_body_type");
-    const auto& profile = field(inputs, "profile");
+    const auto& profile = profile_override ? *profile_override : field(inputs, "profile");
     auto rule = math::FillRule::kEvenOdd;
     if (const auto* fill = profile.find("fill_rule"); fill && *fill->if_string() == "nonzero")
       rule = math::FillRule::kNonZero;
+    auto closed_paths = sketch.paths;
+    auto closed_entities = sketch.path_entities;
+    closed_entities.resize(closed_paths.size());
+    for (std::size_t p = 0; p < closed_paths.size(); ++p)
+      closed_entities[p].resize(closed_paths[p].size());
+    auto segment_entities = sketch.segment_entities;
+    segment_entities.resize(sketch.segments.size());
+    join_curves(sketch.segments, closed_paths, std::move(segment_entities), closed_entities);
     // Arrangement probes must lie on a smooth span, not an interior spline corner.
     // Exact Bézier decomposition also exposes intersections between different spans.
     std::vector<std::vector<math::NurbsCurve2>> paths;
+    std::vector<std::vector<std::string>> entities;
     std::size_t spans = 0;
-    for (const auto& path : sketch.paths) {
+    for (std::size_t p = 0; p < closed_paths.size(); ++p) {
       paths.emplace_back();
-      for (const auto& curve : path) {
-        auto pieces = math::decompose(curve);
+      entities.emplace_back();
+      for (std::size_t c = 0; c < closed_paths[p].size(); ++c) {
+        auto pieces = math::decompose(closed_paths[p][c]);
         spans += pieces.size();
         if (spans > 4096) fail("/profile", "profile exceeds the initial 4096-span work limit");
         paths.back().insert(paths.back().end(), pieces.begin(), pieces.end());
+        entities.back().insert(entities.back().end(), pieces.size(), closed_entities[p][c]);
       }
     }
     auto regions = math::regions(paths, rule);
@@ -281,23 +580,77 @@ std::expected<std::vector<math::Region>, ir::Error> prepare_regions(const Value&
       *regions = std::move(picked);
     }
     if (regions->empty()) fail("/profile", "profile has no filled regions");
+    if (sources) {
+      sources->clear();
+      for (std::size_t r = 0; r < regions->size(); ++r) {
+        const auto& region = (*regions)[r];
+        for (std::size_t l = 0; l <= region.holes.size(); ++l) {
+          const auto& loop = l == 0 ? region.outer : region.holes[l - 1];
+          for (std::size_t c = 0; c < loop.curves.size(); ++c) {
+            auto& ids = (*sources)[{r, l, c}];
+            for (const auto& source : loop.sources[c]) {
+              const auto& id = entities[source.path][source.curve];
+              if (!id.empty() && std::ranges::find(ids, id) == ids.end()) ids.push_back(id);
+            }
+          }
+        }
+      }
+    }
     return std::move(*regions);
   });
 }
 }  // namespace
 
 std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& inputs,
-                                                              const Sketch& sketch) {
-  auto regions = prepare_regions(inputs, sketch);
+                                                              const Sketch& sketch,
+                                                              ProfileSources* sources,
+                                                              const kernel::Plane* termination) {
+  auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
-    if (!inputs.find("distance")) fail("/to", "extrude-to selectors are not implemented");
     if (const auto* draft = inputs.find("draft"); draft && number(*draft) != 0)
       fail("/draft", "drafted extrusion is not implemented");
     const auto direction = inputs.find("direction") ? unit(field(inputs, "direction"), "/direction")
                                                     : sketch.plane.normal;
-    kernel::Extrusion extrusion{sketch.plane, std::move(*regions),
-                                direction * number(field(inputs, "distance"))};
+    double distance;
+    if (inputs.find("to")) {
+      if (!termination) fail("/to", "termination plane must be resolved by the evaluator");
+      if (const auto* symmetric = inputs.find("symmetric"); symmetric && *symmetric->if_bool())
+        fail("/symmetric", "symmetric extrude-to is not implemented");
+      if (math::length(math::cross(sketch.plane.normal, termination->normal)) > kTolerance.angular)
+        fail("/to", "termination plane must be parallel to the sketch plane");
+      const auto alignment = math::dot(direction, termination->normal);
+      if (!(std::abs(alignment) > kTolerance.angular) ||
+          !(std::abs(math::dot(direction, sketch.plane.normal)) > kTolerance.angular))
+        fail("/direction", "extrusion ray must leave both the sketch and termination planes");
+      const auto separation =
+          math::dot(termination->origin - sketch.plane.origin, termination->normal);
+      if (!(std::abs(separation) > kTolerance.linear))
+        fail("/to", "termination plane is coincident or within the linear tolerance");
+      distance = separation / alignment;
+      if (!std::isfinite(distance) || !(distance > 0))
+        fail("/to", "termination must be finite and ahead of the extrusion ray");
+    } else {
+      distance = number(field(inputs, "distance"));
+    }
+    kernel::Extrusion extrusion{sketch.plane, std::move(*regions), direction * distance};
+    if (inputs.find("to")) {
+      // Positive-weight NURBS remain in their control hulls. Avoid amplifying an accepted
+      // angular tolerance into a cap/target discrepancy above the linear tolerance.
+      const auto y = math::cross(sketch.plane.normal, sketch.plane.x_axis);
+      for (const auto& region : extrusion.regions)
+        for (std::size_t l = 0; l <= region.holes.size(); ++l) {
+          const auto& loop = l == 0 ? region.outer : region.holes[l - 1];
+          for (const auto& curve : loop.curves)
+            for (const auto p : curve.points()) {
+              const auto end = sketch.plane.origin + sketch.plane.x_axis * p.x + y * p.y +
+                               extrusion.displacement;
+              if (!(std::abs(math::dot(end - termination->origin, termination->normal)) <=
+                    kTolerance.linear))
+                fail("/to", "termination plane is not parallel across the full profile");
+            }
+        }
+    }
     if (const auto* symmetric = inputs.find("symmetric"); symmetric && *symmetric->if_bool())
       extrusion.plane.origin = extrusion.plane.origin - extrusion.displacement / 2;
     return extrusion;
@@ -305,19 +658,71 @@ std::expected<kernel::Extrusion, ir::Error> prepare_extrusion(const Value& input
 }
 
 std::expected<kernel::Revolution, ir::Error> prepare_revolution(const Value& inputs,
-                                                                const Sketch& sketch) {
-  auto regions = prepare_regions(inputs, sketch);
+                                                                const Sketch& sketch,
+                                                                const Sketch* axis_sketch,
+                                                                ProfileSources* sources,
+                                                                const kernel::Axis* selected_axis) {
+  auto regions = prepare_regions(inputs, sketch, sources);
   if (!regions) return std::unexpected(regions.error());
   return guarded([&] {
-    const auto& axis = field(inputs, "axis");
-    if (!axis.find("origin")) fail("/axis", "selector and sketch axes are not implemented");
-    return kernel::Revolution{sketch.plane, std::move(*regions), vector3(field(axis, "origin")),
-                              unit(field(axis, "direction"), "/axis/direction"),
+    const auto [origin, direction] =
+        prepare_axis(field(inputs, "axis"), axis_sketch, "/axis", selected_axis);
+    return kernel::Revolution{sketch.plane, std::move(*regions), origin, direction,
                               number(field(inputs, "angle"))};
   });
 }
 
-std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& inputs) {
+std::expected<kernel::Loft, ir::Error> prepare_loft(const Value& inputs,
+                                                    const std::vector<const Sketch*>& sketches,
+                                                    std::vector<ProfileSources>* sources) {
+  return guarded([&] {
+    if (inputs.find("rails")) fail("/rails", "guided loft rails are not implemented");
+    const auto& profiles = *field(inputs, "profiles").if_array();
+    if (profiles.size() < 2 || profiles.size() > 32 || sketches.size() != profiles.size())
+      fail("/profiles", "loft requires 2..32 resolved profile sketches");
+    if (sources) sources->assign(profiles.size(), {});
+    kernel::Loft loft;
+    for (std::size_t s = 0; s < profiles.size(); ++s) {
+      const auto pointer = "/profiles/" + std::to_string(s);
+      if (!sketches[s]) fail(pointer, "loft profile sketch is unavailable");
+      auto regions =
+          prepare_regions(inputs, *sketches[s], sources ? &(*sources)[s] : nullptr, &profiles[s]);
+      if (!regions) {
+        auto error = regions.error();
+        if (error.pointer.starts_with("/inputs/profile"))
+          error.pointer.replace(0, std::string_view("/inputs/profile").size(), "/inputs" + pointer);
+        throw error;
+      }
+      if (regions->size() != 1 || !regions->front().holes.empty())
+        fail(pointer, "loft requires one filled region without holes per section");
+      loft.sections.push_back({sketches[s]->plane, std::move(regions->front())});
+    }
+    return loft;
+  });
+}
+
+std::expected<kernel::Sweep, ir::Error> prepare_sweep(const Value& inputs, const Sketch& profile,
+                                                      const Sketch& path, ProfileSources* sources) {
+  return guarded([&] {
+    const auto& reference = field(inputs, "path");
+    if (!reference.find("sketch")) fail("/path", "selector sweep paths are not implemented");
+    const auto& id = *field(reference, "entity").if_string();
+    kernel::Sweep sweep{profile.plane, {}, path.plane, {}};
+    for (std::size_t i = 0; i < path.segment_entities.size(); ++i)
+      if (path.segment_entities[i] == id) sweep.path.push_back(path.segments.at(i));
+    if (sweep.path.size() != 1)
+      fail("/path/entity", "sweep path must name one whole open line, arc or spline entity");
+    auto regions = prepare_regions(inputs, profile, sources);
+    if (!regions) throw regions.error();
+    if (regions->size() != 1 || !regions->front().holes.empty())
+      fail("/profile", "sweep requires one filled region without holes");
+    sweep.region = std::move(regions->front());
+    return sweep;
+  });
+}
+
+std::expected<kernel::RigidTransform, ir::Error> prepare_transform(
+    const Value& inputs, const Sketch* axis_sketch, const kernel::Axis* selected_axis) {
   return guarded([&] {
     std::set<std::string> bodies;
     for (const auto& body : *field(inputs, "bodies").if_array())
@@ -326,14 +731,59 @@ std::expected<kernel::RigidTransform, ir::Error> prepare_transform(const Value& 
     if (const auto* translation = inputs.find("translation"))
       result.translation = vector3(*translation);
     if (const auto* rotation = inputs.find("rotation")) {
-      const auto& axis = field(*rotation, "axis");
-      if (!axis.find("origin"))
-        fail("/rotation/axis", "selector and sketch axes are not implemented");
-      result.axis_origin = vector3(field(axis, "origin"));
-      result.axis_direction = unit(field(axis, "direction"), "/rotation/axis/direction");
+      const auto [origin, direction] =
+          prepare_axis(field(*rotation, "axis"), axis_sketch, "/rotation/axis", selected_axis);
+      result.axis_origin = origin;
+      result.axis_direction = direction;
       result.angle = number(field(*rotation, "angle"));
     }
     return result;
+  });
+}
+
+std::expected<BodyPattern, ir::Error> prepare_linear_pattern(const Value& inputs) {
+  return guarded([&] {
+    const auto count = pattern_count(inputs);
+    const double spacing = number(field(inputs, "spacing"));
+    if (count > 1 && !(std::abs(spacing) > kTolerance.linear))
+      fail("/spacing", "pattern spacing must exceed the linear tolerance in magnitude");
+    const auto step = unit(field(inputs, "direction"), "/direction") * spacing;
+    const auto last = step * static_cast<double>(count - 1);
+    if (!std::isfinite(last.x) || !std::isfinite(last.y) || !std::isfinite(last.z))
+      fail("/spacing", "pattern offsets exceed finite coordinates");
+    kernel::RigidTransform placement;
+    placement.translation = step;
+    return BodyPattern{count, placement};
+  });
+}
+
+std::expected<BodyPattern, ir::Error> prepare_circular_pattern(const Value& inputs,
+                                                               const Sketch* axis_sketch,
+                                                               const kernel::Axis* selected_axis) {
+  return guarded([&] {
+    const auto count = pattern_count(inputs);
+    const double sweep = number(field(inputs, "angle")), turn = 2 * std::numbers::pi;
+    if (std::abs(sweep) > turn + kTolerance.angular)
+      fail("/angle", "circular pattern sweep must be at most one full turn");
+    const bool full = std::abs(sweep) >= turn - kTolerance.angular;
+    const double step = full ? std::copysign(turn, sweep) / static_cast<double>(count)
+                             : sweep / static_cast<double>(std::max(std::size_t{1}, count - 1));
+    if (count > 1 && !(std::abs(step) > kTolerance.angular))
+      fail("/angle", "pattern angular step must exceed the angular tolerance in magnitude");
+    const auto [origin, direction] =
+        prepare_axis(field(inputs, "axis"), axis_sketch, "/axis", selected_axis);
+    kernel::RigidTransform placement;
+    placement.axis_origin = origin;
+    placement.axis_direction = direction;
+    placement.angle = count == 1 ? 0 : step;
+    return BodyPattern{count, placement};
+  });
+}
+std::expected<kernel::Plane, ir::Error> prepare_mirror(const Value& inputs,
+                                                       const kernel::Plane* selected_plane) {
+  return guarded([&] {
+    pattern_targets(inputs, 2);
+    return selected_plane ? *selected_plane : prepare_plane(field(inputs, "plane"));
   });
 }
 }  // namespace nf::kernel_service

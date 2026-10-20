@@ -1,0 +1,107 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Placed mounting foot",
+    "doc": "Select the 20 x 10 mm region, rotate 90 degrees about Z, then translate by [30, 5, 7] mm."
+  },
+  "params": [
+    {
+      "name": "thickness",
+      "value": "6 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "foot",
+            "type": "rect",
+            "corner": [
+              0,
+              0
+            ],
+            "size": [
+              20,
+              10
+            ]
+          },
+          {
+            "id": "unused",
+            "type": "rect",
+            "corner": [
+              40,
+              0
+            ],
+            "size": [
+              5,
+              5
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "foot",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline",
+          "regions": [
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "placement",
+      "type": "transform",
+      "inputs": {
+        "bodies": [
+          "part"
+        ],
+        "rotation": {
+          "axis": {
+            "origin": [
+              0,
+              0,
+              0
+            ],
+            "direction": "z"
+          },
+          "angle": 90
+        },
+        "translation": [
+          30,
+          5,
+          7
+        ]
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

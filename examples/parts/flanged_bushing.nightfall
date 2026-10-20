@@ -1,0 +1,90 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Flanged bushing",
+    "doc": "6 mm bore, 12 mm sleeve diameter, and a 24 mm flange 3 mm thick."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "15 mm",
+      "min": "4 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "zx"
+        },
+        "entities": [
+          {
+            "id": "section",
+            "type": "polygon",
+            "points": [
+              [
+                0,
+                3
+              ],
+              [
+                "height",
+                3
+              ],
+              [
+                "height",
+                6
+              ],
+              [
+                3,
+                6
+              ],
+              [
+                3,
+                12
+              ],
+              [
+                0,
+                12
+              ]
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "turn",
+      "type": "revolve",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        },
+        "angle": "360 deg",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

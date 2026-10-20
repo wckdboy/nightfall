@@ -179,6 +179,52 @@ class FaultKernel final : public kernel::IKernel {
   explicit FaultKernel(kernel::IKernel& real) : backend(real) {}
   std::string_view identity() const noexcept override { return backend.identity(); }
   Capabilities capabilities() const noexcept override { return backend.capabilities(); }
+  std::expected<kernel::OperationResult, kernel::KernelError> loft(
+      const kernel::Loft& input) override {
+    return backend.loft(input);
+  }
+  std::expected<kernel::OperationResult, kernel::KernelError> sweep(
+      const kernel::Sweep& input) override {
+    return backend.sweep(input);
+  }
+  std::expected<kernel::Mesh, kernel::KernelError> tessellate(
+      const kernel::ShapePtr& shape, const kernel::MeshingOptions& options) override {
+    return backend.tessellate(shape, options);
+  }
+  std::expected<std::vector<kernel::EntityPtr>, kernel::KernelError> edges(
+      const kernel::EntityPtr& face) override {
+    return backend.edges(face);
+  }
+  std::expected<kernel::OperationResult, kernel::KernelError> fillet(
+      const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
+      double radius) override {
+    return backend.fillet(shape, edges, radius);
+  }
+  std::expected<kernel::OperationResult, kernel::KernelError> chamfer(
+      const kernel::ShapePtr& shape, const std::vector<kernel::EntityPtr>& edges,
+      double distance) override {
+    return backend.chamfer(shape, edges, distance);
+  }
+  std::expected<std::string, kernel::KernelError> export_step(
+      const std::vector<kernel::ShapePtr>& bodies) override {
+    return backend.export_step(bodies);
+  }
+  std::expected<double, kernel::KernelError> face_distance(const kernel::EntityPtr& e,
+                                                           math::Vec3 point) override {
+    return backend.face_distance(e, point);
+  }
+  std::expected<std::vector<kernel::FaceInfo>, kernel::KernelError> faces(
+      const kernel::ShapePtr& s) override {
+    return backend.faces(s);
+  }
+  std::expected<kernel::Plane, kernel::KernelError> face_plane(
+      const kernel::EntityPtr& e) override {
+    return backend.face_plane(e);
+  }
+  std::expected<kernel::OperationResult, kernel::KernelError> mirror(
+      const kernel::ShapePtr& shape, const kernel::Plane& plane) override {
+    return backend.mirror(shape, plane);
+  }
   std::expected<kernel::OperationResult, kernel::KernelError> extrude(
       const kernel::Extrusion& input) override {
     return backend.extrude(input);
@@ -280,10 +326,11 @@ TEST_CASE("unsupported modifiers invalidate their intended current bodies") {
   auto document = part();
   document.features.insert(
       document.features.begin() + 2,
-      feature("round", "fillet", R"({"edges":{"created_by":"base"},"radius":1})"));
+      feature("hollow", "shell",
+              R"({"body":"plate","faces":{"created_by":"base"},"thickness":1})"));
   auto result = evaluator.evaluate(source(document)).value();
   CHECK_FALSE(result.ok());
-  CHECK(result.features[2].errors.front().message == "feature is not implemented: fillet");
+  CHECK(result.features[2].errors.front().message == "feature is not implemented: shell");
   CHECK(result.features[3].errors.front().code == "input_failed");
   CHECK_FALSE(result.bodies.at("plate").shape);
 }

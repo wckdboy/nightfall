@@ -1,0 +1,113 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Twin boss plate",
+    "doc": "40 x 20 x 4 mm plate with two 8 mm diameter bosses joined to its top face."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "8 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "footprint",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "plate",
+            "type": "rect",
+            "corner": [
+              -20,
+              -10
+            ],
+            "size": [
+              40,
+              20
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "plate",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "footprint"
+        },
+        "distance": 4,
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "boss_profile",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            4
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "left",
+            "type": "circle",
+            "center": [
+              -10,
+              0
+            ],
+            "radius": 4
+          },
+          {
+            "id": "right",
+            "type": "circle",
+            "center": [
+              10,
+              0
+            ],
+            "radius": 4
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "bosses",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "boss_profile"
+        },
+        "distance": "height",
+        "result": {
+          "join": "part"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

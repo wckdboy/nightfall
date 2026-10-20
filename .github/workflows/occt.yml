@@ -15,8 +15,17 @@ on:
     paths:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
+      - "tools/cli/**"
       - "core/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - "services/kernel/**"
+      - "app/**"
+      - "tools/embed_service.py"
+      - "examples/parts/**"
+      - "examples/modeling/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
@@ -26,8 +35,17 @@ on:
     paths:
       - "third_party/occt/**"
       - "tools/bakeoff/**"
+      - "tools/cli/**"
       - "core/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - "services/kernel/**"
+      - "app/**"
+      - "tools/embed_service.py"
+      - "examples/parts/**"
+      - "examples/modeling/**"
       - "third_party/build-occt.sh"
       - "tools/check.sh"
       - "CMakeLists.txt"
@@ -53,6 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: brew install ninja python@3.14
+      - run: rustup show
       - name: Install schema test tooling
         run: |
           python3.14 -m venv "$RUNNER_TEMP/tools"
@@ -66,7 +85,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: third_party/install
-          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh') }}
+          key: occt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-occt.sh', 'third_party/occt/patches/*.patch') }}
 
       - name: Build OCCT
         if: steps.cache.outputs.cache-hit != 'true'
@@ -80,8 +99,16 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - run: tools/check.sh --preset occt --skip-format
+      - name: Sanitize Swift worker concurrency
+        run: |
+          cmake --preset occt -B build/swift-tsan -DNF_BUILD_XPC_BUNDLE=OFF -DCMAKE_Swift_FLAGS=-sanitize=thread -DFETCHCONTENT_SOURCE_DIR_CATCH2="$PWD/build/occt/_deps/catch2-src"
+          cmake --build build/swift-tsan --target nf_native_worker_tests --parallel 2
+          ctest --test-dir build/swift-tsan -R '^native\.' --output-on-failure
       - name: Sanitize production geometry and evaluator ownership
         run: |
           cmake --preset asan -DNF_WITH_OCCT=ON
-          cmake --build --preset asan --target nf_kernel_tests nf_kernel_cache_tests nf_evaluator_tests --parallel 2
-          ctest --preset asan -R '^(kernel\.|kernel-cache\.|evaluator\.)'
+          cmake --build --preset asan --target \
+            nf_kernel_tests nf_kernel_cache_tests nf_evaluator_tests nf_cli_tests nf_bridge_tests nf_bridge_c_smoke \
+            nf_native_adapter_tests nf_native_adapter_c_smoke nf_native_unavailable_tests nf_native_unavailable_c_smoke \
+            --parallel 2
+          ctest --preset asan -R '^(kernel\.|kernel-cache\.|evaluator\.|cli\.|bridge\.|native-abi\.)'

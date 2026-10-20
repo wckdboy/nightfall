@@ -3,7 +3,11 @@
 #include "evaluator.hpp"
 
 #include <algorithm>
+#include <functional>
+#include <limits>
 #include <set>
+#include <tuple>
+#include <unordered_map>
 
 #include "geometry_cache.hpp"
 #include "model_inputs.hpp"
@@ -17,7 +21,9 @@ struct Output {
   std::optional<Sketch> sketch;
   std::optional<kernel::OperationResult> tool;  // private sweep before a result-mode boolean
   std::vector<kernel::OperationResult> operations;
+  std::vector<std::vector<kernel::OperationResult>> copies;  // private per-body pattern history
   std::vector<kernel::ShapePtr> bindings;
+  std::vector<ProfileSources> sources{ProfileSources{}};
   std::size_t bytes = sizeof(Output);
 };
 using Cache = GeometryCache<Output>;
@@ -38,6 +44,77 @@ T take(std::expected<T, E> value) {
   return std::move(*value);
 }
 const std::string& string(const Value& value) { return *value.if_string(); }
+void check_plane_frame(const kernel::Plane& p, const std::string& pointer) {
+  for (const double v : {p.origin.x, p.origin.y, p.origin.z, p.x_axis.x, p.x_axis.y, p.x_axis.z,
+                         p.normal.x, p.normal.y, p.normal.z})
+    if (!std::isfinite(v)) fail("kernel", "non-finite selected plane frame", pointer);
+  const auto tolerance = math::Tolerance::standard().angular;
+  if (!math::near(math::length(p.x_axis), 1, tolerance) ||
+      !math::near(math::length(p.normal), 1, tolerance) ||
+      !math::near(math::dot(p.x_axis, p.normal), 0, tolerance))
+    fail("kernel", "selected plane frame must be orthonormal", pointer);
+}
+struct FaceFilter {
+  bool planar = false, cylindrical = false;
+  std::optional<double> radius;
+  std::optional<math::Vec3> normal, parallel, perpendicular;
+  std::optional<math::Vec3> near;  // evaluated world point in mm; does not imply planar type
+  bool matches(const kernel::FaceInfo& face) const {
+    if ((cylindrical || radius) && !face.cylinder) return false;
+    if (radius && std::abs(face.cylinder->radius - *radius) > math::Tolerance::standard().linear)
+      return false;
+    if (!planar) return true;
+    if (!face.plane) return false;
+    const auto n = face.plane->normal;
+    constexpr auto angular = math::Tolerance::standard().angular;
+    const auto aligned = [&](math::Vec3 v) { return math::length(math::cross(n, v)) <= angular; };
+    return (!normal || (math::dot(n, *normal) > 0 && aligned(*normal))) &&
+           (!parallel || std::abs(math::dot(n, *parallel)) <= angular) &&
+           (!perpendicular || aligned(*perpendicular));
+  }
+};
+FaceFilter face_filter(const Value& where, const std::string& pointer) {
+  FaceFilter result;
+  for (const auto* key : {"convex", "concave"})
+    if (where.find(key)) fail("kernel", "face filter is not implemented", pointer + "/" + key);
+  if (const auto* type = where.find("type")) {
+    if (string(*type) == "plane")
+      result.planar = true;
+    else if (string(*type) == "cylinder")
+      result.cylindrical = true;
+    else
+      fail("kernel", "surface filter is not implemented", pointer + "/type");
+  }
+  if (const auto* radius = where.find("radius")) {
+    result.radius = *radius->if_number();
+    if (!(*result.radius > 0))
+      fail("kernel", "radius filter must be positive", pointer + "/radius");
+  }
+  if (const auto* near = where.find("near")) {
+    const auto& v = *near->if_array();
+    result.near = math::Vec3{*v[0].if_number(), *v[1].if_number(), *v[2].if_number()};
+  }
+  for (const auto& [key, output] : {std::pair{"normal", &result.normal},
+                                    {"parallel_to", &result.parallel},
+                                    {"perpendicular_to", &result.perpendicular}}) {
+    const auto* value = where.find(key);
+    if (!value) continue;
+    math::Vec3 direction;
+    if (const auto* word = value->if_string()) {
+      const double sign = word->front() == '-' ? -1 : 1;
+      if (word->back() == 'x') direction.x = sign;
+      if (word->back() == 'y') direction.y = sign;
+      if (word->back() == 'z') direction.z = sign;
+    } else {
+      const auto& v = *value->if_array();
+      direction = {*v[0].if_number(), *v[1].if_number(), *v[2].if_number()};
+    }
+    *output = math::normalized(direction);
+    if (!*output) fail("kernel", "direction must be nonzero and finite", pointer + "/" + key);
+    result.planar = true;
+  }
+  return result;
+}
 kernel::BooleanOp boolean_kind(std::string_view mode) {
   if (mode == "union" || mode == "join") return kernel::BooleanOp::kUnion;
   if (mode == "subtract" || mode == "cut") return kernel::BooleanOp::kSubtract;
@@ -83,42 +160,85 @@ std::vector<std::string> targets(const ir::Feature& feature, const Targets& prev
   return {ids.begin(), ids.end()};
 }
 std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
-                               const kernel::OperationResult& operation,
-                               const std::string& feature) {
+                               const kernel::OperationResult& operation, const std::string& feature,
+                               const std::vector<ProfileSources>* sources = nullptr,
+                               const std::vector<std::string>& sketches = {}) {
   std::vector<NamedEntity> result;
+  // A history entry can only match the same snapshot and topology kind.
+  // Nested patterns otherwise scan every copy's history for every inherited name.
+  using HistoryKey = std::pair<const kernel::Shape*, kernel::EntityKind>;
+  std::map<HistoryKey, std::vector<const kernel::History*>> histories;
+  for (const auto& h : operation.history)
+    if (h.before) histories[{h.before->owner().get(), h.before->kind()}].push_back(&h);
+  // Aliases often share one entity handle. Resolve its history only once per operation.
+  std::unordered_map<const kernel::Entity*, const kernel::History*> matched;
+  matched.reserve(operation.history.size());
+  std::map<std::tuple<std::string, std::string, std::string>, std::vector<std::size_t>> named;
   auto append = [&](const std::string& producer, const std::string& role,
-                    const kernel::EntityPtr& entity) {
+                    const kernel::EntityPtr& entity, const std::string& from = "") {
     if (!entity || entity->owner() != operation.shape)
       fail("kernel", "naming history belongs to a different snapshot", "/inputs");
-    if (std::ranges::none_of(result, [&](const auto& name) {
-          return name.feature == producer && name.role == role && name.entity->same_as(*entity);
-        }))
-      result.push_back({producer, role, entity});
+    auto& candidates = named[{producer, role, from}];
+    if (std::ranges::none_of(
+            candidates, [&](const auto index) { return result[index].entity->same_as(*entity); })) {
+      candidates.push_back(result.size());
+      result.push_back({producer, role, entity, from});
+    }
   };
   for (const auto* input : inputs) {
     for (const auto& name : input->names) {
-      const auto found = std::ranges::find_if(operation.history, [&](const auto& h) {
-        return h.before && h.before->same_as(*name.entity);
-      });
-      if (found == operation.history.end()) fail("kernel", "incomplete naming history", "/inputs");
-      if (!found->deleted && found->modified.empty())
+      auto [match, inserted] = matched.try_emplace(name.entity.get(), nullptr);
+      if (inserted) {
+        const auto& candidates = histories[{name.entity->owner().get(), name.entity->kind()}];
+        const auto found = std::ranges::find_if(
+            candidates, [&](const auto* h) { return h->before->same_as(*name.entity); });
+        if (found == candidates.end()) fail("kernel", "incomplete naming history", "/inputs");
+        match->second = *found;
+      }
+      const auto* history = match->second;
+      if (!history->deleted && history->modified.empty())
         fail("kernel", "history omitted a surviving entity", "/inputs");
-      if (!found->deleted)
-        for (const auto& entity : found->modified) append(name.feature, name.role, entity);
+      if (!history->deleted)
+        for (const auto& entity : history->modified)
+          append(name.feature, name.role, entity, name.from);
     }
   }
-  for (const auto& generated : operation.generated)
+  for (const auto& generated : operation.generated) {
+    if (sources && generated.from) {
+      const auto& edge = *generated.from;
+      if (edge.section >= sources->size() || edge.section >= sketches.size())
+        fail("kernel", "invalid profile section provenance", "/inputs");
+      const auto& section = (*sources)[edge.section];
+      const auto found = section.find({edge.region, edge.loop, edge.curve});
+      if (found == section.end()) fail("kernel", "invalid profile edge provenance", "/inputs");
+      if (!found->second.empty()) {
+        for (const auto& id : found->second)
+          append(feature, generated.role, generated.entity, sketches[edge.section] + "/" + id);
+        continue;
+      }
+    }
     append(feature, generated.role, generated.entity);
+  }
   return result;
 }
 std::size_t sketch_bytes(const Sketch& sketch) {
   std::size_t bytes = sizeof(Sketch);
+  const auto curve_bytes = [](const auto& curve) {
+    return sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
+           (curve.weights().size() + curve.knots().size()) * sizeof(double);
+  };
+  for (const auto& point : sketch.points) bytes += sizeof(point) + 64 + point.first.size();
+  for (const auto& line : sketch.lines) bytes += sizeof(line) + 64 + line.first.size();
+  for (const auto& path : sketch.path_entities) {
+    bytes += sizeof(path);
+    for (const auto& id : path) bytes += sizeof(id) + id.size();
+  }
+  for (const auto& id : sketch.segment_entities) bytes += sizeof(id) + id.size();
   for (const auto& path : sketch.paths) {
     bytes += sizeof(path);
-    for (const auto& curve : path)
-      bytes += sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
-               (curve.weights().size() + curve.knots().size()) * sizeof(double);
+    for (const auto& curve : path) bytes += curve_bytes(curve);
   }
+  for (const auto& curve : sketch.segments) bytes += curve_bytes(curve);
   return bytes;
 }
 }  // namespace
@@ -145,12 +265,13 @@ bool Evaluation::ok() const {
                               [](const auto& f) { return f.status == FeatureStatus::kFailed; });
 }
 
-std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view source) {
+std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view source,
+                                                          const Observer& observer) {
   auto document = ir::read_document(source);
   if (!document) return std::unexpected(document.error());
   auto parameters = ir::evaluate_parameters(document->params);
   if (!parameters) return std::unexpected(parameters.error());
-  const auto version = "evaluator/7;roles/3;" + std::string(state_->kernel.identity());
+  const auto version = "evaluator/29;roles/6;" + std::string(state_->kernel.identity());
   Evaluation result;
   result.features.reserve(document->features.size());
   Targets previous;
@@ -159,10 +280,13 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
   bool rolled_back = false;
   for (std::size_t index = 0; index < document->features.size(); ++index) {
     const auto& feature = document->features[index];
-    const bool profile_feature = feature.type == "extrude" || feature.type == "revolve";
+    const bool profile_feature = feature.type == "extrude" || feature.type == "revolve" ||
+                                 feature.type == "loft" || feature.type == "sweep";
+    const bool pattern_feature = feature.type == "pattern_linear" ||
+                                 feature.type == "pattern_circular" || feature.type == "mirror";
     result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
     auto& record = result.features.back();
-    const auto affected = targets(feature, previous);
+    auto affected = targets(feature, previous);
     previous.emplace(feature.id, affected);
     features.emplace(feature.id, index);
     const bool skip = rolled_back;
@@ -177,6 +301,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         result.bodies[string(*output->find("new"))].unavailable = "input_suppressed";
       continue;
     }
+    if (observer) observer(index);
     try {
       const auto program = take(ir::FeatureInputs::compile(feature));
       const auto inputs = take(program.evaluate(document->units, parameters->values));
@@ -187,25 +312,58 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         const auto& body = result.bodies.at(id);
         if (!body.shape || !body.hash)
           fail(body.unavailable, "body is unavailable: " + id, pointer);
-        dependencies.emplace(pointer, *body.hash);
+        // A selector can bind multiple current bodies at one reference pointer.
+        dependencies.emplace(pointer + "/body/" + id, *body.hash);
         bindings.push_back(body.shape);
       };
-      std::shared_ptr<const Output> sketch;
-      std::string result_mode;
-      if (profile_feature) {
-        const auto& id = string(*inputs.find("profile")->find("sketch"));
+      auto bind_sketch = [&](const std::string& id, const std::string& pointer) {
         const auto& upstream = result.features[features.at(id)];
         if (!upstream.hash)
           fail(upstream.status == FeatureStatus::kSuppressed ? "input_suppressed" : "input_failed",
-               "profile sketch is unavailable: " + id, "/inputs/profile/sketch");
-        dependencies.emplace("/inputs/profile/sketch", *upstream.hash);
-        sketch = sketches.at(id);
+               "sketch is unavailable: " + id, pointer);
+        dependencies.emplace(pointer, *upstream.hash);
+        return sketches.at(id);
+      };
+      std::shared_ptr<const Output> sketch, axis_sketch, path_sketch;
+      std::vector<std::shared_ptr<const Output>> loft_sketches;
+      std::vector<std::string> source_sketches;
+      std::optional<BodyPattern> pattern;
+      std::optional<kernel::Plane> mirror;
+      std::optional<kernel::Plane> selected_plane;
+      std::optional<kernel::Axis> selected_axis;
+      std::vector<kernel::EntityPtr> selected_edges;
+      const bool chamfer = feature.type == "chamfer";
+      const bool edge_blend = chamfer || feature.type == "fillet";
+      std::string result_mode;
+      if (profile_feature) {
+        if (feature.type == "loft") {
+          const auto& profiles = *inputs.find("profiles")->if_array();
+          if (profiles.size() > 32)
+            fail("kernel", "loft supports at most 32 sections", "/inputs/profiles");
+          for (std::size_t s = 0; s < profiles.size(); ++s) {
+            const auto& id = string(*profiles[s].find("sketch"));
+            source_sketches.push_back(id);
+            loft_sketches.push_back(
+                bind_sketch(id, "/inputs/profiles/" + std::to_string(s) + "/sketch"));
+          }
+        } else {
+          const auto& id = string(*inputs.find("profile")->find("sketch"));
+          source_sketches.push_back(id);
+          sketch = bind_sketch(id, "/inputs/profile/sketch");
+        }
+        if (feature.type == "sweep") {
+          const auto& path = *inputs.find("path");
+          if (!path.find("sketch"))
+            fail("kernel", "selector sweep paths are not implemented", "/inputs/path");
+          path_sketch = bind_sketch(string(*path.find("sketch")), "/inputs/path/sketch");
+        }
         for (const auto* mode : {"join", "cut", "intersect"}) {
           if (!inputs.find("result")->find(mode)) continue;
           result_mode = mode;
           bind(affected.front(), "/inputs/result/" + result_mode);
         }
-      } else if (feature.type == "transform") {
+      } else if (feature.type == "transform" || pattern_feature) {
+        if (feature.type == "pattern_linear") pattern = take(prepare_linear_pattern(inputs));
         for (std::size_t i = 0; i < affected.size(); ++i)
           bind(affected[i], "/inputs/bodies/" + std::to_string(i));
       } else if (feature.type == "boolean") {
@@ -217,9 +375,241 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
           bind(id, pointer);
           tools.push_back(id);
         }
-      } else if (feature.type != "sketch") {
+      } else if (feature.type != "sketch" && !edge_blend) {
         fail("kernel", "feature is not implemented: " + feature.type, "/type");
       }
+      // Operation targets precede selector-only bindings retained for cache compatibility.
+      auto target_count = bindings.size();
+      const Value* axis = (feature.type == "revolve" || feature.type == "pattern_circular")
+                              ? inputs.find("axis")
+                              : nullptr;
+      if (feature.type == "transform")
+        if (const auto* rotation = inputs.find("rotation")) axis = rotation->find("axis");
+      const auto* selection = axis;
+      if (feature.type == "sketch" || feature.type == "mirror") selection = inputs.find("plane");
+      if (feature.type == "extrude") selection = inputs.find("to");
+      if (edge_blend) {
+        if (chamfer && inputs.find("angle"))
+          fail("kernel", "angled chamfer is not implemented", "/inputs/angle");
+        const std::string quantity = chamfer ? "distance" : "radius";
+        if (*inputs.find(quantity)->if_number() <= math::Tolerance::standard().linear)
+          fail("kernel", feature.type + " " + quantity + " must exceed linear tolerance",
+               "/inputs/" + quantity);
+        selection = inputs.find("edges");
+      }
+      if (selection) {
+        const auto& plane = *selection;
+        if (!plane.find("datum") && !plane.find("origin") && !plane.find("sketch")) {
+          std::map<kernel::ShapePtr, std::vector<kernel::FaceInfo>> face_queries;
+          auto describe = [&](const kernel::ShapePtr& shape,
+                              const std::string& pointer) -> const std::vector<kernel::FaceInfo>& {
+            if (const auto found = face_queries.find(shape); found != face_queries.end())
+              return found->second;
+            ++result.kernel_calls;
+            auto queried = state_->kernel.faces(shape);
+            if (!queried) fail(queried.error().code, queried.error().message, pointer);
+            for (const auto& face : *queried) {
+              if (!face.entity || face.entity->owner() != shape ||
+                  face.entity->kind() != kernel::EntityKind::kFace)
+                fail("kernel", "face query returned an invalid snapshot handle", pointer);
+              if (face.plane) check_plane_frame(*face.plane, pointer);
+              if (face.cylinder) {
+                const auto& c = *face.cylinder;
+                for (const double v :
+                     {c.axis.origin.x, c.axis.origin.y, c.axis.origin.z, c.axis.direction.x,
+                      c.axis.direction.y, c.axis.direction.z, c.radius})
+                  if (!std::isfinite(v)) fail("kernel", "non-finite cylinder description", pointer);
+                if (face.plane || !(c.radius > 0) ||
+                    !math::near(math::length(c.axis.direction), 1,
+                                math::Tolerance::standard().angular))
+                  fail("kernel", "invalid cylinder description", pointer);
+              }
+            }
+            return face_queries.emplace(shape, std::move(*queried)).first->second;
+          };
+          auto inspect = [&](const kernel::EntityPtr& entity,
+                             const std::string& pointer) -> const kernel::FaceInfo& {
+            const auto& described = describe(entity->owner(), pointer);
+            const auto found = std::ranges::find_if(
+                described, [&](const auto& face) { return face.entity->same_as(*entity); });
+            if (found == described.end())
+              fail("kernel", "selected face is absent from its owning snapshot", pointer);
+            return *found;
+          };
+          std::function<std::vector<kernel::EntityPtr>(const Value&, const std::string&)> select;
+          select = [&](const Value& node, const std::string& pointer) {
+            if (!edge_blend && node.find("edges_of"))
+              fail("kernel", "face selector cannot use edges_of", pointer + "/edges_of");
+            if (const auto* from = node.find("from")) {
+              const auto& id = string(*from);
+              (void)bind_sketch(id.substr(0, id.find('/')), pointer + "/from");
+            }
+            const auto* where = node.find("where");
+            if (where && node.find("edges_of"))
+              fail("kernel", "edge filters are not implemented", pointer + "/where");
+            const auto filter = where ? face_filter(*where, pointer + "/where") : FaceFilter{};
+            std::vector<kernel::EntityPtr> matches;
+            auto append = [&](const kernel::EntityPtr& entity) {
+              if (std::ranges::none_of(matches, [&](const auto& m) { return m->same_as(*entity); }))
+                matches.push_back(entity);
+            };
+            if (const auto* boundary = node.find("edges_of")) {
+              for (const auto& face : select(*boundary, pointer + "/edges_of")) {
+                if (face->kind() != kernel::EntityKind::kFace)
+                  fail("kernel", "edges_of requires faces", pointer + "/edges_of");
+                ++result.kernel_calls;
+                auto edges = state_->kernel.edges(face);
+                if (!edges) fail(edges.error().code, edges.error().message, pointer + "/edges_of");
+                for (const auto& edge : *edges) {
+                  if (!edge || edge->owner() != face->owner() ||
+                      edge->kind() != kernel::EntityKind::kEdge)
+                    fail("kernel", "edge query returned an invalid snapshot handle", pointer);
+                  append(edge);
+                }
+              }
+            } else if (const auto* any = node.find("any")) {
+              const auto& children = *any->if_array();
+              for (std::size_t i = 0; i < children.size(); ++i)
+                for (const auto& entity :
+                     select(children[i], pointer + "/any/" + std::to_string(i)))
+                  append(entity);
+            } else {
+              const bool body_selector = node.find("faces_of");
+              const std::string reference = body_selector ? "faces_of" : "created_by";
+              const auto& id = string(*node.find(reference));
+              if (!body_selector) {
+                const auto& producer = result.features[features.at(id)];
+                if (!producer.hash)
+                  fail(producer.status == FeatureStatus::kSuppressed ? "input_suppressed"
+                                                                     : "input_failed",
+                       "selected producer is unavailable: " + id, pointer + "/created_by");
+                dependencies.emplace(pointer + "/created_by/feature/" + id, *producer.hash);
+              }
+              const auto body_ids = body_selector ? std::vector{id} : previous.at(id);
+              for (const auto& body_id : body_ids) {
+                bind(body_id, pointer + "/" + reference);
+                const auto& body = result.bodies.at(body_id);
+                if (body_selector) {
+                  for (const auto& face : describe(body.shape, pointer)) append(face.entity);
+                } else {
+                  for (const auto& name : body.names) {
+                    if (name.feature != id) continue;
+                    if (const auto* role = node.find("role"); role && name.role != string(*role))
+                      continue;
+                    if (const auto* from = node.find("from"); from && name.from != string(*from))
+                      continue;
+                    if (!name.entity || name.entity->owner() != body.shape)
+                      fail("kernel", "selected name belongs to a different snapshot", pointer);
+                    if (edge_blend || name.entity->kind() == kernel::EntityKind::kFace)
+                      append(name.entity);
+                  }
+                }
+              }
+            }
+            if (const auto* except = node.find("except")) {
+              const auto excluded = select(*except, pointer + "/except");
+              std::erase_if(matches, [&](const auto& entity) {
+                return std::ranges::any_of(excluded,
+                                           [&](const auto& e) { return e->same_as(*entity); });
+              });
+            }
+            if (where && std::ranges::any_of(matches, [](const auto& e) {
+                  return e->kind() != kernel::EntityKind::kFace;
+                }))
+              fail("kernel", "edge filters are not implemented", pointer + "/where");
+            if (where)
+              std::erase_if(matches, [&](const auto& entity) {
+                return !filter.matches(inspect(entity, pointer));
+              });
+            if (filter.near) {
+              std::vector<double> distances;
+              double minimum = std::numeric_limits<double>::infinity();
+              const auto near_pointer = pointer + "/where/near";
+              for (const auto& entity : matches) {
+                ++result.kernel_calls;
+                const auto distance = state_->kernel.face_distance(entity, *filter.near);
+                if (!distance) fail(distance.error().code, distance.error().message, near_pointer);
+                if (!std::isfinite(*distance) || *distance < 0)
+                  fail("kernel", "face distance must be finite and nonnegative", near_pointer);
+                distances.push_back(*distance);
+                minimum = std::min(minimum, *distance);
+              }
+              std::vector<kernel::EntityPtr> nearest;
+              for (std::size_t i = 0; i < matches.size(); ++i)
+                if (distances[i] - minimum <= math::Tolerance::standard().linear)
+                  nearest.push_back(matches[i]);
+              matches = std::move(nearest);
+            }
+            const auto* expect = node.find("expect");
+            const std::string expectation = expect ? string(*expect) : "some";
+            if ((expectation == "one" && matches.size() != 1) ||
+                (expectation == "some" && matches.empty()))
+              fail("selector_count",
+                   "selector expected " + expectation + "; matched " +
+                       std::to_string(matches.size()),
+                   pointer);
+            return matches;
+          };
+          const std::string pointer = edge_blend                    ? "/inputs/edges"
+                                      : feature.type == "extrude"   ? "/inputs/to"
+                                      : !axis                       ? "/inputs/plane"
+                                      : feature.type == "transform" ? "/inputs/rotation/axis"
+                                                                    : "/inputs/axis";
+          const auto matches = select(plane, pointer);
+          if (edge_blend) {
+            if (matches.empty() || std::ranges::any_of(matches, [](const auto& e) {
+                  return e->kind() != kernel::EntityKind::kEdge;
+                }))
+              fail("kernel", feature.type + " requires a nonempty edge selection", pointer);
+            selected_edges = matches;
+          } else {
+            if (matches.size() != 1 || matches.front()->kind() != kernel::EntityKind::kFace)
+              fail("selector_count",
+                   std::string(axis ? "axis" : "plane") + " requires one face; selector matched " +
+                       std::to_string(matches.size()),
+                   pointer);
+            if (axis) {
+              const auto& face = inspect(matches.front(), pointer);
+              if (!face.cylinder) fail("kernel", "selected axis face is not cylindrical", pointer);
+              selected_axis = face.cylinder->axis;
+            } else if (face_queries.contains(matches.front()->owner())) {
+              const auto& face = inspect(matches.front(), pointer);
+              if (!face.plane) fail("kernel", "selected face is not planar", pointer);
+              selected_plane = face.plane;
+            } else {
+              ++result.kernel_calls;
+              auto resolved = state_->kernel.face_plane(matches.front());
+              if (!resolved) fail(resolved.error().code, resolved.error().message, pointer);
+              selected_plane = *resolved;
+            }
+            if (selected_plane) check_plane_frame(*selected_plane, pointer);
+          }
+        }
+      }
+      if (edge_blend) {
+        std::vector<kernel::ShapePtr> targets;
+        std::erase_if(affected, [&](const auto& id) {
+          const auto& shape = result.bodies.at(id).shape;
+          if (std::ranges::none_of(selected_edges,
+                                   [&](const auto& e) { return e->owner() == shape; }))
+            return true;
+          targets.push_back(shape);
+          return false;
+        });
+        target_count = targets.size();
+        bindings.insert(bindings.begin(), targets.begin(), targets.end());
+        previous[feature.id] = affected;
+      }
+      if (feature.type == "mirror")
+        mirror = take(prepare_mirror(inputs, selected_plane ? &*selected_plane : nullptr));
+      if (axis && axis->find("sketch"))
+        axis_sketch = bind_sketch(
+            string(*axis->find("sketch")),
+            feature.type == "transform" ? "/inputs/rotation/axis/sketch" : "/inputs/axis/sketch");
+      const auto* axis_input = axis_sketch ? &*axis_sketch->sketch : nullptr;
+      const auto* resolved_axis = selected_axis ? &*selected_axis : nullptr;
+      if (feature.type == "pattern_circular")
+        pattern = take(prepare_circular_pattern(inputs, axis_input, resolved_axis));
       std::vector<ir::Hash> upstream;
       for (const auto& [pointer, hash] : dependencies) upstream.push_back(hash);
       const auto key = ir::feature_hash(version, feature.type, inputs, upstream);
@@ -233,17 +623,35 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         auto built = std::make_shared<Output>();
         built->bindings = bindings;
         built->bytes += bindings.size() * sizeof(kernel::ShapePtr);
+        for (std::size_t i = target_count; i < bindings.size(); ++i)
+          built->bytes += bindings[i]->estimated_bytes();
         if (feature.type == "sketch") {
-          built->sketch = take(prepare_sketch(inputs));
+          built->sketch = take(prepare_sketch(inputs, selected_plane ? &*selected_plane : nullptr));
           built->bytes += sketch_bytes(*built->sketch);
         } else if (profile_feature) {
           auto solid = [&] {
+            if (feature.type == "loft") {
+              std::vector<const Sketch*> sections;
+              for (const auto& section : loft_sketches) sections.push_back(&*section->sketch);
+              const auto operation = take(prepare_loft(inputs, sections, &built->sources));
+              ++result.kernel_calls;
+              return take(state_->kernel.loft(operation));
+            }
+            if (feature.type == "sweep") {
+              const auto operation = take(prepare_sweep(
+                  inputs, *sketch->sketch, *path_sketch->sketch, &built->sources.front()));
+              ++result.kernel_calls;
+              return take(state_->kernel.sweep(operation));
+            }
             if (feature.type == "extrude") {
-              const auto operation = take(prepare_extrusion(inputs, *sketch->sketch));
+              const auto operation =
+                  take(prepare_extrusion(inputs, *sketch->sketch, &built->sources.front(),
+                                         selected_plane ? &*selected_plane : nullptr));
               ++result.kernel_calls;
               return take(state_->kernel.extrude(operation));
             }
-            const auto operation = take(prepare_revolution(inputs, *sketch->sketch));
+            const auto operation = take(prepare_revolution(inputs, *sketch->sketch, axis_input,
+                                                           &built->sources.front(), resolved_axis));
             ++result.kernel_calls;
             return take(state_->kernel.revolve(operation));
           }();
@@ -256,44 +664,116 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
             built->operations.push_back(take(state_->kernel.boolean_operation(
                 bindings.front(), {built->tool->shape}, boolean_kind(result_mode))));
           }
+        } else if (edge_blend) {
+          for (std::size_t i = 0; i < target_count; ++i) {
+            std::vector<kernel::EntityPtr> edges;
+            for (const auto& e : selected_edges)
+              if (e->owner() == bindings[i]) edges.push_back(e);
+            ++result.kernel_calls;
+            built->operations.push_back(
+                take(chamfer ? state_->kernel.chamfer(bindings[i], edges,
+                                                      *inputs.find("distance")->if_number())
+                             : state_->kernel.fillet(bindings[i], edges,
+                                                     *inputs.find("radius")->if_number())));
+          }
         } else if (feature.type == "boolean") {
           const auto& op = string(*inputs.find("op"));
           ++result.kernel_calls;
           built->operations.push_back(take(state_->kernel.boolean_operation(
               bindings.front(), {bindings.begin() + 1, bindings.end()}, boolean_kind(op))));
-        } else {
-          const auto operation = take(prepare_transform(inputs));
-          for (const auto& input : bindings) {
+        } else if (pattern_feature) {
+          const auto count = pattern ? pattern->count : std::size_t{2};
+          built->copies.resize(target_count);
+          built->bytes += target_count * sizeof(built->copies.front());
+          for (std::size_t body = 0; body < target_count; ++body) {
+            const auto& seed = bindings[body];
+            if (count == 1) {
+              ++result.kernel_calls;
+              built->operations.push_back(take(state_->kernel.transform(seed, {})));
+              continue;
+            }
+            std::vector<kernel::ShapePtr> instances;
+            for (std::size_t i = 1; i < count; ++i) {
+              kernel::RigidTransform placement;
+              if (pattern) {
+                placement = pattern->step;
+                placement.translation = placement.translation * static_cast<double>(i);
+                placement.angle *= static_cast<double>(i);
+              }
+              ++result.kernel_calls;
+              auto copy = mirror ? take(state_->kernel.mirror(seed, *mirror))
+                                 : take(state_->kernel.transform(seed, placement));
+              for (const auto& h : copy.history)
+                for (const auto& entity : h.modified)
+                  if (entity && entity->kind() == kernel::EntityKind::kFace) {
+                    copy.generated.push_back({"instance", entity, {}});
+                    copy.estimated_bytes += sizeof(kernel::Generated) + 64;
+                  }
+              instances.push_back(copy.shape);
+              built->bytes += sizeof(copy) + copy.estimated_bytes;
+              built->copies[body].push_back(std::move(copy));
+            }
             ++result.kernel_calls;
-            built->operations.push_back(take(state_->kernel.transform(input, operation)));
+            built->operations.push_back(
+                take(state_->kernel.boolean_operation(seed, instances, kernel::BooleanOp::kUnion)));
+          }
+        } else {
+          const auto operation = take(prepare_transform(inputs, axis_input, resolved_axis));
+          for (std::size_t i = 0; i < target_count; ++i) {
+            ++result.kernel_calls;
+            built->operations.push_back(take(state_->kernel.transform(bindings[i], operation)));
           }
         }
         for (const auto& operation : built->operations) built->bytes += operation.estimated_bytes;
+        built->bytes += built->sources.size() * sizeof(ProfileSources);
+        for (const auto& section : built->sources)
+          for (const auto& [edge, ids] : section) {
+            built->bytes += sizeof(edge) + sizeof(ids) + 64;
+            for (const auto& id : ids) built->bytes += sizeof(id) + id.size();
+          }
         output = std::move(built);
       }
       std::vector<BodyState> published;
       for (std::size_t i = 0; i < output->operations.size(); ++i) {
         const auto& operation = output->operations[i];
         if (!operation.shape) fail("kernel", "backend returned no shape", "/inputs");
-        const auto* input = bindings.empty() ? nullptr : &result.bodies.at(affected[i]);
+        const auto* input = target_count == 0 ? nullptr : &result.bodies.at(affected[i]);
         std::vector<const BodyState*> named_inputs;
         if (input) named_inputs.push_back(input);
         for (const auto& tool : tools) named_inputs.push_back(&result.bodies.at(tool));
+        std::vector<BodyState> copied;
+        if (!output->copies.empty())
+          for (const auto& copy : output->copies[i])
+            copied.push_back({copy.shape, {}, names({input}, copy, feature.id), {}});
+        for (const auto& copy : copied) named_inputs.push_back(&copy);
         BodyState temporary;
         if (output->tool) {
-          temporary.names = names({}, *output->tool, feature.id);
+          temporary.names = names({}, *output->tool, feature.id, &output->sources, source_sketches);
           named_inputs.push_back(&temporary);
         }
         published.push_back({operation.shape,
                              ir::body_hash(input ? input->hash : std::nullopt, key),
-                             names(named_inputs, operation, feature.id),
+                             names(named_inputs, operation, feature.id,
+                                   profile_feature ? &output->sources : nullptr, source_sketches),
                              {}});
       }
       // Publish complete geometry and naming together, after every operation/history succeeds.
       for (std::size_t i = 0; i < published.size(); ++i)
         result.bodies[affected[i]] = std::move(published[i]);
       const auto* keep = inputs.find("keep_tools");
-      if (!keep || !*keep->if_bool())
+      const bool keep_tools = keep && *keep->if_bool();
+      if (!tools.empty())
+        for (auto& [producer, ids] : previous) {
+          if (std::ranges::none_of(
+                  ids, [&](const auto& id) { return std::ranges::find(tools, id) != tools.end(); }))
+            continue;
+          std::set<std::string> current(ids.begin(), ids.end());
+          if (!keep_tools)
+            for (const auto& tool : tools) current.erase(tool);
+          current.insert(affected.front());
+          ids.assign(current.begin(), current.end());
+        }
+      if (!keep_tools)
         for (const auto& tool : tools) result.bodies[tool] = {{}, {}, {}, "input_failed"};
       if (output->sketch) sketches[feature.id] = output;
       if (cached)

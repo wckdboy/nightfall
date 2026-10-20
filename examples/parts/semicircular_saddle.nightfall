@@ -1,0 +1,98 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Semicircular saddle",
+    "doc": "Half-annular section with 10 mm outer and 6 mm inner radius; overlapping straight closures cancel."
+  },
+  "params": [
+    {
+      "name": "width",
+      "value": "8 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Width"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "arc",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 10,
+            "start_angle": 0,
+            "sweep_angle": 180
+          },
+          {
+            "id": "outer_base",
+            "type": "line",
+            "start": [
+              -10,
+              0
+            ],
+            "end": [
+              10,
+              0
+            ]
+          },
+          {
+            "id": "inner",
+            "type": "arc",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 6,
+            "start_angle": 0,
+            "sweep_angle": 180
+          },
+          {
+            "id": "inner_base",
+            "type": "line",
+            "start": [
+              -6,
+              0
+            ],
+            "end": [
+              6,
+              0
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "saddle",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "width",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

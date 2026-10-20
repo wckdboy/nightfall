@@ -1,0 +1,91 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Hexagonal spacer",
+    "doc": "Regular hexagon with 20 mm across corners and a 6 mm bore."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "12 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "hex",
+            "type": "polygon",
+            "points": [
+              [
+                10,
+                0
+              ],
+              [
+                5,
+                "5 mm * sqrt(3)"
+              ],
+              [
+                -5,
+                "5 mm * sqrt(3)"
+              ],
+              [
+                -10,
+                0
+              ],
+              [
+                -5,
+                "-5 mm * sqrt(3)"
+              ],
+              [
+                5,
+                "-5 mm * sqrt(3)"
+              ]
+            ]
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 3
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "spacer",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "height",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

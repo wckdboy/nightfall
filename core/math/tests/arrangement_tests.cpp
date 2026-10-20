@@ -230,9 +230,10 @@ TEST_CASE("shared straight seams split at crossings from a third path", "[arrang
   }
 }
 
-TEST_CASE("curved shared stretches remain explicit errors", "[arrangement][shared]") {
-  const auto circle = make_circle(Vec2{0, 0}, 1);
-  const auto a = arrange(std::vector<std::vector<NurbsCurve2>>{{circle}, {circle}});
+TEST_CASE("uncertified shared parameterizations remain explicit errors", "[arrangement][shared]") {
+  auto path = square(0, 0, 2);
+  path[0] = make_bezier(std::vector<Vec2>{{0, 0}, {0.1, 0}, {0.2, 0}, {2, 0}});
+  const auto a = arrange(std::vector<std::vector<NurbsCurve2>>{square(0, 0, 2), path});
   REQUIRE_FALSE(a);
   CHECK(a.error().find("#74") != std::string::npos);
 }

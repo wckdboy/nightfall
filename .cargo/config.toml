@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[build]
+target-dir = "build/rust"
+
+[env]
+MACOSX_DEPLOYMENT_TARGET = "15.0"

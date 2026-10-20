@@ -29,7 +29,7 @@ fail=0
 step "License headers"
 # Every tracked or new source file must carry an SPDX license identifier.
 missing=$(git ls-files --cached --others --exclude-standard \
-  '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
+  '*.c' '*.cpp' '*.hpp' '*.h' '*.mm' '*.swift' '*.rs' '*.sh' '*.py' '*CMakeLists.txt' '*.cmake' \
   | while read -r f; do
       [[ -f "$f" ]] || continue
       head -n 5 "$f" | grep -q 'SPDX-License-Identifier:' || echo "$f"
@@ -45,7 +45,7 @@ step "Layering"
 # AppKit/Cocoa only inside app/ (WORKFLOW.md §6): everything else must stay portable to
 # iPadOS and visionOS. Catches Swift/ObjC imports, C/C++ includes and CMake framework links.
 appkit=$(git ls-files --cached --others --exclude-standard \
-  '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*CMakeLists.txt' '*.cmake' \
+  '*.swift' '*.m' '*.mm' '*.h' '*.hpp' '*.c' '*.cpp' '*.rs' '*CMakeLists.txt' '*.cmake' \
   | { grep -v '^app/' || true; } \
   | while read -r f; do
       [[ -f "$f" ]] || continue
@@ -67,7 +67,7 @@ elif ! clang-format --version | grep -q "version $(cat .clang-format-version)"; 
   msg="clang-format $(cat .clang-format-version) required (.clang-format-version), found: $(clang-format --version)"
   if [[ -n "${CI:-}" ]]; then echo "$msg"; fail=1; else echo "$msg; skipping locally"; fi
 else
-  files=$(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h' '*.mm')
+  files=$(git ls-files --cached --others --exclude-standard '*.c' '*.cpp' '*.hpp' '*.h' '*.mm')
   if [[ -n "$files" ]] && ! echo "$files" | xargs clang-format --dry-run --Werror; then
     echo "run: git ls-files '*.cpp' '*.hpp' '*.h' '*.mm' | xargs clang-format -i"
     fail=1
@@ -75,6 +75,13 @@ else
     echo "ok"
   fi
 fi
+
+step "Rust math (pinned toolchain; locked, offline dependencies)"
+cargo fmt --all -- --check
+cargo clippy -p nightfall-math --all-targets --locked --offline -- -D warnings
+cargo test -p nightfall-math --locked --offline
+cargo test -p nightfall-math --locked --offline --release
+# Native Rust checks run through CTest after its adapter has been built by CMake.
 
 step "IR schema"
 python3 core/ir/schema/build_schema.py --check

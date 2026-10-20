@@ -1,0 +1,125 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Drilled block",
+    "doc": "30 x 20 mm block with two 4 mm through-bores; a compound tool body is consumed by a solid boolean."
+  },
+  "params": [
+    {
+      "name": "height",
+      "value": "12 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Height"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "footprint",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "block",
+            "type": "rect",
+            "corner": [
+              -15,
+              -10
+            ],
+            "size": [
+              30,
+              20
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "block",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "footprint"
+        },
+        "distance": "height",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "drill_profile",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            -1
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "left",
+            "type": "circle",
+            "center": [
+              -8,
+              0
+            ],
+            "radius": 2
+          },
+          {
+            "id": "right",
+            "type": "circle",
+            "center": [
+              8,
+              0
+            ],
+            "radius": 2
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "drills",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "drill_profile"
+        },
+        "distance": "height + 2 mm",
+        "result": {
+          "new": "drills",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "drill",
+      "type": "boolean",
+      "inputs": {
+        "op": "subtract",
+        "target": "part",
+        "tools": [
+          "drills"
+        ]
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

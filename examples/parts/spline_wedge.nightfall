@@ -1,0 +1,91 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Parabolic spline wedge",
+    "doc": "Quadratic Bezier roof y = x - x^2 / 20 on x = 0..20 mm, with a straight base."
+  },
+  "params": [
+    {
+      "name": "thickness",
+      "value": "5 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "roof",
+            "type": "spline",
+            "degree": 2,
+            "knots": [
+              0,
+              0,
+              0,
+              1,
+              1,
+              1
+            ],
+            "control_points": [
+              [
+                0,
+                0
+              ],
+              [
+                10,
+                10
+              ],
+              [
+                20,
+                0
+              ]
+            ]
+          },
+          {
+            "id": "base",
+            "type": "line",
+            "start": [
+              20,
+              0
+            ],
+            "end": [
+              0,
+              0
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "wedge",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

@@ -1,0 +1,100 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Four-hole mounting plate",
+    "doc": "60 x 40 mm plate with four 6 mm through-holes on a 40 x 20 mm grid."
+  },
+  "params": [
+    {
+      "name": "thickness",
+      "value": "4 mm",
+      "min": "0.5 mm",
+      "max": "100 mm",
+      "doc": "Thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "blank",
+            "type": "rect",
+            "corner": [
+              -30,
+              -20
+            ],
+            "size": [
+              60,
+              40
+            ]
+          },
+          {
+            "id": "hole_0",
+            "type": "circle",
+            "center": [
+              -20,
+              -10
+            ],
+            "radius": 3
+          },
+          {
+            "id": "hole_1",
+            "type": "circle",
+            "center": [
+              20,
+              -10
+            ],
+            "radius": 3
+          },
+          {
+            "id": "hole_2",
+            "type": "circle",
+            "center": [
+              20,
+              10
+            ],
+            "radius": 3
+          },
+          {
+            "id": "hole_3",
+            "type": "circle",
+            "center": [
+              -20,
+              10
+            ],
+            "radius": 3
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "plate",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "part",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

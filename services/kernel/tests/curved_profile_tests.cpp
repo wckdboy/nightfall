@@ -65,7 +65,7 @@ TEST_CASE("curved profiles preserve signed arcs and analytic semicylinder measur
     set_entity(inputs, "sweep_angle", sign * 180);
     auto sketch = prepare(inputs);
     REQUIRE(sketch);
-    REQUIRE(sketch->paths.size() == 1);
+    REQUIRE(sketch->segments.size() == 2);
     const auto shape = extrude(*sketch);
     CHECK_THAT(shape->measures().volume, WithinAbs(200 * kPi, 1e-6));
     CHECK_THAT(shape->measures().area, WithinAbs(140 * kPi + 80, 1e-6));
@@ -113,7 +113,7 @@ TEST_CASE("curved profiles join unordered arcs lines and reversed rational splin
      "control_points":[[-10,0],[-10,10],[0,10]],"weights":[1,"sqrt(0.5)",1]},
     {"id":"l","type":"line","start":[-10,0],"end":[10,0]}])json"));
   REQUIRE(sketch);
-  REQUIRE(sketch->paths.size() == 1);
+  REQUIRE(sketch->segments.size() == 3);
   const auto shape = extrude(*sketch);
   CHECK_THAT(shape->measures().volume, WithinAbs(200 * kPi, 1e-6));
   CHECK_THAT(shape->measures().centroid.y, WithinAbs(40 / (3 * kPi), 1e-7));
@@ -240,16 +240,25 @@ TEST_CASE("curved profiles reject malformed arcs ellipses and splines with field
 TEST_CASE("curved profiles reject open chains and junctions shared by closed loops", "[curved]") {
   auto open = sketch_inputs(half_disk);
   set_entity(open, "end", ir::json::Array{11.0, 0.0}, 1);
-  const auto gap = prepare(open);
+  const auto gap_sketch = prepare(open);
+  REQUIRE(gap_sketch);
+  const auto f = feature("base", "extrude", R"({"profile":{"sketch":"outline"},
+    "distance":4,"result":{"new":"plate","body_type":"brep"}})");
+  const auto inputs = ir::FeatureInputs::compile(f).value().evaluate().value();
+  const auto gap = prepare_extrusion(inputs, *gap_sketch);
   REQUIRE_FALSE(gap);
+  CHECK(gap.error().pointer == "/inputs/profile");
   CHECK(gap.error().message.find("open") != std::string::npos);
   auto junction = sketch_inputs(R"([
     {"id":"a","type":"arc","center":[-10,0],"radius":10,"start_angle":0,"sweep_angle":180},
     {"id":"b","type":"line","start":[-20,0],"end":[0,0]},
     {"id":"c","type":"arc","center":[10,0],"radius":10,"start_angle":0,"sweep_angle":180},
     {"id":"d","type":"line","start":[20,0],"end":[0,0]}])");
-  const auto ambiguous = prepare(junction);
+  const auto junction_sketch = prepare(junction);
+  REQUIRE(junction_sketch);
+  const auto ambiguous = prepare_extrusion(inputs, *junction_sketch);
   REQUIRE_FALSE(ambiguous);
+  CHECK(ambiguous.error().pointer == "/inputs/profile");
   CHECK(ambiguous.error().message.find("ambiguous") != std::string::npos);
 }
 

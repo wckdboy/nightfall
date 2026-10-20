@@ -12,8 +12,10 @@
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <NCollection_IncAllocator.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
+#include <Standard_OutOfMemory.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
@@ -27,7 +29,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <new>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -61,6 +68,67 @@ std::optional<TopoDS_Edge> z_edge_at_origin(const TopoDS_Shape& box) {
 }
 
 }  // namespace
+
+TEST_CASE("incremental allocator aligns mixed allocations and preserves payloads across resets",
+          "[occt][occt-allocator]") {
+  NCollection_IncAllocator allocator(2048);
+  struct alignas(std::max_align_t) Payload {
+    std::uint64_t id;
+    double value;
+  };
+  struct Bytes {
+    unsigned char* address;
+    std::size_t size;
+    unsigned char value;
+  };
+  for (int round = 0; round < 4; ++round) {
+    std::vector<Bytes> buffers;
+    std::vector<Payload*> objects;
+    for (std::size_t i = 0; i < 512; ++i) {
+      const std::size_t size = 1 + (i * 17) % 251;
+      auto* p = static_cast<unsigned char*>(i % 2 ? allocator.Allocate(size)
+                                                  : allocator.AllocateOptimal(size));
+      REQUIRE(p);
+      REQUIRE(reinterpret_cast<std::uintptr_t>(p) % alignof(std::max_align_t) == 0);
+      const auto value = static_cast<unsigned char>(i % 256);
+      std::fill_n(p, size, value);
+      buffers.push_back({p, size, value});
+      if (i % 16 == 0) {
+        void* storage = allocator.Allocate(sizeof(Payload));
+        REQUIRE(reinterpret_cast<std::uintptr_t>(storage) % alignof(Payload) == 0);
+        objects.push_back(
+            new (storage) Payload{static_cast<std::uint64_t>(i), static_cast<double>(i) + 0.25});
+      }
+    }
+    for (const auto& buffer : buffers)
+      CHECK(std::all_of(buffer.address, buffer.address + buffer.size,
+                        [&](unsigned char v) { return v == buffer.value; }));
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+      CHECK(objects[i]->id == i * 16);
+      CHECK(objects[i]->value == static_cast<double>(i * 16) + 0.25);
+      objects[i]->~Payload();
+    }
+    allocator.Reset(round % 2 == 1);
+  }
+}
+
+TEST_CASE("incremental allocator rejects unrepresentable sizes before allocation",
+          "[occt][occt-allocator]") {
+  NCollection_IncAllocator allocator;
+  for (const auto size :
+       {std::numeric_limits<std::size_t>::max(), std::numeric_limits<std::size_t>::max() - 1,
+        static_cast<std::size_t>(std::numeric_limits<unsigned int>::max())}) {
+    CHECK_THROWS_AS(allocator.Allocate(size), Standard_OutOfMemory);
+    CHECK_THROWS_AS(allocator.AllocateOptimal(size), Standard_OutOfMemory);
+  }
+  void* first = allocator.Allocate(0);
+  void* second = allocator.AllocateOptimal(0);
+  REQUIRE(first);
+  REQUIRE(second);
+  CHECK(first != second);
+  CHECK(reinterpret_cast<std::uintptr_t>(first) % alignof(std::max_align_t) == 0);
+  CHECK(reinterpret_cast<std::uintptr_t>(second) % alignof(std::max_align_t) == 0);
+}
 
 TEST_CASE("box volume is exact", "[occt]") {
   const TopoDS_Shape box = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape();

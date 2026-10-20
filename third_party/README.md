@@ -7,6 +7,7 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
 
 | Name | Version | License | Used by | Why | Fetched by |
 | --- | --- | --- | --- | --- | --- |
+| Rust toolchain + standard library | 1.99.1 (`rust-toolchain.toml`) | MIT OR Apache-2.0; bundled component notices in the toolchain's `COPYRIGHT.html` / `COPYRIGHT-library.html` | Rust math (RFC 0008); rustfmt/Clippy build-only | Safe numerical geometry; no external Cargo crates in the first slice | rustup, exact toolchain pin; Cargo.lock committed |
 | Catch2 | v3.16.1 (`5010924c`) | BSL-1.0 | tests only | C++ unit and property tests | CMake FetchContent, pinned commit |
 | jsonschema | 4.26.0 (transitives pinned in `tools/schema-requirements.txt`) | MIT (including attrs, referencing, jsonschema-specifications, rpds-py) | tests only | Independent JSON Schema 2020-12 check of the IR corpus (RFC 0005) | pip in an isolated test environment; never linked or shipped |
 | OpenCASCADE | 7.9.3 (`a016080b`) | LGPL-2.1 (dynamic linking only) | `NF_WITH_OCCT=ON` only | Comparison/fallback kernel and STEP translator (RFC 0001) | `third_party/build-occt.sh`, used via `third_party/occt/CMakeLists.txt` |
@@ -30,4 +31,11 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
   SM_API test suite runs unchanged as `smlib.SM_API_test`.
 - **OpenCASCADE** is built by `third_party/build-occt.sh` with only the modeling and
   data-exchange toolkits (no Draw, Tcl/Tk, FreeType or OpenGL) and installed into the
-  git-ignored `third_party/install/`. CI caches that install keyed on the script's hash.
+  git-ignored `third_party/install/`. CI caches that install keyed on the script and patch
+  hashes. Nightfall's `occt/patches/0001-align-incremental-allocations.patch` fixes mixed-size
+  incremental allocation alignment in the pinned 7.9.3 source (#174), with size-overflow
+  rejection and no public ABI change. This modification retains OCCT's LGPL-2.1 license
+  and exception; the complete patch is distributed here for reproducible rebuilds.
+  The install receipt includes its SHA256, verified at configure time and included in the
+  backend's cache identity. A checkout must be clean upstream or contain exactly this patch;
+  unrelated source edits are rejected. The script preserves those edits on failure.

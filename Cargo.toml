@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[workspace]
+members = ["core/math/rust", "core/kernel/native", "core/kernel/rust"]
+default-members = ["core/math/rust"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.99.1"
+license = "Apache-2.0"
+
+[profile.release]
+panic = "unwind"
+lto = "thin"
+codegen-units = 1
