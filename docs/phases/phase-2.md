@@ -21,6 +21,24 @@ and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assem
 studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
 and RFC 0010 (#247). This gate and its recorded failures are unchanged.
 
+## Topological Naming regression corpus (#227)
+
+The first kernel-only corpus slice keeps an authored top-cap reference while a subtracting
+tool moves outside a plate, splits it symmetrically, removes one side, deletes the cap while
+leaving a parallel replacement, and restores earlier states. Analytic V/A pairs are
+**6000/2200**, **4800/3200**, **5400/2100** and **5600/2080 mm³/mm²** at 1e-7 absolute
+tolerance. Selected cap planes stay at z=30 mm (1e-8 mm); split descendants are equally
+1 mm from the center (1e-8 mm). Deleted-cap replacement geometry exists at z=28 mm but
+does not acquire the old reference. Split/deleted selectors report `selector_count` and
+block downstream geometry; unique caps attach the probe at (5,10,31) mm.
+
+Sequential edits, warm hits and forced cold builds retain correct ownership and earlier
+readers. The focused case passes **950 assertions in 0.23 s**. The first full gate passes
+884/885 in 274.43 s; the existing #185 Nocturne deadline recurs at 5.84 s. A scoped recheck
+passes naming plus unchanged Nocturne **2/2 in 6.20 s** (cold build 2725.291 ms). This is
+not a latency fix; deadlines, fixture and tolerances are unchanged. Final complete checks
+remain required. Logs: `/tmp/nightfall-227-{naming,check,recheck}.log`.
+
 ## Consolidated integration review (#223)
 
 On 2026-10-20 the maintainer explicitly authorizes the consolidated integration through
