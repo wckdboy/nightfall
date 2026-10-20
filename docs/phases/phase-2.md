@@ -27,6 +27,30 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Rust native context ownership (#197)
+
+Accepted RFC 0008 now has a std-only `nightfall-native` crate and a private C adapter
+for OCCT context creation, immutable identity/capability queries and matched release.
+Rust retains owners with `Rc`, exposes no raw pointers and serializes every native call,
+including independent creation and final destruction. Positive compile-time assertions
+and compile-fail examples enforce neither `Send` nor `Sync`; owned metadata may cross threads.
+C++ exceptions become status errors and failed creation publishes no owner. The macOS
+adapter exports only its three C functions; OCCT remains dynamically linked.
+
+Ten initial checks fail against the stub. The implemented boundary passes twelve focused
+checks, including eight Rust tests per backend in each profile, retained readers, null
+boundaries, precision/input errors, concurrent independent contexts and poisoned-lock recovery.
+The final ASan/UBSan boundary suite passes **12/12 in 10.45 s**, including Rust callers.
+Nightfall's C++ adapter/kernel code is instrumented; Rust and the installed OCCT library
+are not. This is not a claim of sanitizer coverage for those uninstrumented implementations.
+Clean unavailable and OCCT builds test bootstrap dependencies, explicit runtime paths and
+a path containing spaces. Missing adapter configuration fails explicitly instead of using
+cached artifacts. The full OCCT/native gate passes **841/841 in 230.86 s**, with 25 math
+tests in each Rust profile, native Rust checks, schema and hygiene. PR #196's remote CI
+also passes all five jobs without a retry; #191's earlier native failures remain recorded.
+No Rust modeling-operation parity, production client cutover, native timeout fix or MVP
+is claimed; exact extrusion and shape ownership follow separately. #185 remains open.
+
 ## Rust rational curves (#192)
 
 The std-only Rust math crate now owns immutable 2D/3D NURBS curves, checked controls and

@@ -34,6 +34,7 @@ if(NF_SANITIZE)
 endif()
 
 if(NF_BUILD_TESTS)
+  enable_language(C)
   enable_testing()
   include(FetchContent)
   # Pinned by commit (v3.16.1). See third_party/README.md.
