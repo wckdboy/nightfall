@@ -26,3 +26,7 @@ for profile in ("dev", "release"):
     subprocess.run([cargo, "test", "-p", "nightfall-native", "--target", rust_target,
                     "--profile", profile, "--locked", "--offline"],
                    cwd=root, env=env, check=True)
+if expected == "1":
+    subprocess.run([cargo, "run", "-p", "nightfall-native", "--example", "nf-rust-extrude",
+                    "--target", rust_target, "--release", "--locked", "--offline"],
+                   cwd=root, env=env, check=True)

@@ -1,81 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Point {
-    x: f64,
-    y: f64,
-}
-#[repr(C)]
-struct Curve {
-    degree: u32,
-    knots: *const f64,
-    knot_count: usize,
-    points: *const Point,
-    point_count: usize,
-    weights: *const f64,
-    weight_count: usize,
-}
-#[repr(C)]
-struct Loop {
-    curves: *const Curve,
-    count: usize,
-}
-#[repr(C)]
-struct Region {
-    outer: Loop,
-    holes: *const Loop,
-    hole_count: usize,
-}
-#[repr(C)]
-struct Extrusion {
-    origin: [f64; 3],
-    x_axis: [f64; 3],
-    normal: [f64; 3],
-    displacement: [f64; 3],
-    regions: *const Region,
-    region_count: usize,
-}
-#[repr(C)]
-#[derive(Default)]
-struct Info {
-    volume: f64,
-    area: f64,
-    centroid: [f64; 3],
-    minimum: [f64; 3],
-    maximum: [f64; 3],
-    solids: u64,
-    faces: u64,
-    edges: u64,
-    estimated_bytes: u64,
-    generated_count: u64,
-    history_count: u64,
-}
-#[repr(C)]
-#[derive(Default)]
-struct Generated {
-    role: *const u8,
-    role_bytes: usize,
-    entity: *const c_void,
-    region: u64,
-    r#loop: u64,
-    curve: u64,
-    section: u64,
-    has_from: u32,
-    kind: u32,
-}
-unsafe extern "C" {
-    fn nf_native_extrude(
-        context: *mut c_void,
-        input: *const Extrusion,
-        out: *mut *mut c_void,
-    ) -> u32;
-    fn nf_native_result_query(result: *const c_void, out: *mut Info) -> u32;
-    fn nf_native_result_generated(result: *const c_void, index: u64, out: *mut Generated) -> u32;
-    fn nf_native_entities_same(a: *const c_void, b: *const c_void, out: *mut u32) -> u32;
-    fn nf_native_result_release(result: *mut c_void);
-}
+use crate::extrusion::{Frame, Measures};
+use crate::extrusion_ffi::*;
 struct Owned(*mut c_void);
 impl Drop for Owned {
     fn drop(&mut self) {
@@ -119,9 +46,7 @@ fn make_box(context: &Context) -> Owned {
         hole_count: 0,
     };
     let input = Extrusion {
-        origin: [0.0; 3],
-        x_axis: [1.0, 0.0, 0.0],
-        normal: [0.0, 0.0, 1.0],
+        frame: Frame::default(),
         displacement: [0.0, 0.0, 30.0],
         regions: &region,
         region_count: 1,
@@ -150,7 +75,10 @@ fn extrusion_record_layout_and_null_failures_match_c() {
     assert_eq!(std::mem::size_of::<Info>(), 136);
     assert_eq!(std::mem::size_of::<Generated>(), 64);
     assert_eq!(std::mem::offset_of!(Curve, knots), 8);
-    assert_eq!(std::mem::offset_of!(Info, solids), 88);
+    assert_eq!(
+        std::mem::offset_of!(Info, measures) + std::mem::offset_of!(Measures, solids),
+        88
+    );
     assert_eq!(std::mem::offset_of!(Generated, has_from), 56);
     let mut result = std::ptr::null_mut();
     // SAFETY: null inputs are documented failures; output is a writable slot.
@@ -162,7 +90,10 @@ fn extrusion_record_layout_and_null_failures_match_c() {
     );
     assert!(result.is_null());
     let mut output = Info {
-        volume: 42.0,
+        measures: Measures {
+            volume: 42.0,
+            ..Measures::default()
+        },
         ..Info::default()
     };
     // SAFETY: null result is a documented error and output is live/aligned.
@@ -170,7 +101,7 @@ fn extrusion_record_layout_and_null_failures_match_c() {
         with_native(|| unsafe { nf_native_result_query(std::ptr::null(), &mut output) }),
         1
     );
-    assert_eq!(output.volume, 0.0);
+    assert_eq!(output.measures.volume, 0.0);
 }
 #[test]
 fn rust_abi_builds_exact_solid_after_profile_and_context_teardown() {
@@ -180,12 +111,19 @@ fn rust_abi_builds_exact_solid_after_profile_and_context_teardown() {
     let result = make_box(&context);
     drop(context);
     let output = info(&result);
-    assert!((output.volume - 6000.0).abs() <= 1e-8);
-    assert!((output.area - 2200.0).abs() <= 1e-8);
-    for (actual, expected) in output.centroid.into_iter().zip([5.0, 10.0, 15.0]) {
+    assert!((output.measures.volume - 6000.0).abs() <= 1e-8);
+    assert!((output.measures.area - 2200.0).abs() <= 1e-8);
+    for (actual, expected) in output.measures.centroid.into_iter().zip([5.0, 10.0, 15.0]) {
         assert!((actual - expected).abs() <= 1e-10);
     }
-    assert_eq!((output.solids, output.faces, output.edges), (1, 6, 12));
+    assert_eq!(
+        (
+            output.measures.solids,
+            output.measures.faces,
+            output.measures.edges
+        ),
+        (1, 6, 12)
+    );
     assert_eq!((output.generated_count, output.history_count), (6, 0));
     assert!(output.estimated_bytes > 0);
 }

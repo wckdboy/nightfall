@@ -27,6 +27,26 @@ implementation can begin. No Rust production cutover or completed port is claime
 The documentation revision passes the full native gate **827/827 in 211.91 s**; existing
 Rust 1.99.1 tooling is verified and the missing formatter/Clippy components are installed.
 
+## Safe Rust exact extrusion and retained snapshots (#202)
+
+`nightfall-native` now exposes typed frames/regions of checked Rust NURBS, exact extrusion,
+immutable solids, owned measures, generated roles/source lineage and retained entities.
+All raw pointers and native release calls stay private. `Rc` retains the result/context;
+final drop runs outside existing guard scopes to avoid recursive locking. Foreign contexts
+fail before native entity access; unsupported nonempty native history is rejected explicitly.
+Geometry construction/full validation remain the transitional C++/OCCT implementation.
+
+Five tests first fail against the API stub; the implemented API passes all **17 native Rust
+tests per backend in both profiles**, including positive compile-time neither-Send-nor-Sync
+checks, source preservation, retained readers, invalid-input cleanup and exact curved holes.
+The real headless Rust example builds a two-hole plate, drops inputs/context/result and
+retains shape/entity readers: **8795.752280681 mm³**, **3721.061929830 mm²**, fourteen faces,
+thirty-six edges. Analytic volume/area and topology assertions run in the CTest gate.
+The adapter sanitizer suite passes **20/20 in 15.05 s**; Rust and installed OCCT remain
+uninstrumented. The full native gate passes **849/849 in 208.79 s**, including schema and
+hygiene. Typed Rust kernel policy and IR/evaluator/client cutover remain pending under
+#199/RFC 0008; #185/#195 stay open.
+
 ## Exact extrusion native boundary (#200)
 
 The private adapter now accepts exact degree-1..9 NURBS regions with outer/hole loops,

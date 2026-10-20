@@ -8,3 +8,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 links = "nf_native_adapter"
+
+[dependencies]
+nightfall-math = { path = "../../math/rust" }
+
+[[example]]
+name = "nf-rust-extrude"
+path = "tests/support/extrude_example.rs"

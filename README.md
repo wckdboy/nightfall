@@ -44,9 +44,12 @@ and translation-conditioned derivatives. Run `cargo doc --locked --offline --no-
 and a headless conic example. The production client still uses the
 existing C++ engine while parity gates are built. `tools/check.sh` checks both languages;
 Rust dependency resolution is locked/offline and artifacts go to `build/rust/`.
-The std-only `nightfall-native` crate adds checked, retained OCCT context ownership,
-serialized native calls and owned backend metadata. It exposes no modeling operations yet.
-Contexts are neither `Send` nor `Sync`; all native allocations use their matching release.
+The std-only `nightfall-native` crate adds checked OCCT contexts, exact typed extrusion,
+retained immutable solids/entities, owned measures and generated face/source lineage.
+Contexts and native snapshots are neither `Send` nor `Sync`; native calls and matching
+releases are serialized. The headless `nf-rust-extrude` example builds a plate with two
+exact rational circular holes and checks it after input/context teardown. The configured
+native CTest checks run this example and print its exact measurements in verbose mode.
 CMake builds the private dynamic adapter before CTest runs Rust Debug/Release and Clippy
 against both OCCT-enabled and unavailable configurations. Math-only Cargo commands remain
 independent; native Cargo consumers must set an absolute `NF_NATIVE_LIB_DIR` and a runtime rpath.
@@ -57,6 +60,10 @@ cmake --preset occt
 cmake --build --preset occt --target nf_native_adapter_tests nf_native_adapter_c_smoke nf_native_unavailable_tests nf_native_unavailable_c_smoke
 ctest --preset occt -R '^native-abi\.'
 ```
+
+The safe API is documented in `nightfall_native::extrusion`. Mathematical curves come
+from `nightfall-math`; exact solid validation/construction remain delegated to the native
+OCCT adapter. Rust kernel policy, IR/evaluation and production client cutover are pending.
 
 Build the native visual preview with the production, dynamically linked OCCT kernel:
 
