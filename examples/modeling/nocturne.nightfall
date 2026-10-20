@@ -1,0 +1,2110 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Nocturne \u2014 loft-and-sweep manipulator",
+    "doc": "Exact-solid posed manipulator: turned pedestal, rounded cooling fins, mirrored joint hardware, elliptic lofts, swept spline harness and hooked gripper. Geometric showcase only; no assembly joints, collision, actuator, strength or physics validation."
+  },
+  "params": [
+    {
+      "name": "upper_length",
+      "value": "250 mm",
+      "min": "220 mm",
+      "max": "280 mm"
+    },
+    {
+      "name": "forearm_length",
+      "value": "210 mm",
+      "min": "190 mm",
+      "max": "240 mm"
+    },
+    {
+      "name": "shoulder_height",
+      "value": "110 mm",
+      "min": "105 mm",
+      "max": "120 mm"
+    },
+    {
+      "name": "jaw_gap",
+      "value": "42 mm",
+      "min": "28 mm",
+      "max": "48 mm"
+    },
+    {
+      "name": "link_waist",
+      "value": 1,
+      "min": 0.9,
+      "max": 1.1
+    },
+    {
+      "name": "fin_count",
+      "value": 32,
+      "min": 16,
+      "max": 48
+    },
+    {
+      "name": "cable_radius",
+      "value": "3.5 mm",
+      "min": "2 mm",
+      "max": "4 mm"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "pedestal_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": [
+            0,
+            -1,
+            0
+          ],
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "turned_profile",
+            "type": "polygon",
+            "points": [
+              [
+                14,
+                0
+              ],
+              [
+                80,
+                0
+              ],
+              [
+                80,
+                8
+              ],
+              [
+                68,
+                12
+              ],
+              [
+                54,
+                12
+              ],
+              [
+                48,
+                25
+              ],
+              [
+                36,
+                75
+              ],
+              [
+                36,
+                90
+              ],
+              [
+                14,
+                90
+              ]
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "turned_pedestal",
+      "type": "revolve",
+      "inputs": {
+        "profile": {
+          "sketch": "pedestal_section"
+        },
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        },
+        "angle": "360 deg",
+        "result": {
+          "new": "pedestal",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "mount_bolts",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            -1
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "mount_0",
+            "type": "circle",
+            "center": [
+              -48,
+              -36
+            ],
+            "radius": 5
+          },
+          {
+            "id": "mount_1",
+            "type": "circle",
+            "center": [
+              48,
+              -36
+            ],
+            "radius": 5
+          },
+          {
+            "id": "mount_2",
+            "type": "circle",
+            "center": [
+              48,
+              36
+            ],
+            "radius": 5
+          },
+          {
+            "id": "mount_3",
+            "type": "circle",
+            "center": [
+              -48,
+              36
+            ],
+            "radius": 5
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "drilled_pedestal",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "mount_bolts"
+        },
+        "distance": 14,
+        "result": {
+          "cut": "pedestal"
+        }
+      }
+    },
+    {
+      "id": "cooling_fin_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            14
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "fin",
+            "type": "rect",
+            "corner": [
+              48,
+              -1
+            ],
+            "size": [
+              16,
+              2
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "cooling_fin",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "cooling_fin_section"
+        },
+        "distance": 14,
+        "result": {
+          "new": "cooling_fins",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "cooling_fin_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "cooling_fin",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "cooling_fin",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "cooling_fin",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 0.6
+      }
+    },
+    {
+      "id": "cooling_fin_array",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "cooling_fins"
+        ],
+        "count": "fin_count",
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "direction": "z"
+        }
+      }
+    },
+    {
+      "id": "shoulder_housing_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            -55,
+            "shoulder_height"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 42
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 15
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "shoulder_housing",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "shoulder_housing_section"
+        },
+        "distance": 110,
+        "result": {
+          "new": "shoulder_housing",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "shoulder_covers_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            -63,
+            "shoulder_height"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 46
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 15
+          },
+          {
+            "id": "bolt_0",
+            "type": "circle",
+            "center": [
+              38.0,
+              0.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_1",
+            "type": "circle",
+            "center": [
+              26.870057685088806,
+              26.870057685088803
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_2",
+            "type": "circle",
+            "center": [
+              2.326828918379971e-15,
+              38.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_3",
+            "type": "circle",
+            "center": [
+              -26.870057685088803,
+              26.870057685088806
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_4",
+            "type": "circle",
+            "center": [
+              -38.0,
+              4.653657836759942e-15
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_5",
+            "type": "circle",
+            "center": [
+              -26.870057685088813,
+              -26.870057685088803
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_6",
+            "type": "circle",
+            "center": [
+              -6.980486755139913e-15,
+              -38.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_7",
+            "type": "circle",
+            "center": [
+              26.8700576850888,
+              -26.870057685088813
+            ],
+            "radius": 2.75
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "shoulder_covers",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "shoulder_covers_section"
+        },
+        "distance": 8,
+        "result": {
+          "new": "shoulder_covers",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "shoulder_cover_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "shoulder_covers"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "shoulder_fasteners_seed",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            -66,
+            "shoulder_height"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "head",
+            "type": "circle",
+            "center": [
+              38,
+              0
+            ],
+            "radius": 4
+          },
+          {
+            "id": "socket",
+            "type": "circle",
+            "center": [
+              38,
+              0
+            ],
+            "radius": 1.8
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "shoulder_fasteners_head",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "shoulder_fasteners_seed"
+        },
+        "distance": 3,
+        "result": {
+          "new": "shoulder_fasteners",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "shoulder_fasteners_array",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "shoulder_fasteners"
+        ],
+        "count": 8,
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            0,
+            0,
+            "shoulder_height"
+          ],
+          "direction": "y"
+        }
+      }
+    },
+    {
+      "id": "shoulder_fasteners_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "shoulder_fasteners"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "elbow_housing_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6",
+            -48,
+            "shoulder_height + upper_length * 0.8"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 34
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 11
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "elbow_housing",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "elbow_housing_section"
+        },
+        "distance": 96,
+        "result": {
+          "new": "elbow_housing",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "elbow_covers_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6",
+            -56,
+            "shoulder_height + upper_length * 0.8"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 38
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 11
+          },
+          {
+            "id": "bolt_0",
+            "type": "circle",
+            "center": [
+              30.0,
+              0.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_1",
+            "type": "circle",
+            "center": [
+              21.213203435596427,
+              21.213203435596423
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_2",
+            "type": "circle",
+            "center": [
+              1.83697019872103e-15,
+              30.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_3",
+            "type": "circle",
+            "center": [
+              -21.213203435596423,
+              21.213203435596427
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_4",
+            "type": "circle",
+            "center": [
+              -30.0,
+              3.67394039744206e-15
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_5",
+            "type": "circle",
+            "center": [
+              -21.21320343559643,
+              -21.213203435596423
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_6",
+            "type": "circle",
+            "center": [
+              -5.510910596163089e-15,
+              -30.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_7",
+            "type": "circle",
+            "center": [
+              21.21320343559642,
+              -21.21320343559643
+            ],
+            "radius": 2.75
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "elbow_covers",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "elbow_covers_section"
+        },
+        "distance": 8,
+        "result": {
+          "new": "elbow_covers",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "elbow_cover_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "elbow_covers"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "elbow_fasteners_seed",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6",
+            -59,
+            "shoulder_height + upper_length * 0.8"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "head",
+            "type": "circle",
+            "center": [
+              30,
+              0
+            ],
+            "radius": 4
+          },
+          {
+            "id": "socket",
+            "type": "circle",
+            "center": [
+              30,
+              0
+            ],
+            "radius": 1.8
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "elbow_fasteners_head",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "elbow_fasteners_seed"
+        },
+        "distance": 3,
+        "result": {
+          "new": "elbow_fasteners",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "elbow_fasteners_array",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "elbow_fasteners"
+        ],
+        "count": 8,
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            "upper_length * 0.6",
+            0,
+            "shoulder_height + upper_length * 0.8"
+          ],
+          "direction": "y"
+        }
+      }
+    },
+    {
+      "id": "elbow_fasteners_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "elbow_fasteners"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "wrist_housing_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            -35,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 26
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 10
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "wrist_housing",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "wrist_housing_section"
+        },
+        "distance": 70,
+        "result": {
+          "new": "wrist_housing",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "wrist_covers_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            -43,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 30
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 10
+          },
+          {
+            "id": "bolt_0",
+            "type": "circle",
+            "center": [
+              23.0,
+              0.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_1",
+            "type": "circle",
+            "center": [
+              16.263455967290593,
+              16.263455967290593
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_2",
+            "type": "circle",
+            "center": [
+              1.4083438190194562e-15,
+              23.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_3",
+            "type": "circle",
+            "center": [
+              -16.263455967290593,
+              16.263455967290593
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_4",
+            "type": "circle",
+            "center": [
+              -23.0,
+              2.8166876380389124e-15
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_5",
+            "type": "circle",
+            "center": [
+              -16.263455967290597,
+              -16.263455967290593
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_6",
+            "type": "circle",
+            "center": [
+              -4.225031457058368e-15,
+              -23.0
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_7",
+            "type": "circle",
+            "center": [
+              16.26345596729059,
+              -16.263455967290597
+            ],
+            "radius": 2.75
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "wrist_covers",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "wrist_covers_section"
+        },
+        "distance": 8,
+        "result": {
+          "new": "wrist_covers",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "wrist_cover_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "wrist_covers"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "wrist_fasteners_seed",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            -46,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "head",
+            "type": "circle",
+            "center": [
+              23,
+              0
+            ],
+            "radius": 4
+          },
+          {
+            "id": "socket",
+            "type": "circle",
+            "center": [
+              23,
+              0
+            ],
+            "radius": 1.8
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "wrist_fasteners_head",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "wrist_fasteners_seed"
+        },
+        "distance": 3,
+        "result": {
+          "new": "wrist_fasteners",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "wrist_fasteners_array",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "wrist_fasteners"
+        ],
+        "count": 8,
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6"
+          ],
+          "direction": "y"
+        }
+      }
+    },
+    {
+      "id": "wrist_fasteners_back",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "wrist_fasteners"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "upper_root",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "(30 mm) * 0.6",
+            -34,
+            "shoulder_height + (30 mm) * 0.8"
+          ],
+          "normal": [
+            0.6,
+            0,
+            0.8
+          ],
+          "x_direction": [
+            0.8,
+            0,
+            -0.6
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              22,
+              12
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "upper_waist",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "(upper_length / 2) * 0.6",
+            -34,
+            "shoulder_height + (upper_length / 2) * 0.8"
+          ],
+          "normal": [
+            0.6,
+            0,
+            0.8
+          ],
+          "x_direction": [
+            0.8,
+            0,
+            -0.6
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              "16 mm * link_waist",
+              "9 mm * link_waist"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "upper_tip",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "(upper_length - 30 mm) * 0.6",
+            -34,
+            "shoulder_height + (upper_length - 30 mm) * 0.8"
+          ],
+          "normal": [
+            0.6,
+            0,
+            0.8
+          ],
+          "x_direction": [
+            0.8,
+            0,
+            -0.6
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              19,
+              11
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "upper_elliptic_loft",
+      "type": "loft",
+      "inputs": {
+        "profiles": [
+          {
+            "sketch": "upper_root"
+          },
+          {
+            "sketch": "upper_waist"
+          },
+          {
+            "sketch": "upper_tip"
+          }
+        ],
+        "result": {
+          "new": "upper_links",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "upper_link_opposite",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "upper_links"
+        ],
+        "plane": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "normal": "y",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "forearm_root",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + (30 mm) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - (30 mm) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              24,
+              27
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_waist",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + ((forearm_length + 10 mm) / 2) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - ((forearm_length + 10 mm) / 2) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              "18 mm * link_waist",
+              "20 mm * link_waist"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_tip",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + (forearm_length - 20 mm) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - (forearm_length - 20 mm) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              16,
+              17
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_elliptic_loft",
+      "type": "loft",
+      "inputs": {
+        "profiles": [
+          {
+            "sketch": "forearm_root"
+          },
+          {
+            "sketch": "forearm_waist"
+          },
+          {
+            "sketch": "forearm_tip"
+          }
+        ],
+        "result": {
+          "new": "forearm",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "harness_route",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            -64,
+            "shoulder_height + 20 mm"
+          ],
+          "normal": "y",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "cable_path",
+            "type": "spline",
+            "degree": 3,
+            "knots": [
+              0,
+              0,
+              0,
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            "control_points": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                -170
+              ],
+              [
+                210,
+                -255
+              ],
+              [
+                "upper_length * 0.6 + forearm_length * 0.8 - 8 mm",
+                "-upper_length * 0.8 + forearm_length * 0.6 - 16 mm"
+              ]
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "harness_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            -64,
+            "shoulder_height + 20 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "jacket",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": "cable_radius"
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "harness_sweep",
+      "type": "sweep",
+      "inputs": {
+        "profile": {
+          "sketch": "harness_section"
+        },
+        "path": {
+          "sketch": "harness_route",
+          "entity": "cable_path"
+        },
+        "result": {
+          "new": "cable_harness",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "harness_pair",
+      "type": "pattern_linear",
+      "inputs": {
+        "bodies": [
+          "cable_harness"
+        ],
+        "count": 2,
+        "direction": "y",
+        "spacing": -10
+      }
+    },
+    {
+      "id": "harness_base_anchor_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            0,
+            0,
+            "shoulder_height + 14 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "block",
+            "type": "rect",
+            "corner": [
+              -9,
+              -80
+            ],
+            "size": [
+              18,
+              30
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "harness_base_anchor_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "harness_base_anchor_section"
+        },
+        "distance": 16,
+        "result": {
+          "new": "harness_base_anchor",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "harness_base_anchor_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "harness_base_anchor_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "harness_base_anchor_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "harness_base_anchor_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 3
+      }
+    },
+    {
+      "id": "harness_wrist_anchor_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 + 6 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "block",
+            "type": "rect",
+            "corner": [
+              -17,
+              -80
+            ],
+            "size": [
+              18,
+              46
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "harness_wrist_anchor_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "harness_wrist_anchor_section"
+        },
+        "distance": 36,
+        "result": {
+          "new": "harness_wrist_anchor",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "harness_wrist_anchor_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "harness_wrist_anchor_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "harness_wrist_anchor_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "harness_wrist_anchor_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 3
+      }
+    },
+    {
+      "id": "tool_neck_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 38 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 16
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 9
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "tool_neck",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "tool_neck_section"
+        },
+        "distance": 18,
+        "result": {
+          "new": "tool_neck",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "tool_flange_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 44 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "outer",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 28
+          },
+          {
+            "id": "bore",
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 9
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "tool_flange",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "tool_flange_section"
+        },
+        "distance": 6,
+        "result": {
+          "new": "tool_flange",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "palm_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 60 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "palm",
+            "type": "rect",
+            "corner": [
+              -40,
+              -22
+            ],
+            "size": [
+              80,
+              44
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "palm_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "palm_section"
+        },
+        "distance": 16,
+        "result": {
+          "new": "gripper_palm",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "palm_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "palm_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "palm_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "palm_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 6
+      }
+    },
+    {
+      "id": "palm_drill_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 61 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "bolt_0",
+            "type": "circle",
+            "center": [
+              -28,
+              -14
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_1",
+            "type": "circle",
+            "center": [
+              28,
+              -14
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_2",
+            "type": "circle",
+            "center": [
+              28,
+              14
+            ],
+            "radius": 2.75
+          },
+          {
+            "id": "bolt_3",
+            "type": "circle",
+            "center": [
+              -28,
+              14
+            ],
+            "radius": 2.75
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "palm_mount_holes",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "palm_drill_section"
+        },
+        "distance": 18,
+        "result": {
+          "cut": "gripper_palm"
+        }
+      }
+    },
+    {
+      "id": "jaw_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 120 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "jaw",
+            "type": "rect",
+            "corner": [
+              "-jaw_gap / 2 - 12 mm",
+              -14
+            ],
+            "size": [
+              12,
+              28
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "jaw_blank",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "jaw_section"
+        },
+        "distance": 60,
+        "result": {
+          "new": "gripper_jaws",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "jaw_rounds",
+      "type": "fillet",
+      "inputs": {
+        "edges": {
+          "edges_of": {
+            "created_by": "jaw_blank",
+            "role": "side"
+          },
+          "except": {
+            "edges_of": {
+              "any": [
+                {
+                  "created_by": "jaw_blank",
+                  "role": "cap_start"
+                },
+                {
+                  "created_by": "jaw_blank",
+                  "role": "cap_end"
+                }
+              ]
+            }
+          }
+        },
+        "radius": 3
+      }
+    },
+    {
+      "id": "jaw_pad_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 132 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "pad",
+            "type": "rect",
+            "corner": [
+              "-jaw_gap / 2 - 12 mm",
+              -14
+            ],
+            "size": [
+              18,
+              28
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "jaw_contact_pad",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "jaw_pad_section"
+        },
+        "distance": 16,
+        "result": {
+          "join": "gripper_jaws"
+        }
+      }
+    },
+    {
+      "id": "opposed_jaw",
+      "type": "mirror",
+      "inputs": {
+        "bodies": [
+          "gripper_jaws"
+        ],
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            0
+          ],
+          "normal": "x",
+          "x_direction": "z"
+        }
+      }
+    },
+    {
+      "id": "palm_fastener_section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + forearm_length * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - forearm_length * 0.6 - 44 mm"
+          ],
+          "normal": "z",
+          "x_direction": "x"
+        },
+        "entities": [
+          {
+            "id": "head_0",
+            "type": "circle",
+            "center": [
+              -28,
+              -14
+            ],
+            "radius": 4
+          },
+          {
+            "id": "head_1",
+            "type": "circle",
+            "center": [
+              28,
+              -14
+            ],
+            "radius": 4
+          },
+          {
+            "id": "head_2",
+            "type": "circle",
+            "center": [
+              28,
+              14
+            ],
+            "radius": 4
+          },
+          {
+            "id": "head_3",
+            "type": "circle",
+            "center": [
+              -28,
+              14
+            ],
+            "radius": 4
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "palm_fasteners",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "palm_fastener_section"
+        },
+        "distance": 3,
+        "result": {
+          "new": "palm_fasteners",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}

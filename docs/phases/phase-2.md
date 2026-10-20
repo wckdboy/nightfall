@@ -12,6 +12,45 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Nocturne mixed-tool geometry showcase (#183)
+
+The user-requested final design/build test combines existing operations in
+`examples/modeling/nocturne.nightfall`: 71 features, 21 body families, 106 closed solids
+and 201808 display triangles. Turned/drilled pedestal, rounded radial fins, mirrored joint
+hardware, oblique elliptic lofts, a planar cubic-spline harness and hooked gripper share
+one editable v1 document and the existing headless/native engine. No production engine,
+client, dependency, public API or schema change is introduced.
+
+All component volumes are independently checked from primitives/frustums, integrated
+quadratic ellipse sections and positive cubic-Bezier length quadrature, at 1e-5 mm³
+absolute tolerance (1e-3 for the swept harness). Parameter/cache/retained-reader checks,
+complete indexed-mesh face coverage, <1% mesh-volume error and exact STEP reload preserve
+all 106 solids. The native test builds and renders, batches waist/jaw edits, verifies a
+changed image, then restores original component measures and byte-identical clean source.
+Default summed component V=2408145.026752167 mm³, A=390313.091946063 mm². The real native
+render is retained at `docs/images/nocturne.png` and has been visually inspected.
+
+The fixed shoulder/elbow/wrist centers are (0,0,110)/(150,0,310)/(318,0,184) mm. This is a
+posed geometric concept toward #169, with no assembly joints, kinematics, collisions,
+actuator/load or physics validation. Existing preview 0.0.10 is preserved; the new source
+and exact STEP are separate artifacts usable with that client.
+
+The final local gate passes **824/824 in 215.53 s**, with schema/hygiene green. The quiet
+native cold build takes 3272.356 ms; its complete build/edit/Undo/render test passes with
+the original five/seven-second policy. The image is the real XPC/Metal output.
+The focused ASan/UBSan model regression passes 6119 assertions with halt-on-error and no
+sanitizer diagnostics, including parameter/cache/retained-reader, meshing and STEP paths.
+
+One final quiet arm64 Release sample measures kernel cold/warm 1941.403/5.257 ms, meshing
+1198.574 ms, and C-bridge cold/warm 3158.810/1234.817 ms. All 71 feature entries hit the
+warm cache (39406608 estimated bytes, not RSS). Mesh volume/area differ from exact summed
+component measures by 0.16390%/0.06380%. These are single local observations, not capacity
+or frame-rate guarantees. The actual preserved 0.0.10 app opens the finished model, changes
+waist/jaw together (202032 triangles), then restores the clean 201808-triangle source with
+Undo, without errors or recovery notices. It remains open, fitted for visual inspection.
+Local deliverables are `out/Nightfall-Nocturne-showcase.zip`, the editable JSON/part source,
+`out/Nightfall-Nocturne.step` and a validation receipt with source/geometry/file hashes.
+
 ## Asterion capability and limit evidence (#161)
 
 The new `examples/modeling/asterion.nightfall` builds through the real evaluator/CLI and
