@@ -231,6 +231,11 @@ Lofts support 2..32 ordered closed profiles on parallel planes, with smooth inte
 through intermediate sections and provenance from every section. Holes within loft sections,
 guide rails and nonparallel planes are unsupported. Sweeps and interactive spline authoring
 remain in progress; exact NURBS spline profiles already work through the shared IR/kernel.
+Loft wire compatibility automatically aligns and can split/reparameterize section curves.
+Authored curve parameters do not constrain point correspondence or twist between sections;
+uniform section parameters do not imply linear world-space height. The private
+`evaluator.loft-rust-reference` check exports actual patches and independently integrates
+their control nets with Rust-owned NURBS and converged quadrature, retaining this distinction.
 
 Viewport consumers can call `IKernel::tessellate(shape, {0.1, 0.2})` for an indexed display
 mesh (absolute mm/radian deflections). Positions are world-space doubles; normals point
