@@ -18,6 +18,7 @@
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
+#include <BRepMesh_Context.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
@@ -57,6 +58,7 @@
 #include <numbers>
 #include <sstream>
 
+#include "mesh_boundary.hpp"
 #include "nf/kernel/occt_geom.hpp"
 #include "nf/math/refine.hpp"
 #include "snapshot.hpp"
@@ -199,7 +201,7 @@ class OcctKernel final : public IKernel {
                 "face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
                 "fillet=copy-contour-vertex-boundaries-v1;"
-                "mesh=indexed-faces-copy-parallel-v2;"
+                "mesh=indexed-faces-copy-normal-boundary-v3;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v4;names=2;validation=parallel-compounds-v1;"
                 "bounds=single-shell-reuse-v1;"
@@ -293,7 +295,12 @@ class OcctKernel final : public IKernel {
       parameters.Angle = parameters.AngleInterior = options.angular_deflection;
       parameters.EnableControlSurfaceDeflectionAllSurfaces = true;
       parameters.InParallel = true;
-      BRepMesh_IncrementalMesh mesher(copy.Shape(), parameters);
+      Handle(BRepMesh_Context) context = new BRepMesh_Context;
+      context->SetEdgeDiscret(new detail::NormalControlledEdges(3 * options.max_triangles));
+      BRepMesh_IncrementalMesh mesher;
+      mesher.SetShape(copy.Shape());
+      mesher.ChangeParameters() = parameters;
+      mesher.Perform(context);
       if (!mesher.IsDone()) fail("solid tessellation failed");
       Mesh result;
       TopTools_IndexedMapOfShape originals, copied;

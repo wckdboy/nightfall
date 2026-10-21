@@ -21,6 +21,54 @@ and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assem
 studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
 and RFC 0010 (#247). This gate and its recorded failures are unchanged.
 
+## Shared-boundary normal control for loft meshes (#242)
+
+#225's corrected independent volume oracle exposes a real vane-mesh defect. The
+direct-kernel one-loft regression first fails with `mesh normals disagree with triangle
+winding`. Raw diagnostics find **13** nondegenerate inverted triangles among **20110**,
+despite positive UV orientation and agreement between stored normals and surface
+derivatives. OCCT's interior angular control explicitly skips frontier links; boundary
+curve-tangent control alone misses incident surface-normal variation near curved edges.
+
+The existing native adapter now refines the discrete shared edges against incident
+surface normals before face triangulation, using the caller's unchanged angular setting.
+All incident pcurves receive the same added edge samples, preserving boundary conformity.
+This is one meshing pass, with no fitted normals, triangle reversal/deletion workaround,
+geometry/tolerance changes or resource/deadline increases. The same three-million-vertex
+budget bounds the edge refinement; exhausted budget/parameter range returns an error.
+Nondegenerate SameParameter/SameRange edges with estimable normal samples enter this
+additional criterion. Other edge cases retain native processing and the unchanged final
+finite-data/complete-face/winding/budget checks. No global angular-error certificate is claimed.
+Transient kernel identity records `mesh=indexed-faces-copy-normal-boundary-v3`.
+
+The private prototype produces **0** inverted triangles among **19962** on the same loft.
+The strengthened public-kernel test passes **4814194 assertions**: default/waist-1.05,
+coarse/finer meshes, arbitrary rotation and reflection, every face/range/index and triangle,
+exact-position boundary welding with opposite edge incidences and Euler characteristic 2,
+monotonic V/A convergence, current face owners and unchanged source B-rep bytes. It also
+checks 360 sampled normal comparisons against finite differences (`1e-5` relative parameter
+steps, projection distance <=1e-6 mm, dot agreement >1-1e-6). Those are sampled comparisons,
+not global uncertainty bounds. The earlier broader mesh corpus passes 622210 assertions
+across ten cases before the strengthened test replaces its smaller initial regression.
+
+Diagnostics and source are retained under `out/kernel-evidence-gh242/`; logs:
+`/tmp/nightfall-242-{red,diagnostic,boundary-diagnostic,focused,quality}.log`.
+Final focused Release and native ASan/UBSan checks both pass **5201892 assertions in ten
+cases**, with identical observed mesh metrics and no sanitizer diagnostics (vendor OCCT
+and Rust remain uninstrumented). At default waist, coarse/fine meshes contain
+**19962 / 77528 triangles**; signed V errors are **-263.515733 / -123.395499 mm³** and
+A errors **-5.684691 / -2.009527 mm²** against exact-solid measures. At waist 1.05 the
+counts are **19646 / 75972**, with V errors **-283.127709 / -129.612148 mm³** and A errors
+**-5.881367 / -2.033057 mm²**. Default display settings are 0.1 mm / 0.2 rad; the finer
+comparison uses 0.05 mm / 0.1 rad. Both remain within the fixed 1% display-mesh comparison
+budget; these measured differences do not bound the exact-solid uncertainty.
+
+The full local gate passes **895/895 in 248.66 s**, plus Rust Debug/Release,
+Clippy/format, schema/hygiene, native XPC/Metal/recovery and concurrency/TSAN checks.
+Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. Remote CI/review and
+#225's full acceptance rerun remain pending. Exact-solid V/A integration and the
+independent Rust surface oracle are unchanged by this tessellation correction.
+
 ## Circular-pattern integration conditioning (#239)
 
 Fine-grained private `IKernel` tracing attributes **52438.947 ms** of an unchanged
