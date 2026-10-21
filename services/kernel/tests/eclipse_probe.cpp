@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Private headless stress test/exporter. This does not bypass or change XPC deadlines.
 #include <BRepGProp.hxx>
+#include <BRepTools.hxx>
 #include <GProp_GProps.hxx>
 #include <STEPControl_Reader.hxx>
 #include <algorithm>
@@ -104,7 +105,7 @@ std::pair<double, double> foundation() {
       8 * (std::sqrt(inner * inner - half * half) - std::sqrt(core * core - half * half));
   return {area * height, 2 * area + perimeter * height};
 }
-std::map<std::string, double> volumes(double waist) {
+std::map<std::string, double> volumes(double vane_seed_volume) {
   auto ring = [](double r, double bore, double h, int holes = 0, int copies = 1) {
     return copies * pi * (r * r - bore * bore - holes * 2.75 * 2.75) * h;
   };
@@ -148,7 +149,7 @@ std::map<std::string, double> volumes(double waist) {
                  {"cell_lower_flange", pi * (150 * 150 - 20 * 20 - 24 * 3.2 * 3.2) * 8},
                  {"cell_upper_flange", pi * (130 * 130 - 45 * 45 - 24 * 2.5 * 2.5) * 8},
                  {"cell_rotor", rotor - pi * 20 * 20 * 130},
-                 {"cell_vanes", 12 * twisted_vane(waist)},
+                 {"cell_vanes", 12 * vane_seed_volume},
                  {"cell_lower_bolts", 24 * pi * ((25 - 2.3 * 2.3) * 4 - (5 + 2.3) * .5 * .5)},
                  {"cell_upper_bolts", 24 * pi * ((16 - 1.8 * 1.8) * 3 - (4 + 1.8) * .4 * .4)},
                  {"cell_deck_bolts", 32 * pi * ((36 - 2.8 * 2.8) * 8 - (6 + 2.8))},
@@ -164,8 +165,9 @@ Evaluation build(Evaluator& evaluator, const std::string& source) {
   require(value->ok(), "feature evaluation failed");
   return std::move(*value);
 }
-kernel::Measures verify(const Evaluation& result, double waist, ir::json::Array* rows = nullptr) {
-  const auto expected = volumes(waist);
+kernel::Measures verify(const Evaluation& result, double vane_seed_volume,
+                        ir::json::Array* rows = nullptr) {
+  const auto expected = volumes(vane_seed_volume);
   kernel::Measures total{};
   std::size_t live = 0;
   for (const auto& [id, body] : result.bodies) {
@@ -185,7 +187,12 @@ kernel::Measures verify(const Evaluation& result, double waist, ir::json::Array*
           {"id", id},
           {"state_hash", body.hash->hex()},
           {"volume_mm3", m.volume},
-          {"analytic_volume_mm3", expected.at(id)},
+          {"independent_volume_mm3", expected.at(id)},
+          {"volume_reference", id == "cell_vanes"
+                                   ? "Rust actual-surface integration, 12 rigid copies"
+                               : id == "cable_harness" || id == "cell_utility_cables"
+                                   ? "Simpson cubic arc length, 4096/8192 refinement"
+                                   : "analytic"},
           {"volume_difference_mm3", m.volume - expected.at(id)},
           {"area_mm2", m.area},
           {"centroid_mm", ir::json::Array{m.centroid.x, m.centroid.y, m.centroid.z}},
@@ -206,42 +213,88 @@ kernel::Measures verify(const Evaluation& result, double waist, ir::json::Array*
 }  // namespace
 int main(int argc, char** argv) {
   ir::json::Object failure{{"status", "failed"}};
+  ir::json::Array completed;
+  std::string stage = "source_and_oracle_binding";
   try {
-    require(argc == 2 || argc == 3,
-            "usage: nf_eclipse_probe eclipse.nightfall [new-output-directory]");
+    require(argc == 3 || argc == 4,
+            "usage: nf_eclipse_probe eclipse.nightfall vane-oracle.json [new-output-directory]");
     const std::filesystem::path path = argv[1];
     const std::string source = read(path);
     failure.push_back({"fixture_sha256", ir::sha256(source).hex()});
     failure.push_back({"probe_binary_sha256", ir::sha256(read(argv[0])).hex()});
-    const std::filesystem::path folder = argc == 3 ? argv[2] : "";
+    const std::string oracle_source = read(argv[2]);
+    const auto oracle = ir::json::parse(oracle_source).value();
+    failure.push_back({"vane_oracle_sha256", ir::sha256(oracle_source).hex()});
+    const std::filesystem::path folder = argc == 4 ? argv[3] : "";
     if (!folder.empty()) require(!std::filesystem::exists(folder), "output already exists");
     auto backend = kernel::make_occt_kernel().value();
     failure.push_back({"kernel", std::string(backend->identity())});
+    const auto text_is = [&](std::string_view key, const std::string& expected) {
+      const auto* value = oracle.find(key);
+      require(value && value->if_string() && *value->if_string() == expected,
+              "vane oracle binding mismatch: " + std::string(key));
+    };
+    text_is("status", "passed");
+    text_is("fixture_sha256", ir::sha256(source).hex());
+    text_is("kernel", std::string(backend->identity()));
+    const auto seed_volume = [&](std::string_view key) {
+      const auto* value = oracle.find(key);
+      require(value && value->if_number() && *value->if_number() > 0,
+              "invalid vane oracle volume: " + std::string(key));
+      return *value->if_number();
+    };
+    const double default_vane = seed_volume("default_seed_volume_mm3"),
+                 edited_vane = seed_volume("edited_seed_volume_mm3");
+    completed.push_back("source_and_kernel_bound_independent_vane_oracle");
     Evaluator evaluator(*backend, {96, 64 * 1024 * 1024});
+    stage = "cold_build_and_independent_mass";
     auto start = Clock::now();
     const auto original = build(evaluator, source);
     const double cold_ms = milliseconds(start);
     std::fprintf(stderr, "Eclipse: cold evaluation %.3f ms\n", cold_ms);
     require(original.features.size() == 113, "authored feature coverage");
+    const auto brep_hash = [](const kernel::ShapePtr& shape) {
+      std::ostringstream bytes;
+      BRepTools::Write(std::dynamic_pointer_cast<const kernel::detail::Snapshot>(shape)->geometry,
+                       bytes);
+      return ir::sha256(bytes.str()).hex();
+    };
+    std::map<std::string, std::string> retained_hashes;
+    for (const auto& [id, body] : original.bodies)
+      if (body.shape) retained_hashes[id] = brep_hash(body.shape);
     ir::json::Array metrics;
-    const auto exact = verify(original, 1, &metrics);
+    const auto exact = verify(original, default_vane, &metrics);
+    completed.push_back("cold_independent_volumes_centroids_foundation_area_names");
     auto part = ir::read_document(source).value();
     for (auto& p : part.params)
       if (p.name == "rotor_waist") p.value = 1.05;
-    verify(build(evaluator, ir::write_document(part).value()), 1.05);
+    start = Clock::now();
+    stage = "edited_build_and_independent_mass";
+    verify(build(evaluator, ir::write_document(part).value()), edited_vane);
+    completed.push_back("waist_1.05_independent_volumes_centroids_names");
+    const double edit_ms = milliseconds(start);
+    start = Clock::now();
+    stage = "restore_and_state_hashes";
     const auto restored = build(evaluator, source);
-    verify(restored, 1);
+    verify(restored, default_vane);
+    const double restore_ms = milliseconds(start);
     for (const auto& [id, body] : original.bodies)
       require(restored.bodies.at(id).hash == body.hash, "restored state hash " + id);
+    completed.push_back("restore_independent_mass_and_state_hashes");
     evaluator.clear_cache();
-    verify(build(evaluator, source), 1);
-    verify(original, 1);
+    start = Clock::now();
+    stage = "cache_clear_and_retained_snapshot";
+    verify(build(evaluator, source), default_vane);
+    const double cleared_ms = milliseconds(start);
+    verify(original, default_vane);
+    completed.push_back("cache_clear_and_retained_mass_names");
     std::vector<kernel::ShapePtr> shapes;
     for (const auto& [id, body] : original.bodies) {
       (void)id;
       if (body.shape) shapes.push_back(body.shape);
     }
     start = Clock::now();
+    stage = "step_export_reload_and_independent_integrator";
     const auto step = backend->export_step(shapes).value();
     const double step_ms = milliseconds(start);
     std::istringstream stream(step);
@@ -260,11 +313,13 @@ int main(int argc, char** argv) {
     BRepGProp::SurfaceProperties(reader.OneShape(), reader_area, 1e-9, false);
     near(reader_volume.Mass(), exact.volume, .05, "separate STEP integration volume mm3");
     near(reader_area.Mass(), exact.area, .05, "separate STEP integration area mm2");
+    completed.push_back("step_closed_solids_topology_and_both_integrators");
     using Session = std::unique_ptr<nf_session, decltype(&nf_session_destroy)>;
     using Result = std::unique_ptr<nf_result, decltype(&nf_result_free)>;
     Session session(nf_session_create(), nf_session_destroy);
     require(session != nullptr, "null session");
     start = Clock::now();
+    stage = "bridge_and_complete_boundary_mesh";
     Result packet(nf_session_build(session.get(), source.data(), source.size(), nullptr),
                   nf_result_free);
     const double packet_ms = milliseconds(start);
@@ -324,16 +379,33 @@ int main(int argc, char** argv) {
       mesh_area += mesh_areas[i];
     }
     require(read(path) == source, "source file changed");
+    completed.push_back("complete_outward_mesh_mass_budget_and_owned_buffers");
+    stage = "source_and_retained_brep_immutability";
+    require(read(argv[2]) == oracle_source, "vane oracle file changed");
+    ir::json::Object retained_breps;
+    for (const auto& [id, hash] : retained_hashes) {
+      require(brep_hash(original.bodies.at(id).shape) == hash, "retained B-rep changed " + id);
+      retained_breps.push_back({id, hash});
+    }
+    completed.push_back("source_oracle_and_retained_brep_bytes_unchanged");
     const std::string receipt = ir::json::write(ir::json::Object{
         {"status", "passed"},
+        {"completed_checks", completed},
         {"body_metrics", std::move(metrics)},
         {"fixture_sha256", ir::sha256(source).hex()},
         {"probe_binary_sha256", ir::sha256(read(argv[0])).hex()},
         {"kernel", std::string(backend->identity())},
+        {"units", ir::json::Object{{"length", "mm"}, {"area", "mm^2"}, {"volume", "mm^3"}}},
+        {"vane_oracle", oracle},
+        {"vane_oracle_sha256", ir::sha256(oracle_source).hex()},
+        {"legacy_vane_basis_formula",
+         ir::json::Object{{"status", "invalid fixed-parameter correspondence assumption"},
+                          {"default_volume_mm3", 12 * twisted_vane(1)},
+                          {"edited_volume_mm3", 12 * twisted_vane(1.05)}}},
         {"step_sha256", ir::sha256(step).hex()},
         {"verification",
          ir::json::Object{
-             {"per_body_analytic_volume_mm3", .02},
+             {"per_body_independent_volume_mm3", .02},
              {"symmetric_centroid_mm", 1e-6},
              {"foundation_analytic_area_mm2", .01},
              {"step_aggregate_comparison_mm3_mm2", .05},
@@ -350,6 +422,7 @@ int main(int argc, char** argv) {
         {"step_reader_volume_mm3", reader_volume.Mass()},
         {"step_reader_area_mm2", reader_area.Mass()},
         {"manifest_sha256", ir::sha256({json, json_bytes}).hex()},
+        {"retained_body_brep_sha256", std::move(retained_breps)},
         {"vertices_sha256",
          ir::sha256({reinterpret_cast<const char*>(vertices), nv * sizeof(*vertices)}).hex()},
         {"indices_sha256",
@@ -366,6 +439,9 @@ int main(int argc, char** argv) {
         {"volume_mm3", exact.volume},
         {"area_mm2", exact.area},
         {"cold_ms", cold_ms},
+        {"edit_verify_ms", edit_ms},
+        {"restore_verify_ms", restore_ms},
+        {"cache_clear_verify_ms", cleared_ms},
         {"bridge_ms", packet_ms},
         {"step_ms", step_ms},
         {"step_bytes", static_cast<double>(step.size())},
@@ -378,6 +454,7 @@ int main(int argc, char** argv) {
       write(folder / "Eclipse.nightfall", source.data(), source.size());
       write(folder / "Eclipse.step", step.data(), step.size());
       write(folder / "manifest.json", json, json_bytes);
+      write(folder / "vane-oracle.json", oracle_source.data(), oracle_source.size());
       write(folder / "vertices.bin", vertices, nv * sizeof(*vertices));
       write(folder / "indices.bin", indices, ni * sizeof(*indices));
       write(folder / "faces.bin", faces, nf * sizeof(*faces));
@@ -385,6 +462,8 @@ int main(int argc, char** argv) {
     }
     std::puts(receipt.c_str());
   } catch (const std::exception& error) {
+    failure.push_back({"failed_stage", stage});
+    failure.push_back({"completed_checks", std::move(completed)});
     failure.push_back({"error", std::string(error.what())});
     std::fprintf(stderr, "%s\n", ir::json::write(std::move(failure)).c_str());
     return 1;

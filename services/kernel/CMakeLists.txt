@@ -74,7 +74,9 @@ if(NF_WITH_OCCT)
     set_target_properties(nf_eclipse_probe PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
     # CI's explicit evaluator-test build must include this headless regression too.
     add_dependencies(nf_evaluator_tests nf_eclipse_probe)
-    add_test(NAME evaluator.eclipse COMMAND nf_eclipse_probe "${PROJECT_SOURCE_DIR}/examples/stress/eclipse.nightfall")
+    add_test(NAME evaluator.eclipse
+      COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/eclipse_reference.py"
+        $<TARGET_FILE:nf_eclipse_probe> $<TARGET_FILE:nf_loft_reference_probe> "${PROJECT_SOURCE_DIR}")
     set_tests_properties(evaluator.eclipse PROPERTIES TIMEOUT 120 LABELS "occt;capability")
     add_test(NAME evaluator.eclipse-fixture COMMAND ${Python3_EXECUTABLE} "${PROJECT_SOURCE_DIR}/tools/make_eclipse.py" --check)
   endif()

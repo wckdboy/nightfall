@@ -96,6 +96,31 @@ Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. Remote CI/revie
 #225's full acceptance rerun remain pending. Exact-solid V/A integration and the
 independent Rust surface oracle are unchanged by this tessellation correction.
 
+## Initial Eclipse oracle integration and mesh failure (#225 / #242)
+
+The full private acceptance driver now checks equality of the minimal vane's section
+inputs, parameters, units and twelve-copy pattern contract with the full source. It runs
+#236's independent Rust integration for default/edited/restored waists and binds those
+reference volumes to source/kernel identity before native acceptance. Modified parameters,
+section geometry and pattern counts are rejected in negative binding checks. The original
+invalid fixed-parameter formula remains a diagnostic; numerical budgets are unchanged.
+
+The first run on #239's corrected backend passes independent body volumes, symmetric
+centroids, foundation area, waist edit/restore/state hashes, cache-clear/retained measures
+and both STEP comparisons, then fails bridge tessellation with
+**`cell_vanes: mesh normals disagree with triangle winding`**. Full cold evaluation is
+**13478.297 ms** (Release M3 Pro, uncontrolled host load). Source SHA f4be17d4… retains
+113 features / 32 bodies / 529 solids. This is a new real mesh acceptance failure, not a
+reason to weaken winding checks, reduce the fixture or change deadlines/budgets.
+
+#242 tracks a separate direct-kernel reproduction/correction. Source/executable/kernel-bound
+failure, failed executable/source and the independent Rust receipt are retained in
+`out/kernel-evidence-gh225-verified/`; logs `/tmp/nightfall-225-{oracle-red,oracle-bindings,reference}.log`.
+The private probe additionally records completed checkpoints on failure and checks all
+retained body B-rep digests after edits/export/mesh; that final byte-immutability check
+has not been reached by the failing run. Full acceptance, required final gate and native
+sanitizer/review evidence remain pending the isolated mesh fix.
+
 ## Circular-pattern integration conditioning (#239)
 
 Fine-grained private `IKernel` tracing attributes **52438.947 ms** of an unchanged
