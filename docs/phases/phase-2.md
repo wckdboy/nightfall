@@ -21,6 +21,42 @@ and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assem
 studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
 and RFC 0010 (#247). This gate and its recorded failures are unchanged.
 
+## Precise mesh boundary-budget diagnostics (#242 / #244)
+
+Full Eclipse CI at `202ca02` completes source-bound Rust reference, initial/edited/
+restored body measures and names, cache clear/retained measures and both STEP integration
+checks. It then fails the bridge with `forearm: source face has no complete triangulation`
+after 92.35 s. The local full gate fails **13/898 in 1061.17 s**, including Eclipse's
+unchanged 120-second timeout and native deadline checks; observed load at that timeout is
+321.96 / 260.04 / 210.51. These failures are retained, not counted as a passing gate.
+Logs and exact candidate/source binding: `out/kernel-evidence-gh225-202ca02/`.
+
+Direct isolation finds byte-identical minimal/full-model forearms (B-rep SHA
+`e9060415f0241fb0f4b6b8728a06ef6adac70cd200ad4e75248546eda953c74b`), both of
+which mesh with sufficient capacity. Earlier bodies consume **999866 triangles**;
+only **134** remain for the forearm. Cable harness, utility cables and vanes alone use
+472532 / 105822 / 239000 triangles. The native context swallows the boundary algorithm's
+budget exception and the adapter then reports a missing face. This is a resource rejection,
+not evidence that the forearm's complete mesh is invalid.
+
+The private boundary algorithm now retains its precise failure reason across the native
+context. The caller returns `mesh boundary exceeds vertex budget` before inspecting
+incomplete output. The regression first fails that exact diagnostic and then passes,
+including sufficient-capacity recovery, arbitrary oblique ellipse sections, four rotated
+copies, complete outward/closed meshes and unchanged source/patterned B-rep bytes.
+Kernel mesh identity is `indexed-faces-copy-normal-boundary-v4`; geometry, mesh settings
+and budgets are unchanged. Focused Release and native ASan/UBSan each pass **5988669
+assertions in 11 mesh cases**, with unchanged vane mesh metrics and no sanitizer diagnostics.
+The exact five-feature document reduction passes **79564 assertions** in both configurations.
+Nightfall C++ is instrumented; vendor OCCT and Rust remain uninstrumented. Logs:
+`/tmp/nightfall-242-{boundary-budget-focused,boundary-budget-asan,forearm-document,forearm-document-asan}.log`.
+The updated complete gate remains pending at this checkpoint.
+
+Private diagnostic source/logs and the two forearm B-reps remain under
+`out/kernel-evidence-gh242/`. #244 tracks efficient cable/surface tessellation and completing
+the full fixture within the unchanged quality, output and deadline contracts. Full Eclipse
+acceptance, final retained full-model B-rep immutability and assembly/physics remain unverified.
+
 ## Shared-boundary normal control for loft meshes (#242)
 
 #225's corrected independent volume oracle exposes a real vane-mesh defect. The

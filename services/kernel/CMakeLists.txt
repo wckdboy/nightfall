@@ -42,7 +42,8 @@ if(NF_WITH_OCCT)
     endif()
     add_executable(nf_evaluator_tests tests/model_inputs_tests.cpp tests/evaluator_tests.cpp tests/boolean_evaluator_tests.cpp tests/extrusion_result_tests.cpp tests/revolution_evaluator_tests.cpp tests/sketch_axis_tests.cpp tests/open_sketch_tests.cpp tests/linear_pattern_tests.cpp tests/circular_pattern_tests.cpp tests/mirror_evaluator_tests.cpp tests/face_attached_tests.cpp tests/curved_profile_tests.cpp tests/shared_profile_tests.cpp tests/constraint_tests.cpp tests/point_constraint_tests.cpp tests/tangent_constraint_tests.cpp tests/angle_fixed_constraint_tests.cpp tests/sketch_solve_tests.cpp tests/assembly_tests.cpp tests/strandbeest_tests.cpp tests/interference_tests.cpp tests/reference_part_tests.cpp)
     target_compile_definitions(nf_evaluator_tests PRIVATE NF_REFERENCE_PARTS_DIR="${PROJECT_SOURCE_DIR}/examples/parts"
-      NF_ASSEMBLY_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/assemblies")
+      NF_ASSEMBLY_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/assemblies"
+      NF_KERNEL_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
     target_sources(nf_evaluator_tests PRIVATE tests/cylinder_axis_tests.cpp tests/extrude_to_tests.cpp)
     target_sources(nf_evaluator_tests PRIVATE tests/chamfer_tests.cpp)
     target_sources(nf_evaluator_tests PRIVATE tests/fillet_evaluator_tests.cpp)

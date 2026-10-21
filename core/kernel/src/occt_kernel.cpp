@@ -201,7 +201,7 @@ class OcctKernel final : public IKernel {
                 "face-plane=uv-outward-v1;faces=analytic-v2;"
                 "cylinder-axis=parameter-z-v1;edges=face-loops-v1;chamfer=copy-equal-v1;"
                 "fillet=copy-contour-vertex-boundaries-v1;"
-                "mesh=indexed-faces-copy-normal-boundary-v3;"
+                "mesh=indexed-faces-copy-normal-boundary-v4;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v4;names=2;validation=parallel-compounds-v1;"
                 "bounds=single-shell-reuse-v1;"
@@ -296,11 +296,14 @@ class OcctKernel final : public IKernel {
       parameters.EnableControlSurfaceDeflectionAllSurfaces = true;
       parameters.InParallel = true;
       Handle(BRepMesh_Context) context = new BRepMesh_Context;
-      context->SetEdgeDiscret(new detail::NormalControlledEdges(3 * options.max_triangles));
+      Handle(detail::NormalControlledEdges) boundary =
+          new detail::NormalControlledEdges(3 * options.max_triangles);
+      context->SetEdgeDiscret(boundary);
       BRepMesh_IncrementalMesh mesher;
       mesher.SetShape(copy.Shape());
       mesher.ChangeParameters() = parameters;
       mesher.Perform(context);
+      if (boundary->failure()) fail(boundary->failure());
       if (!mesher.IsDone()) fail("solid tessellation failed");
       Mesh result;
       TopTools_IndexedMapOfShape originals, copied;

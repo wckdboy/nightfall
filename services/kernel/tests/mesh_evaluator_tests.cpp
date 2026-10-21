@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numbers>
 #include <set>
 
 #include <catch2/catch_test_macros.hpp>
@@ -92,6 +93,25 @@ TEST_CASE("all twenty current reference parts produce complete indexed viewport 
     CHECK(warm.bodies.at("part").hash == body.hash);
   }
   CHECK(names.size() == 20);
+}
+
+TEST_CASE("Eclipse forearm document keeps complete patterned loft meshes", "[forearm-mesh]") {
+  std::ifstream stream(std::filesystem::path(NF_KERNEL_FIXTURES_DIR) / "eclipse_forearm.nightfall");
+  REQUIRE(stream.good());
+  const std::string source{std::istreambuf_iterator<char>{stream}, {}};
+  const auto document = ir::read_document(source).value();
+  REQUIRE(document.features.size() == 5);
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {96, 64 * 1024 * 1024});
+  const auto result = evaluator.evaluate(source).value();
+  REQUIRE(result.ok());
+  const auto shape = result.bodies.at("forearm").shape;
+  CHECK(shape->measures().solids == 4);
+  CHECK_THAT(shape->measures().volume, WithinAbs(4 * 62848 * std::numbers::pi, 1e-6));
+  const auto mesh = kernel->tessellate(shape, {});
+  INFO((mesh ? "success" : mesh.error().message));
+  REQUIRE(mesh);
+  display_mesh(*kernel, shape, *mesh);
 }
 
 TEST_CASE("chamfered mirrored parts keep mesh picking handles across cache reuse and eviction",
