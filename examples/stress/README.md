@@ -82,4 +82,14 @@ edit/restore/cache and STEP checks, then exposes
 [#242](https://github.com/wckdboy/nightfall/issues/242): the bridge rejects vane tessellation
 because mesh normals disagree with triangle winding. The source/executable-bound failure
 and independent vane evidence are retained in `out/kernel-evidence-gh225-verified/`.
-Full boundary-mesh acceptance remains pending that isolated kernel correction.
+The isolated correction is in [PR243](https://github.com/wckdboy/nightfall/pull/243),
+with its direct mesh/closure/convergence regression, local 895-test gate, native sanitizer
+checks and all five remote CI workflows passing. Full Eclipse acceptance still needs its
+own completed run. Two runs hit the unchanged 120-second bound while the host reported
+very high load; neither establishes full acceptance or normal latency.
+
+The acceptance driver now bounds its entire POSIX worker groups, handles CTest's timeout
+signal, and emits source-bound stage/feature checkpoint events and failure metadata.
+An expired deadline remains a failure. The worker-lifecycle regression verifies real
+nested-process cleanup on deadline and SIGTERM, and rejects a failed worker's apparent
+success JSON.

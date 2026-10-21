@@ -78,6 +78,13 @@ if(NF_WITH_OCCT)
       COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/eclipse_reference.py"
         $<TARGET_FILE:nf_eclipse_probe> $<TARGET_FILE:nf_loft_reference_probe> "${PROJECT_SOURCE_DIR}")
     set_tests_properties(evaluator.eclipse PROPERTIES TIMEOUT 120 LABELS "occt;capability")
+    if(UNIX)
+      # Timeout remains a failure; let the driver terminate its owned worker groups.
+      set_tests_properties(evaluator.eclipse PROPERTIES TIMEOUT_SIGNAL_NAME SIGTERM)
+    endif()
+    add_test(NAME evaluator.eclipse-runner
+      COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/eclipse_runner_tests.py")
+    set_tests_properties(evaluator.eclipse-runner PROPERTIES TIMEOUT 60 LABELS "occt;capability")
     add_test(NAME evaluator.eclipse-fixture COMMAND ${Python3_EXECUTABLE} "${PROJECT_SOURCE_DIR}/tools/make_eclipse.py" --check)
   endif()
 endif()

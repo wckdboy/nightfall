@@ -156,8 +156,16 @@ std::map<std::string, double> volumes(double vane_seed_volume) {
                  {"cell_utility_cables", 4 * pi * 16 * cable(true, 8192)}});
   return result;
 }
-Evaluation build(Evaluator& evaluator, const std::string& source) {
-  auto value = evaluator.evaluate(source);
+Evaluation build(Evaluator& evaluator, const std::string& source, const char* stage) {
+  const auto started = Clock::now();
+  auto value = evaluator.evaluate(source, [&](std::size_t index) {
+    std::fprintf(stderr, "%s\n",
+                 ir::json::canonical(ir::json::Object{{"event", "feature_start"},
+                                                      {"stage", stage},
+                                                      {"feature_index", static_cast<double>(index)},
+                                                      {"elapsed_ms", milliseconds(started)}})
+                     .c_str());
+  });
   require(value.has_value(), "document validation failed");
   for (const auto& f : value->features)
     for (const auto& e : f.errors)
@@ -215,6 +223,15 @@ int main(int argc, char** argv) {
   ir::json::Object failure{{"status", "failed"}};
   ir::json::Array completed;
   std::string stage = "source_and_oracle_binding";
+  const auto proof_start = Clock::now();
+  const auto checkpoint = [&](const char* name) {
+    completed.push_back(name);
+    std::fprintf(stderr, "%s\n",
+                 ir::json::canonical(ir::json::Object{{"event", "checkpoint"},
+                                                      {"completed", name},
+                                                      {"elapsed_ms", milliseconds(proof_start)}})
+                     .c_str());
+  };
   try {
     require(argc == 3 || argc == 4,
             "usage: nf_eclipse_probe eclipse.nightfall vane-oracle.json [new-output-directory]");
@@ -245,11 +262,11 @@ int main(int argc, char** argv) {
     };
     const double default_vane = seed_volume("default_seed_volume_mm3"),
                  edited_vane = seed_volume("edited_seed_volume_mm3");
-    completed.push_back("source_and_kernel_bound_independent_vane_oracle");
+    checkpoint("source_and_kernel_bound_independent_vane_oracle");
     Evaluator evaluator(*backend, {96, 64 * 1024 * 1024});
     stage = "cold_build_and_independent_mass";
     auto start = Clock::now();
-    const auto original = build(evaluator, source);
+    const auto original = build(evaluator, source, "cold");
     const double cold_ms = milliseconds(start);
     std::fprintf(stderr, "Eclipse: cold evaluation %.3f ms\n", cold_ms);
     require(original.features.size() == 113, "authored feature coverage");
@@ -264,30 +281,30 @@ int main(int argc, char** argv) {
       if (body.shape) retained_hashes[id] = brep_hash(body.shape);
     ir::json::Array metrics;
     const auto exact = verify(original, default_vane, &metrics);
-    completed.push_back("cold_independent_volumes_centroids_foundation_area_names");
+    checkpoint("cold_independent_volumes_centroids_foundation_area_names");
     auto part = ir::read_document(source).value();
     for (auto& p : part.params)
       if (p.name == "rotor_waist") p.value = 1.05;
     start = Clock::now();
     stage = "edited_build_and_independent_mass";
-    verify(build(evaluator, ir::write_document(part).value()), edited_vane);
-    completed.push_back("waist_1.05_independent_volumes_centroids_names");
+    verify(build(evaluator, ir::write_document(part).value(), "edited"), edited_vane);
+    checkpoint("waist_1.05_independent_volumes_centroids_names");
     const double edit_ms = milliseconds(start);
     start = Clock::now();
     stage = "restore_and_state_hashes";
-    const auto restored = build(evaluator, source);
+    const auto restored = build(evaluator, source, "restore");
     verify(restored, default_vane);
     const double restore_ms = milliseconds(start);
     for (const auto& [id, body] : original.bodies)
       require(restored.bodies.at(id).hash == body.hash, "restored state hash " + id);
-    completed.push_back("restore_independent_mass_and_state_hashes");
+    checkpoint("restore_independent_mass_and_state_hashes");
     evaluator.clear_cache();
     start = Clock::now();
     stage = "cache_clear_and_retained_snapshot";
-    verify(build(evaluator, source), default_vane);
+    verify(build(evaluator, source, "cache_clear"), default_vane);
     const double cleared_ms = milliseconds(start);
     verify(original, default_vane);
-    completed.push_back("cache_clear_and_retained_mass_names");
+    checkpoint("cache_clear_and_retained_mass_names");
     std::vector<kernel::ShapePtr> shapes;
     for (const auto& [id, body] : original.bodies) {
       (void)id;
@@ -313,7 +330,7 @@ int main(int argc, char** argv) {
     BRepGProp::SurfaceProperties(reader.OneShape(), reader_area, 1e-9, false);
     near(reader_volume.Mass(), exact.volume, .05, "separate STEP integration volume mm3");
     near(reader_area.Mass(), exact.area, .05, "separate STEP integration area mm2");
-    completed.push_back("step_closed_solids_topology_and_both_integrators");
+    checkpoint("step_closed_solids_topology_and_both_integrators");
     using Session = std::unique_ptr<nf_session, decltype(&nf_session_destroy)>;
     using Result = std::unique_ptr<nf_result, decltype(&nf_result_free)>;
     Session session(nf_session_create(), nf_session_destroy);
@@ -379,7 +396,7 @@ int main(int argc, char** argv) {
       mesh_area += mesh_areas[i];
     }
     require(read(path) == source, "source file changed");
-    completed.push_back("complete_outward_mesh_mass_budget_and_owned_buffers");
+    checkpoint("complete_outward_mesh_mass_budget_and_owned_buffers");
     stage = "source_and_retained_brep_immutability";
     require(read(argv[2]) == oracle_source, "vane oracle file changed");
     ir::json::Object retained_breps;
@@ -387,7 +404,7 @@ int main(int argc, char** argv) {
       require(brep_hash(original.bodies.at(id).shape) == hash, "retained B-rep changed " + id);
       retained_breps.push_back({id, hash});
     }
-    completed.push_back("source_oracle_and_retained_brep_bytes_unchanged");
+    checkpoint("source_oracle_and_retained_brep_bytes_unchanged");
     const std::string receipt = ir::json::write(ir::json::Object{
         {"status", "passed"},
         {"completed_checks", completed},

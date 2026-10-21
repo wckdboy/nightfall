@@ -41,12 +41,43 @@ assertions in 11 mesh cases**, with unchanged vane mesh metrics and no sanitizer
 The exact five-feature document reduction passes **79564 assertions** in both configurations.
 Nightfall C++ is instrumented; vendor OCCT and Rust remain uninstrumented. Logs:
 `/tmp/nightfall-242-{boundary-budget-focused,boundary-budget-asan,forearm-document,forearm-document-asan}.log`.
-The updated complete gate remains pending at this checkpoint.
+The subsequent full core gate at `d061020` passes **897/897 in 240.59 s**; the
+full Eclipse acceptance remains separate and failed.
 
 Private diagnostic source/logs and the two forearm B-reps remain under
 `out/kernel-evidence-gh242/`. #244 tracks efficient cable/surface tessellation and completing
 the full fixture within the unchanged quality, output and deadline contracts. Full Eclipse
 acceptance, final retained full-model B-rep immutability and assembly/physics remain unverified.
+
+## Eclipse run-limit and worker-lifecycle evidence (#225)
+
+On the corrected mesh backend, a complete run hits the unchanged **120-second** bound.
+Independent Rust seed integration passes; cold full-model evaluation reports
+**21219.534 ms**, but the complete acceptance does not finish. A short post-timeout
+stack sample includes STEP export and later evaluator work. Host load averages observed
+after that timeout are **247.46 / 441.27 / 638.56**; this is uncontrolled host context,
+not proof that every delay is external or a representative kernel latency measurement.
+The old outer Python timeout leaves a native descendant running; that owned worker is
+sampled and terminated. Failure/source/binary digests and the sample remain under
+`out/kernel-evidence-gh225-complete/` and `/tmp/nightfall-225-complete.log`.
+
+The private driver now owns POSIX process groups for each stage, applies one unchanged
+120-second complete-run deadline, and stops nested workers on timeout/interruption.
+CTest retains its 120-second failure bound and uses SIGTERM for orderly child cleanup.
+A fault-injected CTest case confirms that even graceful exit zero after its deadline
+remains a Timeout failure. Four real-process regressions pass: success JSON, failure
+cannot publish success, nested-worker timeout cleanup and nested-worker SIGTERM cleanup.
+Native stage/checkpoint and feature-index events distinguish completed checks from an
+in-progress operation; timeout metadata records source/build identity and host load.
+
+The instrumented run again times out: it reaches the source/kernel-bound oracle check,
+but not the complete cold-build checkpoint. Driver preflight plus independent reference
+take **36.359448 s**; the failure is reported at **120.634441 s**, including cleanup.
+Observed start/full-stage/finish load averages exceed 147 in that run. Worker inventory
+confirms no remaining native/Rust acceptance workers. This remains failed full acceptance;
+no geometry, output budget, deadline or fixture is relaxed. The journal is retained at
+`out/kernel-evidence-gh225-instrumented/` and `/tmp/nightfall-225-instrumented.log`.
+Those runs predate the complete-gate and separate-machine results recorded above.
 
 ## Shared-boundary normal control for loft meshes (#242)
 
@@ -92,9 +123,10 @@ budget; these measured differences do not bound the exact-solid uncertainty.
 
 The full local gate passes **895/895 in 248.66 s**, plus Rust Debug/Release,
 Clippy/format, schema/hygiene, native XPC/Metal/recovery and concurrency/TSAN checks.
-Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. Remote CI/review and
-#225's full acceptance rerun remain pending. Exact-solid V/A integration and the
-independent Rust surface oracle are unchanged by this tessellation correction.
+Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. All five remote CI
+workflows on draft PR243 pass, including OCCT/native sanitizers, SMLib and bake-off.
+Human review and #225's full acceptance remain pending. Exact-solid V/A integration
+and the independent Rust surface oracle are unchanged by this tessellation correction.
 
 ## Initial Eclipse oracle integration and mesh failure (#225 / #242)
 
