@@ -26,6 +26,8 @@ namespace nf::kernel::detail {
 class NormalControlledEdges final : public BRepMesh_EdgeDiscret {
  public:
   explicit NormalControlledEdges(std::size_t budget) : budget_(budget) {}
+  // The native meshing context catches Standard_Failure; retain our precise reason.
+  const char* failure() const noexcept { return failure_; }
 
  protected:
   Standard_Boolean performInternal(const Handle(IMeshData_Model) & model,
@@ -41,7 +43,7 @@ class NormalControlledEdges final : public BRepMesh_EdgeDiscret {
       const auto& edge = model->GetEdge(i);
       const auto& curve = edge->GetCurve();
       const auto count = static_cast<std::size_t>(curve->ParametersNb());
-      if (count > budget_ - points) throw Standard_Failure("mesh boundary exceeds vertex budget");
+      if (count > budget_ - points) reject("mesh boundary exceeds vertex budget");
       points += count;
       if (edge->GetDegenerated() || !edge->GetSameParam() || !edge->GetSameRange()) continue;
       std::vector<Boundary> boundaries;
@@ -88,8 +90,8 @@ class NormalControlledEdges final : public BRepMesh_EdgeDiscret {
           const double middle = std::midpoint(a, b);
           if (needs_split(a, b, middle)) {
             if (middle == a || middle == b)
-              throw Standard_Failure("mesh boundary normal refinement exhausted parameter range");
-            if (++points > budget_) throw Standard_Failure("mesh boundary exceeds vertex budget");
+              reject("mesh boundary normal refinement exhausted parameter range");
+            if (++points > budget_) reject("mesh boundary exceeds vertex budget");
             changed = true;
             pending.push_back({middle, b});
             pending.push_back({a, middle});
@@ -108,6 +110,11 @@ class NormalControlledEdges final : public BRepMesh_EdgeDiscret {
   }
 
  private:
+  [[noreturn]] void reject(const char* message) {
+    failure_ = message;
+    throw Standard_Failure(message);
+  }
   std::size_t budget_;
+  const char* failure_ = nullptr;
 };
 }  // namespace nf::kernel::detail

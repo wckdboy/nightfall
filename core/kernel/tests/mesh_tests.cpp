@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "nf/kernel/kernel.hpp"
 #include "nf/math/constructors.hpp"
+#include "nf/math/refine.hpp"
 #include "snapshot.hpp"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -231,6 +232,61 @@ TEST_CASE("automatically matched offset ellipse lofts retain complete outward me
     }
     CHECK(serialized(source) == saved);
   }
+}
+
+TEST_CASE("patterned oblique ellipse lofts retain every triangulated face",
+          "[loft-mesh][mesh-kernel][forearm-mesh]") {
+  auto kernel = make_occt_kernel().value();
+  Loft input;
+  for (const auto& section :
+       std::array{std::array{174., 292., 24., 27.}, std::array{238., 244., 18., 20.},
+                  std::array{302., 196., 16., 17.}}) {
+    const std::vector<std::vector<NurbsCurve2>> paths{
+        decompose(make_arc({}, section[2], section[3], 0, 0, 2 * kPi))};
+    input.sections.push_back({{{section[0], 0, section[1]}, {.6, 0, .8}, {.8, 0, -.6}},
+                              regions(paths, FillRule::kEvenOdd).value().front()});
+  }
+  const auto source = kernel->loft(input).value().shape;
+  const auto saved = serialized(source);
+  CHECK_THAT(source->measures().volume, WithinAbs(62848 * kPi, 1e-6));
+  std::vector<ShapePtr> copies;
+  for (int i = 0; i < 4; ++i) {
+    INFO("instance " << i);
+    RigidTransform placement;
+    placement.axis_origin = {500, 0, 0};
+    placement.angle = i * kPi / 2;
+    const auto shape = i == 0 ? source : kernel->transform(source, placement).value().shape;
+    const auto mesh = kernel->tessellate(shape, {});
+    INFO((mesh ? "success" : mesh.error().message));
+    REQUIRE(mesh);
+    const auto measured = inspect(*kernel, shape, *mesh);
+    CHECK_THAT(measured.volume, WithinAbs(62848 * kPi, 62848 * kPi * .01));
+    CHECK_THAT(measured.area, WithinAbs(shape->measures().area, shape->measures().area * .01));
+    closed(*mesh);
+    copies.push_back(shape);
+  }
+  const auto patterned =
+      kernel->boolean_operation(source, {copies[1], copies[2], copies[3]}, BooleanOp::kUnion)
+          .value()
+          .shape;
+  const auto saved_patterned = serialized(patterned);
+  REQUIRE(patterned->measures().solids == 4);
+  const auto mesh = kernel->tessellate(patterned, {});
+  INFO((mesh ? "success" : mesh.error().message));
+  REQUIRE(mesh);
+  const auto measured = inspect(*kernel, patterned, *mesh);
+  CHECK_THAT(measured.volume, WithinAbs(4 * 62848 * kPi, 4 * 62848 * kPi * .01));
+  CHECK_THAT(measured.area,
+             WithinAbs(patterned->measures().area, patterned->measures().area * .01));
+  const auto bounded = kernel->tessellate(patterned, {.1, .2, 134});
+  REQUIRE_FALSE(bounded);
+  CHECK(bounded.error().message == "mesh boundary exceeds vertex budget");
+  const auto recovered = kernel->tessellate(patterned, {});
+  REQUIRE(recovered);
+  CHECK(recovered->indices.size() == mesh->indices.size());
+  CHECK(recovered->faces.size() == patterned->measures().faces);
+  CHECK(serialized(patterned) == saved_patterned);
+  CHECK(serialized(source) == saved);
 }
 
 TEST_CASE("indexed box meshes cover original faces with outward normals and exact winding",
