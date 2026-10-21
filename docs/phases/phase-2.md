@@ -12,6 +12,62 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Independent loft correspondence and runtime evidence (#236)
+
+The Eclipse vane mismatch is resolved as an invalid fixed-parameter oracle assumption,
+without changing geometry or tolerances. OCCT's compatible-wire stage splits/reparameterizes
+the three section curves before interpolation. A private exporter verifies all eight
+rectangular biquadratic side patches and two horizontal caps, then passes knots, controls,
+weights, orientation and native samples to Rust-owned NURBS evaluation. No native point,
+derivative or mass routine is called by the Rust integration process.
+
+Composite Gauss–Legendre-8 integration splits at surface knots and refines through
+1/2/4/8/16 subcells per span. Divergence flux `((x-500)/2,y/2,0)` integrates volume;
+horizontal caps contribute zero flux and their area is independently `334*pi` mm².
+Analytic quarter-cylinder/frustum/reversed-orientation checks with nonunit parameter
+domains pass at 1e-10. The first 4→8 area refinement fails the fixed 1e-6 criterion
+(6.215e-6 mm²); adding the 16-subcell level converges without relaxing that criterion.
+Per-seed comparison budgets remain the original 12-vane allocation: 0.02/12 mm³ and
+0.05/12 mm². These refinement/comparison checks are not certified uncertainty bounds.
+
+At default waist, native/Rust V are **90521.6234363384 / 90521.62343633838 mm³**;
+A are **19896.77395958201 / 19896.77395958219 mm²**. At waist 1.05, they are
+**97219.91601411755 / 97219.91601411748 mm³** and
+**20587.311762742895 / 20587.311762742993 mm²**. Native/Rust point and derivative
+component differences are at most 2.274e-13 mm / 4.406e-13 in this corpus. Section samples
+lie within a 5.569e-13 mm distance bound of the declared ellipses/planes, but corresponding
+ellipse angular parameters differ by up to **1.620674765 rad (92.858 deg)**. Intermediate
+height deviates from linear height by **3.631500714 mm**, with **0.17100655** relative
+homogeneous section-weight variation. Thus the original quadratic ellipse-basis formula
+does not describe this automatically matched surface. Its failed prediction stays recorded.
+
+Edit/restore state hashes and control nets match; retained original B-rep bytes and source
+bytes stay unchanged through export, edits and cache clearing. The receipt binds fixture,
+native exporter/Rust executable and control-net digests, and states checked/unchecked scope.
+The private `evaluator.loft-rust-reference` CTest case has a 60-second bound.
+
+Full unchanged Eclipse source f4be17d4… profiles at **73541.908625 ms**, of which
+**65525.188291 ms (89.10%)** belongs to `cell_manipulators_a` (16-body circular pattern).
+`cell_cable_array` takes 2313.760333 ms, `cell_rotor_vanes` 2011.039750 ms and
+`cell_twisted_vane` 894.672667 ms. Observer intervals include preparation/naming and native
+calls; they do not yet distinguish their CPU shares. Cache ends at 40 entries /
+60,451,161 estimated bytes under the unchanged 96-entry/64 MiB limits (not RSS).
+This is one Release M3 Pro sample with uncontrolled host load, not a latency guarantee.
+#239 tracks finer profiling/correction and integration of the valid oracle into #225's
+still-failing full acceptance. No fixture, million-triangle limit or deadline changed.
+Evidence: `out/kernel-evidence-gh236/` and `/tmp/nightfall-236-{quadrature-red,reference,focused}.log`.
+The focused check passes in **2.30 s**. The complete local gate passes **892/892 in
+273.97 s**, plus Rust Debug/Release, Clippy/format, schema/hygiene and unchanged native
+XPC/Metal/concurrency regressions. The one-off full/minimal IR subgraph reconciliation
+confirms identical feature inputs/parameters/units; twelve independent Rust seed volumes
+sum to the full model's recorded vane volume within the unchanged 0.02 mm³ body budget.
+Remote CI/human review and #239's performance correction remain pending. Full log:
+`/tmp/nightfall-236-check.log`.
+The focused native ASan/UBSan case passes **1/1 in 4.89 s** without diagnostics;
+Rust and vendor OCCT remain uninstrumented in that run. Final source/executable-bound
+receipts with explicit sampling scope are in `out/kernel-evidence-gh236-final/`.
+The original coarse-quadrature failure and pre-refinement receipts remain retained.
+
 ## Owned Rust NURBS surfaces (#234)
 
 Under Accepted RFC 0008 the existing std-only, unsafe-free math crate now owns 2D/3D

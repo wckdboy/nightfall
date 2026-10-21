@@ -1,0 +1,208 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Eclipse — four-station robotic workcell",
+    "doc": "Headless exact-solid stress fixture: four lofted manipulators, twelve twisted loft vanes, cubic swept harnesses, turned rotor, drilled flanges, chamfered hardware and an open spoke foundation. Geometric study; no assembly joints, collision, actuator, strength or physics validation. See issue #225."
+  },
+  "params": [
+    {
+      "name": "upper_length",
+      "value": "250 mm",
+      "min": "220 mm",
+      "max": "280 mm"
+    },
+    {
+      "name": "forearm_length",
+      "value": "210 mm",
+      "min": "190 mm",
+      "max": "240 mm"
+    },
+    {
+      "name": "shoulder_height",
+      "value": "110 mm",
+      "min": "105 mm",
+      "max": "120 mm"
+    },
+    {
+      "name": "jaw_gap",
+      "value": "42 mm",
+      "min": "28 mm",
+      "max": "48 mm"
+    },
+    {
+      "name": "link_waist",
+      "value": 1,
+      "min": 0.9,
+      "max": 1.1
+    },
+    {
+      "name": "fin_count",
+      "value": 32,
+      "min": 16,
+      "max": 48
+    },
+    {
+      "name": "cable_radius",
+      "value": "3.5 mm",
+      "min": "2 mm",
+      "max": "4 mm"
+    },
+    {
+      "name": "arm_count",
+      "value": 4,
+      "min": 1,
+      "max": 4
+    },
+    {
+      "name": "cell_radius",
+      "value": "500 mm",
+      "min": "480 mm",
+      "max": "560 mm"
+    },
+    {
+      "name": "vane_count",
+      "value": 12,
+      "min": 6,
+      "max": 16
+    },
+    {
+      "name": "rotor_waist",
+      "value": 1,
+      "min": 0.85,
+      "max": 1.15
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "cell_vane_root",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "cell_radius + (100 mm)",
+            0.0,
+            52
+          ],
+          "normal": "z",
+          "x_direction": [
+            1.0,
+            0.0,
+            0
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              28,
+              8
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "cell_vane_waist",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "cell_radius + (112.047395849532 mm)",
+            30.023009231892406,
+            117
+          ],
+          "normal": "z",
+          "x_direction": [
+            0.9659258262890683,
+            0.25881904510252074,
+            0
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              "36 mm * rotor_waist",
+              "7 mm * rotor_waist"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "cell_vane_tip",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "cell_radius + (86.6025403784439 mm)",
+            49.99999999999999,
+            182
+          ],
+          "normal": "z",
+          "x_direction": [
+            0.8660254037844387,
+            0.49999999999999994,
+            0
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              22,
+              5
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "cell_twisted_vane",
+      "type": "loft",
+      "inputs": {
+        "profiles": [
+          {
+            "sketch": "cell_vane_root"
+          },
+          {
+            "sketch": "cell_vane_waist"
+          },
+          {
+            "sketch": "cell_vane_tip"
+          }
+        ],
+        "result": {
+          "new": "cell_vanes",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}
