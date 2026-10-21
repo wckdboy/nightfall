@@ -237,7 +237,7 @@ bool surface_properties(const TopoDS_Shape& shape, Measures& measured) {
   return true;
 }
 bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
-  // A corner keeps each coordinate's first moment away from a symmetry-axis zero.
+  // An exterior corner keeps first moments and boundary-plane flux away from zero.
   // Use each shell's bounds so distant components and cavities integrate locally.
   // Signed face integrals use exact surfaces; non-polynomial faces keep the GK tolerance.
   struct FaceTask {
@@ -258,13 +258,21 @@ bool volume_properties(const TopoDS_Shape& shape, Measures& measured) {
     // A single shell already has exactly these optimal bounds. Reusing its corner
     // avoids a second global surface-extrema search on spline faces.
     gp_Pnt reference(measured.maximum.x, measured.maximum.y, measured.maximum.z);
+    gp_Pnt minimum(measured.minimum.x, measured.minimum.y, measured.minimum.z);
     if (!single_shell) {
       Bnd_Box bounds;
       BRepBndLib::AddOptimal(shells.Current(), bounds, false, false);
       if (bounds.IsVoid() || bounds.IsOpen()) return false;
       reference = bounds.CornerMax();
+      minimum = bounds.CornerMin();
     }
     if (!finite(point(reference))) return false;
+    // A face on the bounding corner has zero flux. Rotated analytic trims can leave
+    // roundoff-sized contributions that trigger excessive relative-error refinement.
+    // Move the common shell reference one box extent outward; keep the finite corner
+    // fallback at the floating-point range limit. No geometry or accuracy changes.
+    const gp_Pnt exterior(reference.XYZ() + (reference.XYZ() - minimum.XYZ()));
+    if (finite(point(exterior))) reference = exterior;
     const auto first = tasks.size();
     for (TopExp_Explorer found(shells.Current(), TopAbs_FACE); found.More(); found.Next()) {
       // Preserve multiplicity and traversal order, including oppositely oriented faces.

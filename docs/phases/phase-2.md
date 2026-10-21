@@ -21,6 +21,53 @@ and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assem
 studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
 and RFC 0010 (#247). This gate and its recorded failures are unchanged.
 
+## Circular-pattern integration conditioning (#239)
+
+Fine-grained private `IKernel` tracing attributes **52438.947 ms** of an unchanged
+Eclipse run to native unions inside `cell_manipulators_a`, versus **824.788 ms** to
+transforms and about 8 ms to remaining feature work. A four-feature shoulder-cover
+reproduction takes **15304.568 ms**. A native stack sample places the work in
+`BRepGProp_VinertGK` volume/first-moment integration, with the main thread waiting
+for per-face integration. History/naming is not the dominant cost in this case.
+
+The new regression first fails at **14.547 s**, exceeding the existing five-second
+interactive deadline. It still passes 4045 geometric/history assertions. Rotating
+perforated planar faces leaves roundoff-sized flux around the shell's bounding-corner
+reference, triggering excessive adaptive relative-error refinement. Moving the common
+shell reference one box extent outside its maximum corner conditions these integrals;
+the finite corner remains a fallback when the exterior point is unrepresentable.
+Full closed-solid validation, fresh mass/area integration, tolerances, fixture geometry,
+cache/resource limits and service/client deadlines remain unchanged. Transient kernel
+identity records `mass-reference=shell-exterior-v2` to invalidate incompatible cache entries.
+
+The focused corpus passes **19346 assertions in 11 cases**, including analytic volume,
+area and centroid for eight perforated covers, complete Boolean history/current owners,
+source B-rep bytes, retained snapshots, translated/rotated asymmetric circular holes,
+tori, cavities and unequal distant components. The new runtime bound applies only to
+unsanitized Release builds; numerical/ownership checks also apply under sanitizers.
+
+Paired traced Release runs on the M3 Pro host take **59859.048 / 11304.773 ms** overall
+and **53271.638 / 4664.310 ms** for `cell_manipulators_a`. Source SHA-256 f4be17d4…,
+113 features, 32 bodies, 529 solids, 40 cache entries and 60,451,161 estimated bytes
+match. All operation output face/solid counts and history/generated-record counts match;
+maximum observed operation-volume difference is **1.304e-8 mm³**. These samples have
+uncontrolled host load and profiler overhead; they are not latency guarantees or proof
+that the complete model fits the interactive deadline. Other native union/bounds work
+remains measurable. Receipts/profiles: `out/kernel-evidence-gh239/`; logs:
+`/tmp/nightfall-239-{red,focused,check}.log`.
+
+The complete local gate passes **894/894 in 246.92 s**, plus Rust Debug/Release,
+Clippy/format, schema/hygiene, native recovery/Metal and concurrency/TSAN checks.
+Focused native ASan/UBSan passes **19345 assertions in 11 cases** without diagnostics;
+vendor OCCT and Rust remain uninstrumented. The regenerated 14,362,589-byte STEP retains
+529 solids / 3842 faces / 8201 edges. Separate STEP-reader/integrator differences are
+**0.002665933 mm³ / 0.031093933 mm²**, within the unchanged 0.05 aggregate budgets.
+Per-body area is unchanged and maximum per-body volume change is 1.304e-8 mm³.
+This reader uses the same vendor's different mass integrator, not an independent kernel.
+Detailed digests/scope are in `out/kernel-evidence-gh239/verification.json`;
+sanitizer log: `/tmp/nightfall-239-asan.log`. Integration of the independent vane
+oracle into #225's full analytic/mesh/edit acceptance, remote CI and human review remain pending.
+
 ## Independent loft correspondence and runtime evidence (#236)
 
 The Eclipse vane mismatch is resolved as an invalid fixed-parameter oracle assumption,

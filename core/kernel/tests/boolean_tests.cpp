@@ -9,6 +9,7 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 
 #include <algorithm>
+#include <chrono>
 #include <numbers>
 #include <sstream>
 
@@ -238,4 +239,52 @@ TEST_CASE(
   }
   CHECK(serialized(a) == saved_a);
   CHECK(serialized(b) == saved_b);
+}
+
+TEST_CASE("rotated perforated cover unions retain mass history and bounded integration time",
+          "[separated-union][mass-runtime]") {
+  auto kernel = make_occt_kernel().value();
+  constexpr double pi = std::numbers::pi;
+  std::vector<std::vector<NurbsCurve2>> paths{{make_circle(Vec2{}, 46)}, {make_circle(Vec2{}, 15)}};
+  for (int i = 0; i < 8; ++i)
+    paths.push_back(
+        {make_circle(Vec2{38 * std::cos(i * pi / 4), 38 * std::sin(i * pi / 4)}, 2.75)});
+  const auto front = kernel
+                         ->extrude({{{0, -63, 110}, {1, 0, 0}, {0, 1, 0}},
+                                    regions(paths, FillRule::kEvenOdd).value(),
+                                    {0, 8, 0}})
+                         .value()
+                         .shape;
+  const auto back = kernel->mirror(front, {{}, {0, 0, 1}, {0, 1, 0}}).value().shape;
+  const auto pair = kernel->boolean_operation(front, {back}, BooleanOp::kUnion).value().shape;
+  const auto saved = serialized(pair);
+  std::vector<ShapePtr> sources{pair};
+  for (int i = 1; i < 4; ++i) {
+    RigidTransform transform;
+    transform.axis_origin = {500, 0, 0};
+    transform.angle = i * pi / 2;
+    sources.push_back(kernel->transform(pair, transform).value().shape);
+  }
+  const auto start = std::chrono::steady_clock::now();
+  const auto result =
+      kernel->boolean_operation(pair, {sources.begin() + 1, sources.end()}, BooleanOp::kUnion)
+          .value();
+  const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
+  INFO("union seconds: " << elapsed.count());
+  // The existing interactive service deadline is five seconds; sanitizer builds only check facts.
+  if (NF_RELEASE_PERFORMANCE) CHECK(elapsed.count() < 5.0);
+  const auto& m = result.shape->measures();
+  const double profile_area = pi * (46 * 46 - 15 * 15 - 8 * 2.75 * 2.75);
+  CHECK_THAT(m.volume, WithinAbs(8 * 8 * profile_area, 1e-6));
+  CHECK_THAT(m.area, WithinAbs(8 * (2 * profile_area + 8 * 2 * pi * (46 + 15 + 8 * 2.75)), 1e-6));
+  CHECK_THAT(m.centroid.x, WithinAbs(500, 1e-7));
+  CHECK_THAT(m.centroid.y, WithinAbs(0, 1e-7));
+  CHECK_THAT(m.centroid.z, WithinAbs(110, 1e-7));
+  CHECK(m.solids == 8);
+  CHECK(m.faces == 96);
+  history(result, sources);
+  CHECK(result.generated.empty());
+  CHECK(serialized(pair) == saved);
+  kernel.reset();
+  history(result, sources);
 }

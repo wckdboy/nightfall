@@ -203,7 +203,7 @@ class OcctKernel final : public IKernel {
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
                 "profile=exact-lines-arcs-v4;names=2;validation=parallel-compounds-v1;"
                 "bounds=single-shell-reuse-v1;"
-                "mass-reference=shell-corner-v1;"
+                "mass-reference=shell-exterior-v2;"
                 "mass-evaluation=parallel-face-batch-v2;"
                 "mass-integrator=planar-gauss-v1;area-integrator=analytic-uv-rectangle-gk-v2;mass="
              << detail::kMassRelativeAccuracy
