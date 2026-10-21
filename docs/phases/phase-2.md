@@ -12,6 +12,90 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## Precise mesh boundary-budget diagnostics (#242 / #244)
+
+Full Eclipse CI at `202ca02` completes source-bound Rust reference, initial/edited/
+restored body measures and names, cache clear/retained measures and both STEP integration
+checks. It then fails the bridge with `forearm: source face has no complete triangulation`
+after 92.35 s. The local full gate fails **13/898 in 1061.17 s**, including Eclipse's
+unchanged 120-second timeout and native deadline checks; observed load at that timeout is
+321.96 / 260.04 / 210.51. These failures are retained, not counted as a passing gate.
+Logs and exact candidate/source binding: `out/kernel-evidence-gh225-202ca02/`.
+
+Direct isolation finds byte-identical minimal/full-model forearms (B-rep SHA
+`e9060415f0241fb0f4b6b8728a06ef6adac70cd200ad4e75248546eda953c74b`), both of
+which mesh with sufficient capacity. Earlier bodies consume **999866 triangles**;
+only **134** remain for the forearm. Cable harness, utility cables and vanes alone use
+472532 / 105822 / 239000 triangles. The native context swallows the boundary algorithm's
+budget exception and the adapter then reports a missing face. This is a resource rejection,
+not evidence that the forearm's complete mesh is invalid.
+
+The private boundary algorithm now retains its precise failure reason across the native
+context. The caller returns `mesh boundary exceeds vertex budget` before inspecting
+incomplete output. The regression first fails that exact diagnostic and then passes,
+including sufficient-capacity recovery, arbitrary oblique ellipse sections, four rotated
+copies, complete outward/closed meshes and unchanged source/patterned B-rep bytes.
+Kernel mesh identity is `indexed-faces-copy-normal-boundary-v4`; geometry, mesh settings
+and budgets are unchanged. Focused Release and native ASan/UBSan each pass **5988669
+assertions in 11 mesh cases**, with unchanged vane mesh metrics and no sanitizer diagnostics.
+The exact five-feature document reduction passes **79564 assertions** in both configurations.
+Nightfall C++ is instrumented; vendor OCCT and Rust remain uninstrumented. Logs:
+`/tmp/nightfall-242-{boundary-budget-focused,boundary-budget-asan,forearm-document,forearm-document-asan}.log`.
+The updated complete gate remains pending at this checkpoint.
+
+Private diagnostic source/logs and the two forearm B-reps remain under
+`out/kernel-evidence-gh242/`. #244 tracks efficient cable/surface tessellation and completing
+the full fixture within the unchanged quality, output and deadline contracts. Full Eclipse
+acceptance, final retained full-model B-rep immutability and assembly/physics remain unverified.
+
+## Shared-boundary normal control for loft meshes (#242)
+
+#225's corrected independent volume oracle exposes a real vane-mesh defect. The
+direct-kernel one-loft regression first fails with `mesh normals disagree with triangle
+winding`. Raw diagnostics find **13** nondegenerate inverted triangles among **20110**,
+despite positive UV orientation and agreement between stored normals and surface
+derivatives. OCCT's interior angular control explicitly skips frontier links; boundary
+curve-tangent control alone misses incident surface-normal variation near curved edges.
+
+The existing native adapter now refines the discrete shared edges against incident
+surface normals before face triangulation, using the caller's unchanged angular setting.
+All incident pcurves receive the same added edge samples, preserving boundary conformity.
+This is one meshing pass, with no fitted normals, triangle reversal/deletion workaround,
+geometry/tolerance changes or resource/deadline increases. The same three-million-vertex
+budget bounds the edge refinement; exhausted budget/parameter range returns an error.
+Nondegenerate SameParameter/SameRange edges with estimable normal samples enter this
+additional criterion. Other edge cases retain native processing and the unchanged final
+finite-data/complete-face/winding/budget checks. No global angular-error certificate is claimed.
+Transient kernel identity records `mesh=indexed-faces-copy-normal-boundary-v3`.
+
+The private prototype produces **0** inverted triangles among **19962** on the same loft.
+The strengthened public-kernel test passes **4814194 assertions**: default/waist-1.05,
+coarse/finer meshes, arbitrary rotation and reflection, every face/range/index and triangle,
+exact-position boundary welding with opposite edge incidences and Euler characteristic 2,
+monotonic V/A convergence, current face owners and unchanged source B-rep bytes. It also
+checks 360 sampled normal comparisons against finite differences (`1e-5` relative parameter
+steps, projection distance <=1e-6 mm, dot agreement >1-1e-6). Those are sampled comparisons,
+not global uncertainty bounds. The earlier broader mesh corpus passes 622210 assertions
+across ten cases before the strengthened test replaces its smaller initial regression.
+
+Diagnostics and source are retained under `out/kernel-evidence-gh242/`; logs:
+`/tmp/nightfall-242-{red,diagnostic,boundary-diagnostic,focused,quality}.log`.
+Final focused Release and native ASan/UBSan checks both pass **5201892 assertions in ten
+cases**, with identical observed mesh metrics and no sanitizer diagnostics (vendor OCCT
+and Rust remain uninstrumented). At default waist, coarse/fine meshes contain
+**19962 / 77528 triangles**; signed V errors are **-263.515733 / -123.395499 mm³** and
+A errors **-5.684691 / -2.009527 mm²** against exact-solid measures. At waist 1.05 the
+counts are **19646 / 75972**, with V errors **-283.127709 / -129.612148 mm³** and A errors
+**-5.881367 / -2.033057 mm²**. Default display settings are 0.1 mm / 0.2 rad; the finer
+comparison uses 0.05 mm / 0.1 rad. Both remain within the fixed 1% display-mesh comparison
+budget; these measured differences do not bound the exact-solid uncertainty.
+
+The full local gate passes **895/895 in 248.66 s**, plus Rust Debug/Release,
+Clippy/format, schema/hygiene, native XPC/Metal/recovery and concurrency/TSAN checks.
+Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. Remote CI/review and
+#225's full acceptance rerun remain pending. Exact-solid V/A integration and the
+independent Rust surface oracle are unchanged by this tessellation correction.
+
 ## Circular-pattern integration conditioning (#239)
 
 Fine-grained private `IKernel` tracing attributes **52438.947 ms** of an unchanged

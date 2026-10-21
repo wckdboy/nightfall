@@ -1,0 +1,239 @@
+{
+  "format": "nightfall.part",
+  "version": 1,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Eclipse forearm boundary-mesh regression",
+    "doc": "Five-feature forearm subgraph from Eclipse, retaining all original parameters and exact section expressions; pattern targets only the forearm. See issues #225 and #242."
+  },
+  "params": [
+    {
+      "name": "upper_length",
+      "value": "250 mm",
+      "min": "220 mm",
+      "max": "280 mm"
+    },
+    {
+      "name": "forearm_length",
+      "value": "210 mm",
+      "min": "190 mm",
+      "max": "240 mm"
+    },
+    {
+      "name": "shoulder_height",
+      "value": "110 mm",
+      "min": "105 mm",
+      "max": "120 mm"
+    },
+    {
+      "name": "jaw_gap",
+      "value": "42 mm",
+      "min": "28 mm",
+      "max": "48 mm"
+    },
+    {
+      "name": "link_waist",
+      "value": 1,
+      "min": 0.9,
+      "max": 1.1
+    },
+    {
+      "name": "fin_count",
+      "value": 32,
+      "min": 16,
+      "max": 48
+    },
+    {
+      "name": "cable_radius",
+      "value": "3.5 mm",
+      "min": "2 mm",
+      "max": "4 mm"
+    },
+    {
+      "name": "arm_count",
+      "value": 4,
+      "min": 1,
+      "max": 4
+    },
+    {
+      "name": "cell_radius",
+      "value": "500 mm",
+      "min": "480 mm",
+      "max": "560 mm"
+    },
+    {
+      "name": "vane_count",
+      "value": 12,
+      "min": 6,
+      "max": 16
+    },
+    {
+      "name": "rotor_waist",
+      "value": 1,
+      "min": 0.85,
+      "max": 1.15
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "forearm_root",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + (30 mm) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - (30 mm) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              24,
+              27
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_waist",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + ((forearm_length + 10 mm) / 2) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - ((forearm_length + 10 mm) / 2) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              "18 mm * link_waist",
+              "20 mm * link_waist"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_tip",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "origin": [
+            "upper_length * 0.6 + (forearm_length - 20 mm) * 0.8",
+            0,
+            "shoulder_height + upper_length * 0.8 - (forearm_length - 20 mm) * 0.6"
+          ],
+          "normal": [
+            0.8,
+            0,
+            -0.6
+          ],
+          "x_direction": [
+            0.6,
+            0,
+            0.8
+          ]
+        },
+        "entities": [
+          {
+            "id": "rim",
+            "type": "ellipse",
+            "center": [
+              0,
+              0
+            ],
+            "radii": [
+              16,
+              17
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "forearm_elliptic_loft",
+      "type": "loft",
+      "inputs": {
+        "profiles": [
+          {
+            "sketch": "forearm_root"
+          },
+          {
+            "sketch": "forearm_waist"
+          },
+          {
+            "sketch": "forearm_tip"
+          }
+        ],
+        "result": {
+          "new": "forearm",
+          "body_type": "brep"
+        }
+      }
+    },
+    {
+      "id": "cell_manipulators_a",
+      "type": "pattern_circular",
+      "inputs": {
+        "bodies": [
+          "forearm"
+        ],
+        "count": "arm_count",
+        "angle": "360 deg",
+        "axis": {
+          "origin": [
+            "cell_radius",
+            0,
+            0
+          ],
+          "direction": "z"
+        }
+      }
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}
