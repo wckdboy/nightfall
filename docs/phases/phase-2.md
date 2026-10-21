@@ -6,6 +6,14 @@
 
 ## Gate
 
+The maintainer directs a product transition to a FreeCAD fork on 2026-10-21, restoring
+UI/UX and flexible sketching to scope and prioritizing speed, simplicity, stability and
+AI nativeness. [RFC 0010](../rfcs/0010-freecad-fork.md) records the direction and proposed
+implementation checks; [#246](https://github.com/wckdboy/nightfall/issues/246) traces the
+decision. The new [fork foundation milestone](https://github.com/wckdboy/nightfall-freecad/milestone/1)
+tracks implementation. Preserve this legacy gate and all failures below; the transition
+does not establish a completed Rust migration or industrial geometry/physics parity.
+
 All of these, with evidence linked:
 
 - [ ] 20 reference parts (gear, bracket, enclosure, …) build headlessly in CI

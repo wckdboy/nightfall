@@ -21,5 +21,6 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 | [0005](0005-feature-ir.md) | Feature IR schema v1 | Accepted |
 | [0007](0007-kernel-evaluator-contract.md) | Production kernel interface and incremental evaluator | Accepted |
 | [0008](0008-rust-kernel.md) | Rust implementation of the Nightfall kernel and engine | Accepted |
+| [0010](0010-freecad-fork.md) | FreeCAD as the Nightfall product foundation | Review; maintainer-directed fork |
 
 RFC 0006 is reserved for Nightfall Script by RFC 0005 (#93).
