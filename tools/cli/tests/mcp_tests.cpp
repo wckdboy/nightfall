@@ -189,7 +189,8 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
   }
   CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "body_topology",
                                           "measure", "set_parameters", "replace_part", "patch_part",
-                                          "inspect_assembly", "drive_joints", "undo", "redo",
+                                          "inspect_assembly", "drive_joints", "check_interference",
+                                          "measure_clearance", "sweep_joint", "undo", "redo",
                                           "open_part", "save_part", "export_step", "export_mesh"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
@@ -843,4 +844,92 @@ TEST_CASE("mcp inspect_assembly reports a plain part as not an assembly", "[cli-
   CHECK(*ids(content(process.replies[2], true), "errors").front().find("code")->if_string() ==
         "unknown_id");
   CHECK_FALSE(content(process.replies[2], true).find("assembly"));
+}
+
+namespace {
+/// Two 10 mm blocks, the upper one on a vertical slider over the lower one's top face; the
+/// slider value is the gap (negative: the blocks overlap by that depth over 10 x 10 mm).
+std::string stacked_blocks(const char* gap) {
+  return std::string(R"({"format":"nightfall.part","version":2,
+  "units":{"length":"mm","angle":"deg"},"meta":{},"params":[],"references":[],"features":[],
+  "history_end":null,"ui":{},
+  "components":[{"id":"block","features":[
+    {"id":"square","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"r","type":"rect","corner":[-5,-5],"size":[10,10]}],"constraints":[]}},
+    {"id":"cube","type":"extrude","inputs":{"profile":{"sketch":"square"},"distance":"10 mm",
+      "result":{"new":"cube","body_type":"brep"}}}]}],
+  "occurrences":[{"id":"base","component":"block","grounded":true},
+    {"id":"top","component":"block","placement":{"translation":[0,0,11]}}],
+  "joints":[{"id":"lift","kind":"slider","value":")") +
+         gap + R"(",
+    "a":{"occurrence":"base","frame":{"created_by":"cube","role":"cap_end"}},
+    "b":{"occurrence":"top","frame":{"created_by":"cube","role":"cap_start"},"flip":true}}]})";
+}
+}  // namespace
+
+TEST_CASE("mcp reports interference, clearance and a motion sweep", "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("blocks.nightfall");
+  write(input, stacked_blocks("-2 mm"));
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "check_interference"),
+             call(2, "measure_clearance", R"({"a":"base","b":"top/cube"})"),
+             call(3, "sweep_joint", R"({"joint":"lift","from":-4,"to":4,"steps":8})"),
+             call(4, "drive_joints", R"({"values":{"lift":"3 mm"}})"),
+             call(5, "measure_clearance", R"({"a":"top","b":"base"})"),
+             call(6, "check_interference", R"({"occurrences":["top"]})"),
+             call(7, "check_interference", R"({"occurrences":["nowhere"]})"),
+             call(8, "sweep_joint", R"({"joint":"missing","from":0,"to":1,"steps":1})"),
+             call(9, "sweep_joint", R"({"joint":"lift","from":0,"to":1,"steps":0})"),
+             call(10, "get_part")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 11);
+  // 2 mm deep over 10 x 10 mm.
+  const auto& clash = content(process.replies[1]);
+  REQUIRE(ids(clash, "overlapping").size() == 1);
+  const auto pair = ids(clash, "overlapping").front();
+  CHECK(*pair.find("a")->if_string() == "base/cube");
+  CHECK(*pair.find("b")->if_string() == "top/cube");
+  CHECK_THAT(number(pair, "volume"), WithinAbs(200, 200 * 1e-6));
+  CHECK(number(clash, "pairs_checked") == 1);
+  CHECK(number(content(process.replies[2]), "distance") == 0);
+  // The sweep re-solves 9 positions without changing the document.
+  const auto& sweep = content(process.replies[3]);
+  CHECK(number(sweep, "solved_steps") == 9);
+  CHECK(number(sweep, "steps_with_overlap") == 4);
+  const auto steps = ids(sweep, "steps");
+  REQUIRE(steps.size() == 9);
+  for (const auto& step : steps) {
+    const double gap = number(step, "value");
+    CAPTURE(gap);
+    CHECK(*step.find("solved")->if_bool());
+    const auto& placement = *step.find("placements")->find("top")->if_array();
+    CHECK_THAT(*placement[11].if_number(), WithinAbs(10 + gap, 1e-9));
+    const auto& interference = *step.find("interference");
+    const auto overlapping = ids(interference, "overlapping");
+    if (gap < 0) {
+      REQUIRE(overlapping.size() == 1);
+      CHECK_THAT(number(overlapping.front(), "volume"), WithinAbs(-100 * gap, 1e-4));
+    } else {
+      CHECK(overlapping.empty());
+    }
+    CHECK(ids(interference, "touching").size() == (gap == 0 ? 1u : 0u));
+  }
+  // Lifted 3 mm: the gap is the clearance, between the facing caps.
+  const auto& clear = content(process.replies[5]);
+  CHECK_THAT(number(clear, "distance"), WithinAbs(3, 1e-9));
+  CHECK(*clear.find("a")->if_string() == "top/cube");
+  CHECK_THAT(*clear.find("on_a")->if_array()->at(2).if_number(), WithinAbs(13, 1e-9));
+  CHECK_THAT(*clear.find("on_b")->if_array()->at(2).if_number(), WithinAbs(10, 1e-9));
+  CHECK(ids(content(process.replies[6]), "overlapping").empty());
+  CHECK(*ids(content(process.replies[7], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  CHECK(*ids(content(process.replies[8], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  REQUIRE(process.replies[9].find("error"));  // steps outside 1..360: invalid parameters
+  // Only drive_joints changed the document; the sweep left the 3 mm value in place.
+  const auto text = *content(process.replies[10]).find("document")->if_string();
+  CHECK(text.find("\"3 mm\"") != std::string::npos);
 }
