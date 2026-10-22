@@ -97,6 +97,11 @@ class Session {
       const std::vector<std::string>& only) const;
   [[nodiscard]] std::expected<ir::json::Object, ir::Errors> clearance(const std::string& a,
                                                                       const std::string& b) const;
+  /// RFC 0013 mass properties per occurrence and for the assembly, in the assembly frame:
+  /// density from the occurrence, else its component; occurrences without one report volume
+  /// and centre of volume only and are left out of the total. `occurrence` keeps one.
+  [[nodiscard]] std::expected<ir::json::Object, ir::Errors> mass_properties(
+      const std::optional<std::string>& occurrence) const;
   /// A motion sweep: the joint's value from `from` to `to` (document angle units for rotary
   /// joints, length units for sliders) in `steps` intervals, each re-solved from the current
   /// document without changing it. Each step reports the solve, the placements of `report`

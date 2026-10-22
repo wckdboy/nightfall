@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <array>
 #include <expected>
+#include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,6 +43,28 @@ struct Clearance {
 std::expected<Clearance, ir::Errors> measure_clearance(kernel::IKernel& kernel,
                                                        const std::vector<PlacedBody>& a,
                                                        const std::vector<PlacedBody>& b);
+
+/// RFC 0013 mass properties of one occurrence, or of the assembly, in the assembly frame.
+/// Mass and inertia need a density; without one only volume and centroid are known.
+struct MassReport {
+  std::string id;
+  double volume = 0;                // mm^3
+  std::optional<double> density;    // kg/m^3
+  math::Vec3 centroid;              // centre of mass (centre of volume without density), mm
+  double mass = 0;                  // kg
+  std::array<double, 9> inertia{};  // kg m^2 about the centroid, assembly axes, row-major
+};
+struct AssemblyMass {
+  std::vector<MassReport> occurrences;  // in body order
+  MassReport total;                     // the occurrences with a density
+  std::vector<std::string> without_density;
+};
+/// Combines each occurrence's bodies, and then the occurrences with a density, by the
+/// parallel-axis theorem. `density` maps occurrence ids to kg/m^3; `only`, when not empty,
+/// keeps those occurrences.
+std::expected<AssemblyMass, ir::Errors> mass_properties(
+    kernel::IKernel& kernel, const std::vector<PlacedBody>& bodies,
+    const std::map<std::string, double>& density, const std::vector<std::string>& only = {});
 
 /// The occurrence part of an "occurrence/body" id.
 std::string occurrence_of(const std::string& body);

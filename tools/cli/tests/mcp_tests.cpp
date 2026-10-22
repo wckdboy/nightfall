@@ -187,11 +187,26 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
     CHECK(*tool.find("inputSchema")->find("type")->if_string() == "object");
     CHECK(tool.find("annotations")->find("readOnlyHint")->if_bool());
   }
-  CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "body_topology",
-                                          "measure", "set_parameters", "replace_part", "patch_part",
-                                          "inspect_assembly", "drive_joints", "check_interference",
-                                          "measure_clearance", "sweep_joint", "undo", "redo",
-                                          "open_part", "save_part", "export_step", "export_mesh"});
+  CHECK(names == std::vector<std::string>{"inspect_part",
+                                          "get_schema",
+                                          "get_part",
+                                          "body_topology",
+                                          "measure",
+                                          "set_parameters",
+                                          "replace_part",
+                                          "patch_part",
+                                          "inspect_assembly",
+                                          "drive_joints",
+                                          "check_interference",
+                                          "measure_clearance",
+                                          "mass_properties",
+                                          "sweep_joint",
+                                          "undo",
+                                          "redo",
+                                          "open_part",
+                                          "save_part",
+                                          "export_step",
+                                          "export_mesh"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
   CHECK(*inspected.find("ok")->if_bool());
@@ -932,4 +947,60 @@ TEST_CASE("mcp reports interference, clearance and a motion sweep", "[cli-mcp][a
   // Only drive_joints changed the document; the sweep left the 3 mm value in place.
   const auto text = *content(process.replies[10]).find("document")->if_string();
   CHECK(text.find("\"3 mm\"") != std::string::npos);
+}
+
+TEST_CASE("mcp reports mass properties from component and occurrence densities",
+          "[cli-mcp][assembly]") {
+  Temp temp;
+  auto text = stacked_blocks("5 mm");
+  // Steel cubes, except the top one, which overrides its component's density with aluminium.
+  text.replace(text.find(R"({"id":"block",)"), 14, R"({"id":"block","density":7850,)");
+  text.replace(text.find(R"({"id":"top",)"), 12, R"({"id":"top","density":2700,)");
+  const auto input = temp.path("blocks.nightfall");
+  write(input, text);
+  const auto plate = temp.path("plate.nightfall");
+  write(plate, source(part(2)));
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "mass_properties"),
+             call(2, "mass_properties", R"({"occurrence":"top"})"),
+             call(3, "mass_properties", R"({"occurrence":"nowhere"})"),
+             call(4, "open_part", R"({"path":"plate.nightfall"})"), call(5, "mass_properties")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 6);
+  const auto& all = content(process.replies[1]);
+  // Base cube z 0..10, top cube z 15..25: kg = kg/m^3 x mm^3 x 1e-9.
+  const double m_base = 7850 * 1000e-9, m_top = 2700 * 1000e-9, m = m_base + m_top;
+  const double z = (m_base * 5 + m_top * 20) / m;
+  const auto occurrences = ids(all, "occurrences");
+  REQUIRE(occurrences.size() == 2);
+  CHECK(number(occurrences[0], "density") == 7850);
+  CHECK(number(occurrences[1], "density") == 2700);
+  CHECK_THAT(number(occurrences[1], "mass"), WithinAbs(m_top, 1e-9 * m_top));
+  const auto& total = *all.find("total");
+  CHECK_THAT(number(total, "mass"), WithinAbs(m, 1e-9 * m));
+  CHECK_THAT(*total.find("center")->if_array()->at(2).if_number(), WithinAbs(z, 1e-9));
+  // kg m^2: each cube m s^2 / 6 about its own axes, plus m dz^2 about x and y.
+  const auto& inertia = *total.find("inertia")->if_array();
+  const auto entry = [&](std::size_t i, std::size_t j) {
+    return *inertia[i].if_array()->at(j).if_number();
+  };
+  const double izz = m * 100.0 / 6 * 1e-6;
+  const double ixx = izz + (m_base * (z - 5) * (z - 5) + m_top * (20 - z) * (20 - z)) * 1e-6;
+  CHECK_THAT(entry(2, 2), WithinAbs(izz, 1e-9 * izz));
+  CHECK_THAT(entry(0, 0), WithinAbs(ixx, 1e-9 * ixx));
+  CHECK_THAT(entry(1, 1), WithinAbs(ixx, 1e-9 * ixx));
+  CHECK_THAT(entry(0, 1), WithinAbs(0, 1e-12 * ixx));
+  CHECK(ids(all, "without_density").empty());
+  const auto& top = content(process.replies[2]);
+  REQUIRE(ids(top, "occurrences").size() == 1);
+  CHECK_THAT(number(*top.find("total"), "mass"), WithinAbs(m_top, 1e-9 * m_top));
+  CHECK(*ids(content(process.replies[3], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  // A part without densities reports volume only.
+  const auto& part_mass = content(process.replies[5]);
+  CHECK(ids(part_mass, "without_density") == Array{"plate"});
+  CHECK_FALSE(part_mass.find("total"));
+  CHECK(ids(part_mass, "occurrences").front().find("density")->is_null());
 }
