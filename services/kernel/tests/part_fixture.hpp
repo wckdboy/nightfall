@@ -26,4 +26,19 @@ inline ir::Document part(std::size_t count = 3) {
   return d;
 }
 inline std::string source(const ir::Document& d) { return ir::write_document(d).value(); }
+/// Appends a `fixed` constraint for every entity, after the existing constraints so their
+/// indices and pointers are unchanged. The solver (RFC 0012) then cannot move anything, so a
+/// test of the constraint checker's tolerances and diagnostics keeps its meaning.
+inline ir::json::Value pinned(const ir::json::Value& inputs) {
+  ir::json::Object result = *inputs.if_object();
+  for (auto& member : result)
+    if (member.key == "constraints") {
+      ir::json::Array constraints = *member.value.if_array();
+      for (const auto& entity : *inputs.find("entities")->if_array())
+        constraints.push_back(
+            ir::json::Object{{"type", "fixed"}, {"entities", ir::json::Array{*entity.find("id")}}});
+      member.value = std::move(constraints);
+    }
+  return result;
+}
 }  // namespace nf::kernel_service::test
