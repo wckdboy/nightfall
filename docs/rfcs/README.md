@@ -22,7 +22,7 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 | [0007](0007-kernel-evaluator-contract.md) | Production kernel interface and incremental evaluator | Accepted |
 | [0008](0008-rust-kernel.md) | Rust implementation of the Nightfall kernel and engine | Accepted |
 | [0011](0011-ai-design-loop.md) | The AI design loop program | Accepted |
-| [0014](0014-engineering-studies.md) | Engineering studies in the feature IR | Review |
+| [0014](0014-engineering-studies.md) | Engineering studies in the feature IR | Accepted |
 
 RFC 0006 is reserved for Nightfall Script by RFC 0005 (#93). RFC 0009 (#229) and RFC 0010
 (#247) are Review proposals in open PRs; RFC 0011 supersedes their direction.
