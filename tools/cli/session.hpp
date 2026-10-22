@@ -75,6 +75,10 @@ class Session {
   };
   [[nodiscard]] std::expected<MeshExport, ir::Errors> export_obj(
       const std::vector<std::string>& bodies, kernel::MeshingOptions options) const;
+  /// Faces and edges of one live body: generative names (feature, role, from), analytic type
+  /// and frame (plane origin/normal/x axis, cylinder origin/axis/radius) and adjacency. The
+  /// indices are display order only; references are selectors built from the names.
+  [[nodiscard]] std::expected<ir::json::Object, ir::Errors> topology(const std::string& body) const;
 
  private:
   struct State {
