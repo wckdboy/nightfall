@@ -57,6 +57,12 @@ bool bool_arg(const Value& args, const char* key, bool fallback) {
   if (!v->if_bool()) invalid_params(std::string(key) + " must be a boolean");
   return *v->if_bool();
 }
+double number_arg(const Value& args, const char* key, double fallback) {
+  const auto* v = args.find(key);
+  if (!v) return fallback;
+  if (!v->if_number()) invalid_params(std::string(key) + " must be a number");
+  return *v->if_number();
+}
 std::vector<std::string> strings_arg(const Value& args, const char* key) {
   std::vector<std::string> result;
   const auto* v = args.find(key);
@@ -148,6 +154,19 @@ Array tools() {
                                      {"items", Object{{"type", "string"}}},
                                      {"description", "live body ids; omit for all"}}}},
                   {"path"}),
+           false, true),
+      tool("export_mesh",
+           "Write a derived Wavefront OBJ mesh of the live bodies (all, or the named ones) with "
+           "outward normals, for viewing or downstream tools. Geometry stays exact in the "
+           "document; the mesh is a cache at the given deflections.",
+           schema(
+               {{"path", property("string", "Destination .obj file")},
+                {"bodies", Object{{"type", "array"},
+                                  {"items", Object{{"type", "string"}}},
+                                  {"description", "live body ids; omit for all"}}},
+                {"linear_deflection", property("number", "chord error in mm (default 0.1)")},
+                {"angular_deflection", property("number", "angle error in radians (default 0.2)")}},
+               {"path"}),
            false, true),
   };
 }
@@ -275,6 +294,19 @@ struct Server {
       if (!encoded) return tool_result(Object{{"errors", error_entries(encoded.error())}}, true);
       return write_file(*string_arg(args, "path", true), encoded->text,
                         {{"bodies", static_cast<double>(encoded->bodies)}});
+    }
+    if (name == "export_mesh") {
+      kernel::MeshingOptions options;
+      options.linear_deflection = number_arg(args, "linear_deflection", options.linear_deflection);
+      options.angular_deflection =
+          number_arg(args, "angular_deflection", options.angular_deflection);
+      const auto bodies = strings_arg(args, "bodies");
+      auto mesh = session.export_obj(bodies, options);
+      if (!mesh) return tool_result(Object{{"errors", error_entries(mesh.error())}}, true);
+      return write_file(*string_arg(args, "path", true), mesh->obj,
+                        {{"bodies", static_cast<double>(bodies.size())},
+                         {"vertices", static_cast<double>(mesh->vertices)},
+                         {"triangles", static_cast<double>(mesh->triangles)}});
     }
     invalid_params("unknown tool: " + name);
   }

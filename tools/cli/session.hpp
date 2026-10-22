@@ -71,6 +71,15 @@ class Session {
   };
   [[nodiscard]] std::expected<StepExport, ir::Errors> export_step(
       const std::vector<std::string>& bodies) const;
+  /// Wavefront OBJ of the named live bodies (all when empty): one object per body, world-space
+  /// millimetre positions and outward normals from the kernel's indexed display mesh. Derived
+  /// data for viewing and downstream tools, never persisted geometry (RFC 0005).
+  struct MeshExport {
+    std::string obj;
+    std::size_t vertices = 0, triangles = 0;
+  };
+  [[nodiscard]] std::expected<MeshExport, ir::Errors> export_obj(
+      const std::vector<std::string>& bodies, kernel::MeshingOptions options) const;
 
  private:
   struct State {
