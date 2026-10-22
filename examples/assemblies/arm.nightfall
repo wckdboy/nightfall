@@ -1,0 +1,1112 @@
+{
+  "format": "nightfall.part",
+  "version": 2,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Six-joint arm",
+    "doc": "A six-joint revolute arm of boxes and bosses, for URDF export."
+  },
+  "params": [
+    {
+      "name": "q1",
+      "value": "0 deg",
+      "doc": "Joint 1"
+    },
+    {
+      "name": "q2",
+      "value": "0 deg",
+      "doc": "Joint 2"
+    },
+    {
+      "name": "q3",
+      "value": "0 deg",
+      "doc": "Joint 3"
+    },
+    {
+      "name": "q4",
+      "value": "0 deg",
+      "doc": "Joint 4"
+    },
+    {
+      "name": "q5",
+      "value": "0 deg",
+      "doc": "Joint 5"
+    },
+    {
+      "name": "q6",
+      "value": "0 deg",
+      "doc": "Joint 6"
+    }
+  ],
+  "references": [],
+  "features": [],
+  "history_end": null,
+  "ui": {},
+  "components": [
+    {
+      "id": "base",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -40.0,
+                  0
+                ],
+                "size": [
+                  80,
+                  80
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "30 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "top_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                40,
+                30
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 20
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "top",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "top_profile"
+            },
+            "distance": "5 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 7850
+    },
+    {
+      "id": "turret",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -20.0,
+                  0
+                ],
+                "size": [
+                  40,
+                  40
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "60 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "seat_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                20,
+                0
+              ],
+              "normal": [
+                0,
+                0,
+                -1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 20
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "seat",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "seat_profile"
+            },
+            "distance": "5 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        },
+        {
+          "id": "shoulder_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                40,
+                45
+              ],
+              "normal": [
+                0,
+                1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 15
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "shoulder",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "shoulder_profile"
+            },
+            "distance": "8 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 2700
+    },
+    {
+      "id": "upper",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -15.0,
+                  0
+                ],
+                "size": [
+                  30,
+                  20
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "150 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "hip_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                15
+              ],
+              "normal": [
+                0,
+                -1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 15
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "hip",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "hip_profile"
+            },
+            "distance": "8 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        },
+        {
+          "id": "elbow_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                20,
+                135
+              ],
+              "normal": [
+                0,
+                1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 12
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "elbow",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "elbow_profile"
+            },
+            "distance": "8 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 2700
+    },
+    {
+      "id": "forearm",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -12.0,
+                  0
+                ],
+                "size": [
+                  24,
+                  20
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "120 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "knuckle_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                12
+              ],
+              "normal": [
+                0,
+                -1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 12
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "knuckle",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "knuckle_profile"
+            },
+            "distance": "8 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        },
+        {
+          "id": "roll_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                10,
+                120
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 10
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "roll",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "roll_profile"
+            },
+            "distance": "5 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 2700
+    },
+    {
+      "id": "wrist",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -10.0,
+                  0
+                ],
+                "size": [
+                  20,
+                  20
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "30 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "socket_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                10,
+                0
+              ],
+              "normal": [
+                0,
+                0,
+                -1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 10
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "socket",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "socket_profile"
+            },
+            "distance": "5 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        },
+        {
+          "id": "pitch_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                20,
+                20
+              ],
+              "normal": [
+                0,
+                1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 9
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "pitch",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "pitch_profile"
+            },
+            "distance": "6 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 2700
+    },
+    {
+      "id": "hand",
+      "features": [
+        {
+          "id": "bar_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  -10.0,
+                  0
+                ],
+                "size": [
+                  20,
+                  20
+                ]
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "bar",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "bar_profile"
+            },
+            "distance": "25 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "palm_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                8
+              ],
+              "normal": [
+                0,
+                -1,
+                0
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 9
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "palm",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "palm_profile"
+            },
+            "distance": "6 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        },
+        {
+          "id": "spin_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                10,
+                25
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 8
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "spin",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "spin_profile"
+            },
+            "distance": "4 mm",
+            "result": {
+              "join": "body"
+            }
+          }
+        }
+      ],
+      "density": 2700
+    },
+    {
+      "id": "flange",
+      "features": [
+        {
+          "id": "disc_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 15
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "disc",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "disc_profile"
+            },
+            "distance": "6 mm",
+            "result": {
+              "new": "body",
+              "body_type": "brep"
+            }
+          }
+        }
+      ],
+      "density": 7850
+    }
+  ],
+  "occurrences": [
+    {
+      "id": "base",
+      "component": "base",
+      "grounded": true
+    },
+    {
+      "id": "turret",
+      "component": "turret",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          40
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "upper",
+      "component": "upper",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          80
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "forearm",
+      "component": "forearm",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          120
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "wrist",
+      "component": "wrist",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          160
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "hand",
+      "component": "hand",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          200
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "flange",
+      "component": "flange",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          240
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "q1",
+      "kind": "revolute",
+      "value": "q1",
+      "a": {
+        "occurrence": "base",
+        "frame": {
+          "created_by": "top",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "turret",
+        "frame": {
+          "created_by": "seat",
+          "role": "cap_end"
+        },
+        "flip": true
+      }
+    },
+    {
+      "id": "q2",
+      "kind": "revolute",
+      "value": "q2",
+      "a": {
+        "occurrence": "turret",
+        "frame": {
+          "created_by": "shoulder",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "upper",
+        "frame": {
+          "created_by": "hip",
+          "role": "cap_end"
+        },
+        "flip": true
+      },
+      "limits": [
+        "-120 deg",
+        "120 deg"
+      ]
+    },
+    {
+      "id": "q3",
+      "kind": "revolute",
+      "value": "q3",
+      "a": {
+        "occurrence": "upper",
+        "frame": {
+          "created_by": "elbow",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "forearm",
+        "frame": {
+          "created_by": "knuckle",
+          "role": "cap_end"
+        },
+        "flip": true
+      }
+    },
+    {
+      "id": "q4",
+      "kind": "revolute",
+      "value": "q4",
+      "a": {
+        "occurrence": "forearm",
+        "frame": {
+          "created_by": "roll",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "wrist",
+        "frame": {
+          "created_by": "socket",
+          "role": "cap_end"
+        },
+        "flip": true
+      }
+    },
+    {
+      "id": "q5",
+      "kind": "revolute",
+      "value": "q5",
+      "a": {
+        "occurrence": "wrist",
+        "frame": {
+          "created_by": "pitch",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "hand",
+        "frame": {
+          "created_by": "palm",
+          "role": "cap_end"
+        },
+        "flip": true
+      }
+    },
+    {
+      "id": "q6",
+      "kind": "revolute",
+      "value": "q6",
+      "a": {
+        "occurrence": "hand",
+        "frame": {
+          "created_by": "spin",
+          "role": "cap_end"
+        }
+      },
+      "b": {
+        "occurrence": "flange",
+        "frame": {
+          "created_by": "disc",
+          "role": "cap_start"
+        },
+        "flip": true
+      }
+    }
+  ]
+}

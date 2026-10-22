@@ -180,6 +180,12 @@ Array tools() {
            "per occurrence and for the assembly, from exact volume integrals and the density "
            "(kg/m^3) on each occurrence or its component.",
            schema({{"occurrence", property("string", "one occurrence; omit for all")}}), true),
+      tool("export_urdf",
+           "Write the solved assembly as URDF (metres, kilograms, radians) with one OBJ mesh per "
+           "occurrence in a sibling <name>_meshes folder. URDF is a tree: joints that close a "
+           "loop are left out and listed; missing densities and default effort and velocity "
+           "limits are reported as warnings.",
+           schema({{"path", property("string", "destination .urdf file")}}, {"path"}), false, true),
       tool(
           "sweep_joint",
           "Motion study: drive a revolute, cylindrical or slider joint from `from` to `to` "
@@ -362,6 +368,27 @@ struct Server {
           session.clearance(*string_arg(args, "a", true), *string_arg(args, "b", true)));
     if (name == "mass_properties")
       return outcome_object(session.mass_properties(string_arg(args, "occurrence", false)));
+    if (name == "export_urdf") {
+      const auto path = roots.resolve(*string_arg(args, "path", true));
+      if (!path) return tool_result(Object{{"errors", error_entries(path.error())}}, true);
+      const auto stem = path->stem().string();
+      const auto exported = session.export_urdf(stem + "_meshes", stem);
+      if (!exported) return tool_result(Object{{"errors", error_entries(exported.error())}}, true);
+      const auto folder = roots.resolve((path->parent_path() / (stem + "_meshes")).string());
+      if (!folder) return tool_result(Object{{"errors", error_entries(folder.error())}}, true);
+      fs::create_directories(*folder);
+      Array meshes, cut, warnings;
+      for (const auto& [relative, text] : exported->meshes) {
+        publish(path->parent_path() / relative, text);
+        meshes.push_back(relative);
+      }
+      for (const auto& id : exported->cut_joints) cut.push_back(id);
+      for (const auto& w : exported->warnings) warnings.push_back(w);
+      return write_file(path->string(), exported->urdf,
+                        {{"meshes", std::move(meshes)},
+                         {"cut_joints", std::move(cut)},
+                         {"warnings", std::move(warnings)}});
+    }
     if (name == "sweep_joint") {
       const double steps = number_arg(args, "steps", 0);
       if (steps != std::floor(steps) || steps < 1 || steps > 360)
