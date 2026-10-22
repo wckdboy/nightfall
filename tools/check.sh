@@ -76,11 +76,17 @@ else
   fi
 fi
 
-step "Rust math (pinned toolchain; locked, offline dependencies)"
+step "Rust math and sketch solver (pinned toolchain; locked, offline dependencies)"
 cargo fmt --all -- --check
 cargo clippy -p nightfall-math --all-targets --locked --offline -- -D warnings
 cargo test -p nightfall-math --locked --offline
 cargo test -p nightfall-math --locked --offline --release
+cargo clippy -p nightfall-sketch --all-targets --locked --offline -- -D warnings
+cargo test -p nightfall-sketch --locked --offline
+cargo test -p nightfall-sketch --locked --offline --release
+if command -v python3 >/dev/null && [[ -n "${NF_SOLIDCRAFT_CHECKOUT:-}" ]]; then
+  python3 -I third_party/solidcraft-sketch/vendor.py "$NF_SOLIDCRAFT_CHECKOUT" --check
+fi
 # Native Rust checks run through CTest after its adapter has been built by CMake.
 
 step "IR schema"
