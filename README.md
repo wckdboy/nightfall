@@ -305,7 +305,7 @@ successful encoding and a complete temporary-file write; input aliases are refus
 Agents drive the same headless engine through `nf mcp`, a stdio Model Context Protocol
 server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general tools:
 `inspect_part`, `get_part`, `get_schema`, `body_topology`, `measure`, `set_parameters`, `patch_part` (RFC 6902),
-`replace_part`, `undo`, `redo`,
+`replace_part`, `inspect_assembly`, `drive_joints`, `undo`, `redo`,
 `open_part`, `save_part`, `export_step` and `export_mesh` (derived OBJ). The authoritative state is the IR text; every
 mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
 whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
@@ -313,7 +313,12 @@ whose geometry changed, appeared or vanished. A failed feature rolls the change 
 its degrees of freedom, under-constrained entities and redundant constraints in each
 feature's `sketch` entry, and a rebuild that solved a sketch writes the solved coordinates
 back into the document's plain numbers, in its own units, listing them under
-`written_back`; coordinates authored as expressions stay as written. Files are reachable only in
+`written_back`; coordinates authored as expressions stay as written. A document with occurrences is an
+assembly (RFC 0013): its joints solve on every rebuild, its results are the placed bodies
+named `occurrence/body` (so `measure` and both exports see the solved assembly), and every
+reply carries an `assembly` section with status, degrees of freedom, loops, per-joint
+residuals and placements. A joint conflict fails the build and rolls back like a failed
+feature; `drive_joints` sets joint values by id. Files are reachable only in
 the `--in` folder, a private scratch folder and each `--allow-path`. Evaluation runs in
 process without a deadline; the client's tool timeout bounds it. Register it with Claude Code:
 
