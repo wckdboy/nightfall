@@ -1,0 +1,3321 @@
+{
+  "format": "nightfall.part",
+  "version": 2,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Strandbeest",
+    "doc": "Theo Jansen's walking linkage: four legs on a two-throw crankshaft. Jansen's eleven holy numbers plus the crank radius and pivot offsets are parameters; every link outline is solved from constraints; the crank angle drives the walk."
+  },
+  "params": [
+    {
+      "name": "crank",
+      "value": "30.0 deg",
+      "doc": "Crank angle"
+    },
+    {
+      "name": "a",
+      "value": "38.0 mm",
+      "doc": "Jansen's a: fixed pivot, horizontal"
+    },
+    {
+      "name": "b",
+      "value": "41.5 mm",
+      "doc": "Jansen's b: rocker, pivot to knee"
+    },
+    {
+      "name": "c",
+      "value": "39.3 mm",
+      "doc": "Jansen's c: lower link"
+    },
+    {
+      "name": "d",
+      "value": "40.1 mm",
+      "doc": "Jansen's d: rocker, pivot to thigh"
+    },
+    {
+      "name": "e",
+      "value": "55.8 mm",
+      "doc": "Jansen's e: rocker, knee to thigh"
+    },
+    {
+      "name": "f",
+      "value": "39.4 mm",
+      "doc": "Jansen's f: thigh link"
+    },
+    {
+      "name": "g",
+      "value": "36.7 mm",
+      "doc": "Jansen's g: foot, ankle to heel"
+    },
+    {
+      "name": "h",
+      "value": "65.7 mm",
+      "doc": "Jansen's h: foot, heel to toe"
+    },
+    {
+      "name": "i",
+      "value": "49.0 mm",
+      "doc": "Jansen's i: foot, ankle to toe"
+    },
+    {
+      "name": "j",
+      "value": "50.0 mm",
+      "doc": "Jansen's j: upper crank link"
+    },
+    {
+      "name": "k",
+      "value": "61.9 mm",
+      "doc": "Jansen's k: lower crank link"
+    },
+    {
+      "name": "l",
+      "value": "7.8 mm",
+      "doc": "Jansen's l: fixed pivot, vertical"
+    },
+    {
+      "name": "m",
+      "value": "15.0 mm",
+      "doc": "Jansen's m: crank radius"
+    },
+    {
+      "name": "width",
+      "value": "12 mm",
+      "doc": "Link width"
+    },
+    {
+      "name": "pin",
+      "value": "3 mm",
+      "doc": "Pin hole radius"
+    },
+    {
+      "name": "thickness",
+      "value": "4 mm",
+      "doc": "Plate thickness"
+    },
+    {
+      "name": "stack",
+      "value": "45 mm",
+      "doc": "Frame pin length each side"
+    },
+    {
+      "name": "shoe",
+      "value": "7 mm",
+      "doc": "Foot shoe radius"
+    },
+    {
+      "name": "length",
+      "value": "50 mm",
+      "doc": "Link: hole spacing (set per occurrence)"
+    },
+    {
+      "name": "s01",
+      "value": "40 mm",
+      "doc": "Triangle side 0-1 (set per occurrence)"
+    },
+    {
+      "name": "s12",
+      "value": "40 mm",
+      "doc": "Triangle side 1-2 (set per occurrence)"
+    },
+    {
+      "name": "s20",
+      "value": "40 mm",
+      "doc": "Triangle side 2-0 (set per occurrence)"
+    },
+    {
+      "name": "hand",
+      "value": "1",
+      "doc": "Triangle handedness: 1 or -1 (set per occurrence)"
+    },
+    {
+      "name": "gx",
+      "value": "(s01 * s01 + s20 * s20 - s12 * s12) / (2 * s01)",
+      "doc": "Foot toe, x"
+    }
+  ],
+  "references": [],
+  "features": [],
+  "history_end": null,
+  "ui": {},
+  "components": [
+    {
+      "id": "frame",
+      "features": [
+        {
+          "id": "outline",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "r",
+                "type": "rect",
+                "corner": [
+                  "-a - 12 mm",
+                  "-l - 12 mm"
+                ],
+                "size": [
+                  "2 * a + 24 mm",
+                  "l + 24 mm"
+                ]
+              },
+              {
+                "id": "o",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "pin"
+              },
+              {
+                "id": "bl",
+                "type": "circle",
+                "center": [
+                  "-a",
+                  "-l"
+                ],
+                "radius": "pin"
+              },
+              {
+                "id": "br",
+                "type": "circle",
+                "center": [
+                  "a",
+                  "-l"
+                ],
+                "radius": "pin"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "plate",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "outline"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "round",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "edges_of": {
+                "created_by": "plate",
+                "role": "side",
+                "from": "outline/r"
+              },
+              "except": {
+                "edges_of": {
+                  "any": [
+                    {
+                      "created_by": "plate",
+                      "role": "cap_start"
+                    },
+                    {
+                      "created_by": "plate",
+                      "role": "cap_end"
+                    }
+                  ]
+                }
+              }
+            },
+            "radius": "10 mm"
+          }
+        },
+        {
+          "id": "pins_front_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "thickness"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "bl",
+                "type": "circle",
+                "center": [
+                  "-a",
+                  "-l"
+                ],
+                "radius": "pin - 0.1 mm"
+              },
+              {
+                "id": "br",
+                "type": "circle",
+                "center": [
+                  "a",
+                  "-l"
+                ],
+                "radius": "pin - 0.1 mm"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "pins_front",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "pins_front_profile"
+            },
+            "distance": "stack",
+            "result": {
+              "new": "pins_front",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "pins_back_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "-stack"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "bl",
+                "type": "circle",
+                "center": [
+                  "-a",
+                  "-l"
+                ],
+                "radius": "pin - 0.1 mm"
+              },
+              {
+                "id": "br",
+                "type": "circle",
+                "center": [
+                  "a",
+                  "-l"
+                ],
+                "radius": "pin - 0.1 mm"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "pins_back",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "pins_back_profile"
+            },
+            "distance": "stack",
+            "result": {
+              "new": "pins_back",
+              "body_type": "brep"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "crankshaft",
+      "features": [
+        {
+          "id": "front_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                0
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "rim",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "m + 9 mm"
+              },
+              {
+                "id": "o",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "pin"
+              },
+              {
+                "id": "m1",
+                "type": "circle",
+                "center": [
+                  "m",
+                  0
+                ],
+                "radius": "pin"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "front",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "front_profile"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "front",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "back_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "-10.0 mm"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "rim",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "m + 9 mm"
+              },
+              {
+                "id": "o",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "pin"
+              },
+              {
+                "id": "m2",
+                "type": "circle",
+                "center": [
+                  "-m",
+                  0
+                ],
+                "radius": "pin"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "back",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "back_profile"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "back",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "window_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                -12
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "w",
+                "type": "circle",
+                "center": [
+                  0,
+                  "m * 0.75"
+                ],
+                "radius": "m / 4"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "window",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "window_profile"
+            },
+            "distance": "18 mm",
+            "result": {
+              "new": "window",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "windows",
+          "type": "pattern_circular",
+          "inputs": {
+            "bodies": [
+              "window"
+            ],
+            "count": 3,
+            "angle": "360 deg",
+            "axis": {
+              "origin": [
+                0,
+                0,
+                0
+              ],
+              "direction": "z"
+            }
+          }
+        },
+        {
+          "id": "cut_front",
+          "type": "boolean",
+          "inputs": {
+            "op": "subtract",
+            "target": "front",
+            "tools": [
+              "window"
+            ],
+            "keep_tools": true
+          }
+        },
+        {
+          "id": "cut_back",
+          "type": "boolean",
+          "inputs": {
+            "op": "subtract",
+            "target": "back",
+            "tools": [
+              "window"
+            ]
+          }
+        },
+        {
+          "id": "axle_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "-10.0 mm"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": "pin - 0.1 mm"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "axle",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "axle_profile"
+            },
+            "distance": "thickness + 10 mm",
+            "result": {
+              "new": "axle",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "pin_front_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "thickness"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  "m",
+                  0
+                ],
+                "radius": "pin - 0.1 mm"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "pin_front",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "pin_front_profile"
+            },
+            "distance": "20 mm",
+            "result": {
+              "new": "pin_front",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "pin_back_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                "-30 mm"
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c",
+                "type": "circle",
+                "center": [
+                  "-m",
+                  0
+                ],
+                "radius": "pin - 0.1 mm"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "pin_back",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "pin_back_profile"
+            },
+            "distance": "20 mm",
+            "result": {
+              "new": "pin_back",
+              "body_type": "brep"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "link",
+      "params": {
+        "length": "50 mm"
+      },
+      "features": [
+        {
+          "id": "outline",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "h0",
+                "type": "circle",
+                "center": [
+                  0,
+                  0
+                ],
+                "radius": 3
+              },
+              {
+                "id": "h1",
+                "type": "circle",
+                "center": [
+                  48.5,
+                  0.5
+                ],
+                "radius": 3
+              },
+              {
+                "id": "a0",
+                "type": "arc",
+                "center": [
+                  0.5,
+                  0
+                ],
+                "radius": 6,
+                "start_angle": 90,
+                "sweep_angle": 180
+              },
+              {
+                "id": "bottom",
+                "type": "line",
+                "start": [
+                  0,
+                  -6
+                ],
+                "end": [
+                  50,
+                  -5.5
+                ]
+              },
+              {
+                "id": "a1",
+                "type": "arc",
+                "center": [
+                  50,
+                  0
+                ],
+                "radius": 6.5,
+                "start_angle": -90,
+                "sweep_angle": 180
+              },
+              {
+                "id": "top",
+                "type": "line",
+                "start": [
+                  50,
+                  6
+                ],
+                "end": [
+                  0.5,
+                  6
+                ]
+              }
+            ],
+            "constraints": [
+              {
+                "type": "fixed",
+                "entities": [
+                  "h0"
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "h1"
+                ],
+                "value": "pin"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ],
+                "value": "length"
+              },
+              {
+                "type": "horizontal",
+                "entities": [
+                  "bottom"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "a0"
+                ],
+                "value": "width / 2"
+              },
+              {
+                "type": "equal",
+                "entities": [
+                  "a0",
+                  "a1"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "bottom",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "bottom",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a1",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "top",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "top",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a0",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "bottom",
+                  "a0"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "bottom",
+                  "a1"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "top",
+                  "a1"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "top",
+                  "a0"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "plate",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "outline"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "rocker",
+      "params": {
+        "s01": "41.5 mm",
+        "s12": "55.8 mm",
+        "s20": "40.1 mm"
+      },
+      "features": [
+        {
+          "id": "outline",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "h0",
+                "type": "circle",
+                "center": [
+                  0.0,
+                  0
+                ],
+                "radius": 3
+              },
+              {
+                "id": "h1",
+                "type": "circle",
+                "center": [
+                  41.5,
+                  0
+                ],
+                "radius": 3
+              },
+              {
+                "id": "h2",
+                "type": "circle",
+                "center": [
+                  2.5,
+                  "hand * 40.0 mm"
+                ],
+                "radius": 3
+              },
+              {
+                "id": "a0",
+                "type": "arc",
+                "center": [
+                  0.0,
+                  0
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * 176 deg",
+                "sweep_angle": "hand * 94 deg"
+              },
+              {
+                "id": "a1",
+                "type": "arc",
+                "center": [
+                  41.5,
+                  0
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * -90 deg",
+                "sweep_angle": "hand * 134 deg"
+              },
+              {
+                "id": "a2",
+                "type": "arc",
+                "center": [
+                  2.5,
+                  "hand * 40.0 mm"
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * 44 deg",
+                "sweep_angle": "hand * 132 deg"
+              },
+              {
+                "id": "e0",
+                "type": "line",
+                "start": [
+                  0.0,
+                  "hand * -6.0 mm"
+                ],
+                "end": [
+                  41.5,
+                  "hand * -6.0 mm"
+                ]
+              },
+              {
+                "id": "e1",
+                "type": "line",
+                "start": [
+                  46.0,
+                  "hand * 4.0 mm"
+                ],
+                "end": [
+                  7.0,
+                  "hand * 44.0 mm"
+                ]
+              },
+              {
+                "id": "e2",
+                "type": "line",
+                "start": [
+                  -3.5,
+                  "hand * 40.5 mm"
+                ],
+                "end": [
+                  -6.0,
+                  "hand * 0.5 mm"
+                ]
+              }
+            ],
+            "constraints": [
+              {
+                "type": "fixed",
+                "entities": [
+                  "h0"
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "h1"
+                ],
+                "value": "pin"
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "h2"
+                ],
+                "value": "pin"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ],
+                "value": "s01"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h2",
+                    "point": "center"
+                  }
+                ],
+                "value": "s12"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h2",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  }
+                ],
+                "value": "s20"
+              },
+              {
+                "type": "horizontal",
+                "entities": [
+                  "e0"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a2",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h2",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "a0"
+                ],
+                "value": "width / 2"
+              },
+              {
+                "type": "equal",
+                "entities": [
+                  "a0",
+                  "a1"
+                ]
+              },
+              {
+                "type": "equal",
+                "entities": [
+                  "a0",
+                  "a2"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e0",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e0",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a1",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e0",
+                  "a0"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e0",
+                  "a1"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e1",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e1",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a2",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e1",
+                  "a1"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e1",
+                  "a2"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a2",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e2",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e2",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a0",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e2",
+                  "a2"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e2",
+                  "a0"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "plate",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "outline"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "foot",
+      "params": {
+        "s01": "36.7 mm",
+        "s12": "65.7 mm",
+        "s20": "49.0 mm"
+      },
+      "features": [
+        {
+          "id": "outline",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "datum": "xy"
+            },
+            "entities": [
+              {
+                "id": "h0",
+                "type": "circle",
+                "center": [
+                  0.0,
+                  0
+                ],
+                "radius": 3
+              },
+              {
+                "id": "h1",
+                "type": "circle",
+                "center": [
+                  36.5,
+                  0
+                ],
+                "radius": 3
+              },
+              {
+                "id": "p2",
+                "type": "point",
+                "at": [
+                  -7.5,
+                  "hand * 48.5 mm"
+                ]
+              },
+              {
+                "id": "a0",
+                "type": "arc",
+                "center": [
+                  0.0,
+                  0
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * -171 deg",
+                "sweep_angle": "hand * 81 deg"
+              },
+              {
+                "id": "a1",
+                "type": "arc",
+                "center": [
+                  36.5,
+                  0
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * -90 deg",
+                "sweep_angle": "hand * 133 deg"
+              },
+              {
+                "id": "a2",
+                "type": "arc",
+                "center": [
+                  -7.5,
+                  "hand * 48.5 mm"
+                ],
+                "radius": 6.0,
+                "start_angle": "hand * 43 deg",
+                "sweep_angle": "hand * 147 deg"
+              },
+              {
+                "id": "e0",
+                "type": "line",
+                "start": [
+                  0.0,
+                  "hand * -6.0 mm"
+                ],
+                "end": [
+                  36.5,
+                  "hand * -6.0 mm"
+                ]
+              },
+              {
+                "id": "e1",
+                "type": "line",
+                "start": [
+                  41.0,
+                  "hand * 4.0 mm"
+                ],
+                "end": [
+                  -3.5,
+                  "hand * 52.5 mm"
+                ]
+              },
+              {
+                "id": "e2",
+                "type": "line",
+                "start": [
+                  -13.5,
+                  "hand * 47.5 mm"
+                ],
+                "end": [
+                  -6.0,
+                  "hand * -1.0 mm"
+                ]
+              }
+            ],
+            "constraints": [
+              {
+                "type": "fixed",
+                "entities": [
+                  "h0"
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "h1"
+                ],
+                "value": "pin"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ],
+                "value": "s01"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  },
+                  "p2"
+                ],
+                "value": "s12"
+              },
+              {
+                "type": "distance",
+                "entities": [
+                  "p2",
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  }
+                ],
+                "value": "s20"
+              },
+              {
+                "type": "horizontal",
+                "entities": [
+                  "e0"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h0",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "center"
+                  },
+                  {
+                    "entity": "h1",
+                    "point": "center"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a2",
+                    "point": "center"
+                  },
+                  "p2"
+                ]
+              },
+              {
+                "type": "radius",
+                "entities": [
+                  "a0"
+                ],
+                "value": "width / 2"
+              },
+              {
+                "type": "equal",
+                "entities": [
+                  "a0",
+                  "a1"
+                ]
+              },
+              {
+                "type": "equal",
+                "entities": [
+                  "a0",
+                  "a2"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a0",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e0",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e0",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a1",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e0",
+                  "a0"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e0",
+                  "a1"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a1",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e1",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e1",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a2",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e1",
+                  "a1"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e1",
+                  "a2"
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "a2",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "e2",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "coincident",
+                "entities": [
+                  {
+                    "entity": "e2",
+                    "point": "end"
+                  },
+                  {
+                    "entity": "a0",
+                    "point": "start"
+                  }
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e2",
+                  "a2"
+                ]
+              },
+              {
+                "type": "tangent",
+                "entities": [
+                  "e2",
+                  "a0"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "plate",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "outline"
+            },
+            "distance": "thickness",
+            "result": {
+              "new": "plate",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "shoe_profile",
+          "type": "sketch",
+          "inputs": {
+            "plane": {
+              "origin": [
+                0,
+                0,
+                -3
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "x_direction": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "pad",
+                "type": "circle",
+                "center": [
+                  "gx",
+                  "hand * sqrt(s20 * s20 - gx * gx)"
+                ],
+                "radius": "shoe"
+              }
+            ],
+            "constraints": []
+          }
+        },
+        {
+          "id": "shoe",
+          "type": "extrude",
+          "inputs": {
+            "profile": {
+              "sketch": "shoe_profile"
+            },
+            "distance": "thickness + 6 mm",
+            "result": {
+              "new": "shoe",
+              "body_type": "brep"
+            }
+          }
+        },
+        {
+          "id": "fused",
+          "type": "boolean",
+          "inputs": {
+            "op": "union",
+            "target": "plate",
+            "tools": [
+              "shoe"
+            ]
+          }
+        },
+        {
+          "id": "soften",
+          "type": "fillet",
+          "inputs": {
+            "edges": {
+              "edges_of": {
+                "any": [
+                  {
+                    "created_by": "shoe",
+                    "role": "cap_start"
+                  },
+                  {
+                    "created_by": "shoe",
+                    "role": "cap_end"
+                  }
+                ]
+              }
+            },
+            "radius": "1.5 mm"
+          }
+        }
+      ]
+    }
+  ],
+  "occurrences": [
+    {
+      "id": "frame",
+      "component": "frame",
+      "grounded": true
+    },
+    {
+      "id": "crank",
+      "component": "crankshaft",
+      "placement": {
+        "translation": [
+          0,
+          0,
+          5.0
+        ],
+        "rotation": [
+          0,
+          0,
+          30
+        ]
+      }
+    },
+    {
+      "id": "j_fl",
+      "component": "link",
+      "params": {
+        "length": "j"
+      },
+      "placement": {
+        "translation": [
+          13.0,
+          7.5,
+          10.0
+        ],
+        "rotation": [
+          0,
+          0,
+          149
+        ]
+      }
+    },
+    {
+      "id": "k_fl",
+      "component": "link",
+      "params": {
+        "length": "k"
+      },
+      "placement": {
+        "translation": [
+          13.0,
+          7.5,
+          15.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -124
+        ]
+      }
+    },
+    {
+      "id": "c_fl",
+      "component": "link",
+      "params": {
+        "length": "c"
+      },
+      "placement": {
+        "translation": [
+          -38.0,
+          -8.0,
+          35.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -66
+        ]
+      }
+    },
+    {
+      "id": "f_fl",
+      "component": "link",
+      "params": {
+        "length": "f"
+      },
+      "placement": {
+        "translation": [
+          -77.0,
+          2.5,
+          40.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -59
+        ]
+      }
+    },
+    {
+      "id": "rocker_fl",
+      "component": "rocker",
+      "params": {
+        "s01": "b",
+        "s12": "e",
+        "s20": "d",
+        "hand": "1"
+      },
+      "placement": {
+        "translation": [
+          -38.0,
+          -8.0,
+          30.0
+        ],
+        "rotation": [
+          0,
+          0,
+          79
+        ]
+      }
+    },
+    {
+      "id": "foot_fl",
+      "component": "foot",
+      "params": {
+        "s01": "g",
+        "s12": "h",
+        "s20": "i",
+        "hand": "1"
+      },
+      "placement": {
+        "translation": [
+          -22.0,
+          -43.5,
+          45.0
+        ],
+        "rotation": [
+          0,
+          0,
+          160
+        ]
+      }
+    },
+    {
+      "id": "j_fr",
+      "component": "link",
+      "params": {
+        "length": "j"
+      },
+      "placement": {
+        "translation": [
+          13.0,
+          7.5,
+          20.0
+        ],
+        "rotation": [
+          0,
+          0,
+          25
+        ]
+      }
+    },
+    {
+      "id": "k_fr",
+      "component": "link",
+      "params": {
+        "length": "k"
+      },
+      "placement": {
+        "translation": [
+          13.0,
+          7.5,
+          25.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -61
+        ]
+      }
+    },
+    {
+      "id": "c_fr",
+      "component": "link",
+      "params": {
+        "length": "c"
+      },
+      "placement": {
+        "translation": [
+          38.0,
+          -8.0,
+          35.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -83
+        ]
+      }
+    },
+    {
+      "id": "f_fr",
+      "component": "link",
+      "params": {
+        "length": "f"
+      },
+      "placement": {
+        "translation": [
+          74.0,
+          -25.5,
+          40.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -89
+        ]
+      }
+    },
+    {
+      "id": "rocker_fr",
+      "component": "rocker",
+      "params": {
+        "s01": "b",
+        "s12": "e",
+        "s20": "d",
+        "hand": "-1"
+      },
+      "placement": {
+        "translation": [
+          38.0,
+          -8.0,
+          30.0
+        ],
+        "rotation": [
+          0,
+          0,
+          60
+        ]
+      }
+    },
+    {
+      "id": "foot_fr",
+      "component": "foot",
+      "params": {
+        "s01": "g",
+        "s12": "h",
+        "s20": "i",
+        "hand": "-1"
+      },
+      "placement": {
+        "translation": [
+          42.5,
+          -47.0,
+          45.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -29
+        ]
+      }
+    },
+    {
+      "id": "j_bl",
+      "component": "link",
+      "params": {
+        "length": "j"
+      },
+      "placement": {
+        "translation": [
+          -13.0,
+          -7.5,
+          -10.0
+        ],
+        "rotation": [
+          0,
+          0,
+          125
+        ]
+      }
+    },
+    {
+      "id": "k_bl",
+      "component": "link",
+      "params": {
+        "length": "k"
+      },
+      "placement": {
+        "translation": [
+          -13.0,
+          -7.5,
+          -15.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -159
+        ]
+      }
+    },
+    {
+      "id": "c_bl",
+      "component": "link",
+      "params": {
+        "length": "c"
+      },
+      "placement": {
+        "translation": [
+          -38.0,
+          -8.0,
+          -35.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -147
+        ]
+      }
+    },
+    {
+      "id": "f_bl",
+      "component": "link",
+      "params": {
+        "length": "f"
+      },
+      "placement": {
+        "translation": [
+          -78.0,
+          -8.5,
+          -40.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -138
+        ]
+      }
+    },
+    {
+      "id": "rocker_bl",
+      "component": "rocker",
+      "params": {
+        "s01": "b",
+        "s12": "e",
+        "s20": "d",
+        "hand": "1"
+      },
+      "placement": {
+        "translation": [
+          -38.0,
+          -8.0,
+          -30.0
+        ],
+        "rotation": [
+          0,
+          0,
+          95
+        ]
+      }
+    },
+    {
+      "id": "foot_bl",
+      "component": "foot",
+      "params": {
+        "s01": "g",
+        "s12": "h",
+        "s20": "i",
+        "hand": "1"
+      },
+      "placement": {
+        "translation": [
+          -71.0,
+          -29.0,
+          -45.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -171
+        ]
+      }
+    },
+    {
+      "id": "j_br",
+      "component": "link",
+      "params": {
+        "length": "j"
+      },
+      "placement": {
+        "translation": [
+          -13.0,
+          -7.5,
+          -20.0
+        ],
+        "rotation": [
+          0,
+          0,
+          48
+        ]
+      }
+    },
+    {
+      "id": "k_br",
+      "component": "link",
+      "params": {
+        "length": "k"
+      },
+      "placement": {
+        "translation": [
+          -13.0,
+          -7.5,
+          -25.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -40
+        ]
+      }
+    },
+    {
+      "id": "c_br",
+      "component": "link",
+      "params": {
+        "length": "c"
+      },
+      "placement": {
+        "translation": [
+          38.0,
+          -8.0,
+          -35.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -95
+        ]
+      }
+    },
+    {
+      "id": "f_br",
+      "component": "link",
+      "params": {
+        "length": "f"
+      },
+      "placement": {
+        "translation": [
+          73.0,
+          11.5,
+          -40.0
+        ],
+        "rotation": [
+          0,
+          0,
+          -101
+        ]
+      }
+    },
+    {
+      "id": "rocker_br",
+      "component": "rocker",
+      "params": {
+        "s01": "b",
+        "s12": "e",
+        "s20": "d",
+        "hand": "-1"
+      },
+      "placement": {
+        "translation": [
+          38.0,
+          -8.0,
+          -30.0
+        ],
+        "rotation": [
+          0,
+          0,
+          115
+        ]
+      }
+    },
+    {
+      "id": "foot_br",
+      "component": "foot",
+      "params": {
+        "s01": "g",
+        "s12": "h",
+        "s20": "i",
+        "hand": "-1"
+      },
+      "placement": {
+        "translation": [
+          34.5,
+          -47.0,
+          -45.0
+        ],
+        "rotation": [
+          0,
+          0,
+          33
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "drive",
+      "kind": "revolute",
+      "value": "crank",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/o"
+        },
+        "flip": true
+      },
+      "b": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "front",
+          "role": "side",
+          "from": "front_profile/o"
+        },
+        "flip": true,
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_j_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "front",
+          "role": "side",
+          "from": "front_profile/m1"
+        }
+      },
+      "b": {
+        "occurrence": "j_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_k_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "front",
+          "role": "side",
+          "from": "front_profile/m1"
+        }
+      },
+      "b": {
+        "occurrence": "k_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "knee_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "j_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/bl"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            30.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_c_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/bl"
+        }
+      },
+      "b": {
+        "occurrence": "c_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            35.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_k_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "k_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "c_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "c_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "thigh_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "rocker_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h2"
+        }
+      },
+      "b": {
+        "occurrence": "f_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "heel_fl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "f_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_fl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_j_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "front",
+          "role": "side",
+          "from": "front_profile/m1"
+        }
+      },
+      "b": {
+        "occurrence": "j_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            15.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_k_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "front",
+          "role": "side",
+          "from": "front_profile/m1"
+        }
+      },
+      "b": {
+        "occurrence": "k_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "knee_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "j_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/br"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            30.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_c_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/br"
+        }
+      },
+      "b": {
+        "occurrence": "c_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            35.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_k_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "k_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "c_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "c_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "thigh_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "rocker_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h2"
+        }
+      },
+      "b": {
+        "occurrence": "f_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "heel_fr",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "f_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_fr",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_j_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "back",
+          "role": "side",
+          "from": "back_profile/m2"
+        }
+      },
+      "b": {
+        "occurrence": "j_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_k_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "back",
+          "role": "side",
+          "from": "back_profile/m2"
+        }
+      },
+      "b": {
+        "occurrence": "k_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "knee_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "j_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/bl"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -30.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_c_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/bl"
+        }
+      },
+      "b": {
+        "occurrence": "c_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -35.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_k_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "k_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "c_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "c_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "thigh_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "rocker_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h2"
+        }
+      },
+      "b": {
+        "occurrence": "f_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "heel_bl",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "f_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_bl",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -5.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_j_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "back",
+          "role": "side",
+          "from": "back_profile/m2"
+        }
+      },
+      "b": {
+        "occurrence": "j_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -15.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "crank_k_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "crank",
+        "frame": {
+          "created_by": "back",
+          "role": "side",
+          "from": "back_profile/m2"
+        }
+      },
+      "b": {
+        "occurrence": "k_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -20.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "knee_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "j_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/br"
+        }
+      },
+      "b": {
+        "occurrence": "rocker_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -30.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "hip_c_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "frame",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/br"
+        }
+      },
+      "b": {
+        "occurrence": "c_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -35.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_k_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "k_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "c_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "ankle_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "c_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "thigh_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "rocker_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h2"
+        }
+      },
+      "b": {
+        "occurrence": "f_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h0"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -10.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "heel_br",
+      "kind": "revolute",
+      "a": {
+        "occurrence": "f_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        }
+      },
+      "b": {
+        "occurrence": "foot_br",
+        "frame": {
+          "created_by": "plate",
+          "role": "side",
+          "from": "outline/h1"
+        },
+        "offset": {
+          "translation": [
+            0,
+            0,
+            -5.0
+          ]
+        }
+      }
+    }
+  ]
+}
