@@ -14,7 +14,7 @@ stdin and stdout. Each operand travels as STEP text, together with one sample po
 and per edge. Each result comes back as STEP text, together with every result face's history
 in the result's own STEP face order. The client keeps its own document, naming, undo,
 rendering and agent tools; Nightfall supplies booleans, fillets and chamfers. To read operands,
-`IKernel` gains `import_step(text)`.
+`IKernel` gains `import_step(text)` and `edge_distance`.
 
 The first client is a fork of SolidCraft (Rust and truck, MIT OR Apache-2.0). It keeps its own
 kernel for everything else and for wasm, and routes the operations truck is weakest at to OCCT.
@@ -58,6 +58,13 @@ A spike on 2026-10-23 checked the round trip:
 virtual std::expected<std::vector<ShapePtr>, KernelError> import_step(std::string_view);
 ```
 
+A second query maps edge sample points, mirroring `face_distance`:
+
+```cpp
+/// Minimum distance in mm from a finite world point to a trimmed edge.
+virtual std::expected<double, KernelError> edge_distance(const EntityPtr&, math::Vec3);
+```
+
 The OCCT backend reads from a stream with `STEPControl_Reader`, converts units to millimetres
 and validates each solid as `checked()` does. Imported shapes carry no history; they start a
 lineage.
@@ -92,7 +99,7 @@ An operand is one solid:
 - `faces[i]` is a point on the client's face `i`, and `edges[j]` is a point on the client's
   edge `j`. The client picks interior points, away from boundaries.
 - The server maps each point to the nearest face or edge of the imported solid, using
-  `face_distance` and an edge distance. The match must lie within 10 linear tolerances plus
+  `face_distance` and `edge_distance`. The match must lie within 10 linear tolerances plus
   the client's stated `sample_tolerance` (default 1e-3 mm).
 - An ambiguous or missing match is an error. The server never guesses.
 - Several client faces may map to one OCCT face (a seam split on the client's side).
