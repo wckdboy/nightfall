@@ -216,6 +216,14 @@ class IKernel {
   /// Preserve all inputs; handles remain usable after their producing facade ends.
   [[nodiscard]] virtual std::expected<double, KernelError> face_distance(const EntityPtr&,
                                                                          math::Vec3) = 0;
+  /// RFC 0015: minimum Euclidean distance in mm from a finite world point to a trimmed edge,
+  /// at its owning snapshot's placement. Reject foreign/invalid/non-edge handles; preserve
+  /// inputs. Backends without the query report it as unsupported.
+  [[nodiscard]] virtual std::expected<double, KernelError> edge_distance(const EntityPtr&,
+                                                                         math::Vec3) {
+    return std::unexpected(
+        KernelError{"kernel", "edge distance queries are not supported by this backend"});
+  }
   /// Area (mm^2) and area centroid (world mm) of a trimmed face, for RFC 0013 joint frames.
   /// Reject foreign/invalid/non-face handles; preserve inputs. Backends without the query
   /// report it as unsupported.
