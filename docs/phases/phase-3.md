@@ -46,7 +46,24 @@ Branches: #253 (`patch_part`), the evals branch (#254), `export_mesh` (#255),
 `body_topology` (#256). Report and per-task documents: `out/evals-claude-2026-10-22/`.
 The gate box stays unticked until those PRs merge under an Accepted RFC 0011.
 
+**G3, 2026-10-22.** Closure: a four-bar and a slider-crank built from real solids close at
+their closed-form positions with every joint residual at most 1e-9 mm and 1e-9 rad, the
+slider-crank over nine crank angles in a full turn (#277); the Strandbeest showcase, 37
+revolute joints in 12 loops, puts every toe on Jansen's closed-form path within 1e-9 mm over
+a full turn (#284). Export: the six-joint reference arm (`examples/assemblies/arm.nightfall`)
+exports URDF through `nf mcp`; forward kinematics from the URDF alone reproduces every part's
+solved placement at four poses within 3.8e-15 m (`cli.urdf_export`), and MuJoCo 3.16 loads the
+file and, driven to the same joint values, matches within 3.8e-15 m (local run; MuJoCo is
+not a dependency). Interference, clearance, motion sweeps and mass properties are agent
+tools (#286, #289); the first motion study found and fixed a pin collision in the
+Strandbeest. Branches: #276, #277, #278, #283, #284, #286, #289, #291 and the URDF PR. The box
+stays unticked until they merge.
+
 ## Log
+
+- 2026-10-22: G3 met on unmerged branches: assemblies evaluate, drive and solve on real
+  solids; interference, clearance, motion sweep, mass properties and URDF export are `nf
+  mcp` tools; a solver fix (#291) refuses flipped parts and seeds far drives.
 
 - 2026-10-22: RFC 0011 drafted (#248) and accepted the same day; RFCs 0012 (#257) and 0013
   (#262) accepted with it.
