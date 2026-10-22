@@ -26,7 +26,11 @@ on:
       - "tools/embed_service.py"
       - "examples/parts/**"
       - "examples/modeling/**"
+      - "examples/assemblies/**"
+      - "services/study/**"
       - "third_party/build-occt.sh"
+      - "third_party/build-studies.sh"
+      - "third_party/studies/**"
       - "tools/check.sh"
       - "CMakeLists.txt"
       - "CMakePresets.json"
@@ -46,7 +50,11 @@ on:
       - "tools/embed_service.py"
       - "examples/parts/**"
       - "examples/modeling/**"
+      - "examples/assemblies/**"
+      - "services/study/**"
       - "third_party/build-occt.sh"
+      - "third_party/build-studies.sh"
+      - "third_party/studies/**"
       - "tools/check.sh"
       - "CMakeLists.txt"
       - "CMakePresets.json"
@@ -97,6 +105,29 @@ jobs:
         with:
           path: third_party/install
           key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      # The RFC 0014 study stack links the OCCT install, so its key includes OCCT's.
+      - name: Restore study stack
+        id: studies
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            third_party/install/netgen-6.2.2604
+            third_party/install/mfem-4.10
+          key: studies-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/build-studies.sh', 'third_party/build-occt.sh', 'third_party/occt/patches/*.patch') }}
+
+      - name: Build study stack
+        if: steps.studies.outputs.cache-hit != 'true'
+        run: third_party/build-studies.sh
+
+      - name: Save study stack
+        if: steps.studies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            third_party/install/netgen-6.2.2604
+            third_party/install/mfem-4.10
+          key: ${{ steps.studies.outputs.cache-primary-key }}
 
       - run: tools/check.sh --preset occt --skip-format
       - name: Sanitize Swift worker concurrency
