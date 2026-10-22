@@ -28,6 +28,8 @@ void publish(const std::filesystem::path& output, std::string_view text);
 [[nodiscard]] ir::json::Object feature_counts(const kernel_service::Evaluation& evaluation);
 [[nodiscard]] ir::json::Object body_metrics(const std::string& id,
                                             const kernel_service::BodyState& body);
+/// Diagnostics as `{code, message, pointer[, offset]}` entries.
+[[nodiscard]] ir::json::Array error_entries(const ir::Errors& errors);
 
 class Session {
  public:
@@ -50,6 +52,9 @@ class Session {
   [[nodiscard]] std::expected<Build, ir::Errors> redo();
   /// Forgets undo/redo history, so a document loaded at startup is the first state.
   void clear_history() noexcept { undo_.clear(), redo_.clear(); }
+  /// Holds `source` although it does not validate or build, with its errors, so an agent can
+  /// inspect the diagnostics and repair it. No bodies; the previous state is discarded.
+  void adopt_invalid(std::string source, ir::Errors errors);
   [[nodiscard]] bool can_undo() const noexcept { return !undo_.empty(); }
   [[nodiscard]] bool can_redo() const noexcept { return !redo_.empty(); }
   [[nodiscard]] const std::string& source() const noexcept { return state_.source; }
@@ -68,6 +73,7 @@ class Session {
     ir::Document document;
     kernel_service::Evaluation evaluation;
     Build build;
+    ir::Errors errors;  // document-level errors of an adopted invalid source
   };
   [[nodiscard]] std::expected<State, ir::Errors> evaluate(std::string source);
   [[nodiscard]] std::expected<Build, ir::Errors> commit(std::string source, bool rollback,
