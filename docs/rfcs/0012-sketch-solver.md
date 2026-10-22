@@ -1,10 +1,11 @@
 # RFC 0012: A permissive Rust 2D sketch constraint solver
 
-- **Status:** Review
+- **Status:** Accepted — adopt SolidCraft's `sketch` crate under the conditions in Result
 - **Author(s):** The Nightfall Authors (agent-authored proposal)
 - **Phase:** 3, Track 2 of RFC 0011
 - **Created:** 2026-10-22
 - **Issue:** [#257](https://github.com/wckdboy/nightfall/issues/257)
+- **Decided:** 2026-10-22 by the maintainer, who waived the WORKFLOW §3 review period.
 
 **Depends on:** RFC 0005 (v1 sketch constraints are in the schema; "once the solver lands,
 stored coordinates become its starting point") and RFC 0011 (the solver owns constraint
@@ -135,6 +136,47 @@ Gate G2 (RFC 0011): the corpus solves with reported degrees of freedom; conflict
 redundant sets are named; no panic under fuzzing. Plus differential checks between the two
 candidates where both solve, and the spike results appended to this RFC with raw JSON under
 `tools/sketch-spike/results/`.
+
+## Result (2026-10-22)
+
+The spike ran on Apple M3 Pro, macOS 27.2, rustc 1.99.1, release builds, with both
+candidates at the pinned commits above. Scaffolding and raw results:
+[`tools/sketch-spike/`](../../tools/sketch-spike/).
+
+| Metric (weight) | ezpz | SolidCraft `sketch` |
+| --- | --- | --- |
+| Correctness (30) | 100: all 13 cases solved to 1e-6 mm | 100 |
+| Diagnostics (25) | 46: flags under-constrained variables but gives no DOF count; reports a conflict as a least-squares compromise with 4 unsatisfied equations; no redundancy report | 100: exact DOF, refuses the conflict and names 2 failing and 1 redundant constraint, names the redundant parallel |
+| Continuity (15) | 100: the 3-4-5 branch survives the dimension edit | 100 |
+| Robustness (10) | 100: 400 randomized runs, no crash or hang | 100 |
+| Performance (10) | 100: 0.106 ms median for 203 constraints | 26: 0.410 ms |
+| Footprint and hygiene (10) | 21: 54 crates, ~114,000 lines with `faer`; LICENSE is the unfilled MIT template | 100: 12 crates, ~38,000 lines; Apache-2.0 OR MIT; `forbid(unsafe_code)` |
+| **Weighted** | **78.7** | **92.6** |
+
+**Decision by the rule: SolidCraft's `sketch` crate.** The margin is 13.9 points, outside
+the 5-point tie band. It does not depend on the footprint sub-scores: without that metric
+the totals are 76.6 and 82.6, still beyond the band. ezpz is about four times faster, but
+both solve 203 constraints in well under a millisecond, far inside an interactive frame.
+What decides is diagnostics: SolidCraft refuses a contradiction and names it, while ezpz
+silently returns a compromise, which is exactly the behavior an agent cannot act on.
+
+Deviations from the protocol, stated so the result can be weighed:
+
+- The footprint sub-weights (50 for crate count, 30 for vendored lines, 20 for license
+  completeness) were set at scoring time; the protocol named the inputs but not the split.
+  The decision holds without the metric, as shown above.
+- Robustness used 400 randomized variants per solver instead of 10 minutes of fuzzing.
+- Continuity is one dimension-edit pair; drags and arc flips are not yet in the corpus.
+
+Conditions for adoption, carried into the dependency entry:
+
+1. Vendor `sketch` and `geom` at the pinned commit under `third_party/` with their license
+   texts, as `nightfall-sketch`'s only solver dependency; pin `serde` and `thiserror`.
+2. Exclude sketch text: its embedded fonts are OFL-1.1, which WORKFLOW §8 does not list.
+   The solver does not use the `text` or `fonts` modules; the vendored copy drops them and
+   `ttf-parser`, leaving 10 crates. Sketch text, if wanted later, needs its own decision on
+   OFL fonts.
+3. Track upstream by pinned commit and carry Nightfall changes as patches, as with OCCT.
 
 ## Risks and open questions
 
