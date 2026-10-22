@@ -12,6 +12,15 @@ All of these, with evidence linked:
 - [x] Changing one parameter rebuilds a 30-feature part in < 100 ms ([baseline evidence](#rebuild-benchmark-evidence); [slanted-profile fix](#polynomial-mass-integration-rebuild-evidence); [CLI recheck and loaded-run miss](#headless-cli-export-and-rebuild-evidence))
 - [ ] IR documents validate against schema v1 and migrate forward; ASan/UBSan clean
 
+## AI design loop program (#248)
+
+On 2026-10-22 the maintainer asks for the best path to AI-native CAD with assemblies and
+structural/fluid/material analysis. [RFC 0011](../rfcs/0011-ai-design-loop.md) (Review)
+keeps the accepted kernel/IR foundation, retires the FreeCAD fork as a product foundation,
+and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assemblies and
+studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
+and RFC 0010 (#247). This gate and its recorded failures are unchanged.
+
 ## Consolidated integration review (#223)
 
 On 2026-10-20 the maintainer explicitly authorizes the consolidated integration through
