@@ -8,6 +8,7 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
 | Name | Version | License | Used by | Why | Fetched by |
 | --- | --- | --- | --- | --- | --- |
 | Rust toolchain + standard library | 1.99.1 (`rust-toolchain.toml`) | MIT OR Apache-2.0; bundled component notices in the toolchain's `COPYRIGHT.html` / `COPYRIGHT-library.html` | Rust math (RFC 0008); rustfmt/Clippy build-only | Safe numerical geometry; no external Cargo crates in the first slice | rustup, exact toolchain pin; Cargo.lock committed |
+| SolidCraft `sketch` + `geom` (subset) | `6f5d0038` (`third_party/solidcraft-sketch/vendor.py`) | MIT OR Apache-2.0 (upstream LICENSE-MIT, LICENSE-APACHE and NOTICE kept) | `core/sketch/rust` | 2D sketch constraint solver chosen by RFC 0012's measured spike; vendored dependency-free (serde, thiserror, fonts and text outlines removed) | committed source, regenerated and verified by `vendor.py` |
 | Catch2 | v3.16.1 (`5010924c`) | BSL-1.0 | tests only | C++ unit and property tests | CMake FetchContent, pinned commit |
 | jsonschema | 4.26.0 (transitives pinned in `tools/schema-requirements.txt`) | MIT (including attrs, referencing, jsonschema-specifications, rpds-py) | tests only | Independent JSON Schema 2020-12 check of the IR corpus (RFC 0005) | pip in an isolated test environment; never linked or shipped |
 | OpenCASCADE | 7.9.3 (`a016080b`) | LGPL-2.1 (dynamic linking only) | `NF_WITH_OCCT=ON` only | Comparison/fallback kernel and STEP translator (RFC 0001) | `third_party/build-occt.sh`, used via `third_party/occt/CMakeLists.txt` |
@@ -19,7 +20,6 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
 
 | Name | License | Purpose | RFC |
 | --- | --- | --- | --- |
-| planegcs | LGPL-2.1 | 2D sketch constraint solver | — |
 | sucrase | MIT | TypeScript type stripping for Nightfall Script | — |
 | Sparkle | MIT | Direct-download updates | — |
 
