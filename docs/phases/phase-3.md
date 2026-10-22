@@ -1,8 +1,8 @@
 # Phase 3 — The AI design loop
 
-- **Status:** Proposed by [RFC 0011](../rfcs/0011-ai-design-loop.md) (Review); activates
-  on acceptance. Phase 2's open gate items and failures stay recorded in
-  [phase-2.md](phase-2.md) and are not transferred.
+- **Status:** Active since 2026-10-22, when the maintainer accepted
+  [RFC 0011](../rfcs/0011-ai-design-loop.md) and waived the review period. Phase 2's open
+  gate items and failures stay recorded in [phase-2.md](phase-2.md) and are not transferred.
 - **Milestone:** `Phase 3` on GitHub (to be created on acceptance)
 
 ## Gate
@@ -48,5 +48,7 @@ The gate box stays unticked until those PRs merge under an Accepted RFC 0011.
 
 ## Log
 
+- 2026-10-22: RFC 0011 drafted (#248) and accepted the same day; RFCs 0012 (#257) and 0013
+  (#262) accepted with it.
 - 2026-10-22: RFC 0011 drafted (#248). First implementation slice tracked separately and
   held as a draft PR until acceptance.
