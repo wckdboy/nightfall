@@ -25,6 +25,7 @@ An RFC records a decision before code depends on it. WORKFLOW.md §3 lists what 
 | [0012](0012-sketch-solver.md) | A permissive Rust 2D sketch constraint solver | Accepted (SolidCraft `sketch`) |
 | [0013](0013-assemblies.md) | Assemblies in the feature IR | Accepted |
 | [0014](0014-engineering-studies.md) | Engineering studies in the feature IR | Accepted |
+| [0015](0015-external-kernel-protocol.md) | External kernel protocol (`nf kernel serve`) | Review |
 
 RFC 0006 is reserved for Nightfall Script by RFC 0005 (#93). RFC 0009 (#229) and RFC 0010
 (#247) are Review proposals in open PRs; RFC 0011 supersedes their direction.
