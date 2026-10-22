@@ -303,7 +303,7 @@ Agents drive the same headless engine through `nf mcp`, a stdio Model Context Pr
 server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general tools:
 `inspect_part`, `get_part`, `get_schema`, `measure`, `set_parameters`, `patch_part` (RFC 6902),
 `replace_part`, `undo`, `redo`,
-`open_part`, `save_part` and `export_step`. The authoritative state is the IR text; every
+`open_part`, `save_part`, `export_step` and `export_mesh` (derived OBJ). The authoritative state is the IR text; every
 mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
 whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
 `rollback` is false, and every error carries its JSON Pointer. Files are reachable only in
