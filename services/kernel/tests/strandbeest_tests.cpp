@@ -7,9 +7,11 @@
 #include "assembly.hpp"
 #include "assembly_queries.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
@@ -151,5 +153,38 @@ TEST_CASE("the Strandbeest's links clear each other and the pins over a full tur
       UNSCOPED_INFO(clash.a << " / " << clash.b << ": " << clash.volume << " mm^3");
     CHECK(found->empty());
     CHECK(checked > 0);  // the broad phase passed real candidates to the exact check
+  }
+}
+
+TEST_CASE("the Strandbeest's mass is balanced front to back at every crank angle",
+          "[assembly][showcase][mass]") {
+  // The back half mirrors the front half about the frame's mid-plane, z = 2 mm, at every
+  // pose (the back pair runs half a turn behind), so the centre of mass stays on that plane.
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {256, 256 * 1024 * 1024});
+  for (const double crank : {0.0, 75.0, 210.0}) {
+    CAPTURE(crank);
+    const auto document = strandbeest(crank);
+    const auto result = evaluate_assembly(evaluator, *kernel, document);
+    REQUIRE(result);
+    std::map<std::string, double> density;
+    std::vector<PlacedBody> bodies;
+    double expected = 0;
+    for (const auto& o : result->occurrences) {
+      const auto& component = *std::ranges::find(
+          document.components,
+          std::ranges::find(document.occurrences, o.id, &ir::Occurrence::id)->component,
+          &ir::Component::id);
+      REQUIRE(component.density);
+      density[o.id] = *component.density;
+      for (const auto& [id, shape] : o.bodies) {
+        bodies.emplace_back(o.id + "/" + id, shape);
+        expected += *component.density * shape->measures().volume * 1e-9;
+      }
+    }
+    const auto mass = mass_properties(*kernel, bodies, density).value();
+    CHECK(mass.without_density.empty());
+    CHECK_THAT(mass.total.mass, WithinAbs(expected, 1e-9 * expected));
+    CHECK_THAT(mass.total.centroid.z, WithinAbs(2, 1e-9));
   }
 }

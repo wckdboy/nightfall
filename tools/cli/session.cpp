@@ -718,6 +718,56 @@ std::expected<Object, ir::Errors> Session::clearance(const std::string& a,
                 {"on_b", point(c->on_b)}};
 }
 
+std::expected<Object, ir::Errors> Session::mass_properties(
+    const std::optional<std::string>& occurrence) const {
+  std::map<std::string, double> density;
+  for (const auto& o : state_.document.occurrences) {
+    const auto c = std::ranges::find(state_.document.components, o.component, &ir::Component::id);
+    if (o.density)
+      density[o.id] = *o.density;
+    else if (c != state_.document.components.end() && c->density)
+      density[o.id] = *c->density;
+  }
+  std::vector<std::string> only;
+  if (occurrence) only.push_back(*occurrence);
+  const auto m = kernel_service::mass_properties(kernel_, placed(state_.evaluation), density, only);
+  if (!m) {
+    if (occurrence)
+      return std::unexpected(
+          ir::Errors{{"unknown_id", "no live bodies in occurrence " + *occurrence, "", {}}});
+    return std::unexpected(m.error());
+  }
+  const auto tensor = [](const std::array<double, 9>& t) {
+    return Array{Array{t[0], t[1], t[2]}, Array{t[3], t[4], t[5]}, Array{t[6], t[7], t[8]}};
+  };
+  const auto entry = [&](const kernel_service::MassReport& r) {
+    Object o{{"id", r.id}, {"volume", r.volume}, {"center", point(r.centroid)}};
+    if (r.density) {
+      o.push_back({"density", *r.density});
+      o.push_back({"mass", r.mass});
+      o.push_back({"inertia", tensor(r.inertia)});
+    } else {
+      o.push_back({"density", nullptr});
+    }
+    return Value(std::move(o));
+  };
+  Array occurrences, without;
+  for (const auto& r : m->occurrences) occurrences.push_back(entry(r));
+  for (const auto& id : m->without_density) without.push_back(id);
+  Object result{{"units", Object{{"volume", "mm^3"},
+                                 {"center", "mm"},
+                                 {"density", "kg/m^3"},
+                                 {"mass", "kg"},
+                                 {"inertia", "kg m^2 about the center, assembly axes"}}},
+                {"occurrences", std::move(occurrences)},
+                {"without_density", std::move(without)}};
+  if (m->total.mass > 0)
+    result.push_back({"total", Object{{"mass", m->total.mass},
+                                      {"center", point(m->total.centroid)},
+                                      {"inertia", tensor(m->total.inertia)}}});
+  return result;
+}
+
 std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, double from, double to,
                                                  std::size_t steps, bool interference,
                                                  const std::vector<std::string>& report) {
