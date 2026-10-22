@@ -4,6 +4,7 @@
 add_subdirectory(math)
 add_subdirectory(svg)
 add_subdirectory(ir)
+add_subdirectory(sketch)
 if(NF_WITH_OCCT)
   add_subdirectory(kernel)
 endif()
