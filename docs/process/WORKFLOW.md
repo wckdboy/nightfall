@@ -32,7 +32,7 @@ Build plan (phases + gates)
   `<type>(<scope>): <summary>`.
   - **types:** `feat` `fix` `perf` `refactor` `test` `docs` `build` `ci` `chore` `rfc`
   - **scopes:** `math` `svg` `ir` `kernel` `usd` `script` `app` `viewport` `sketch`
-    `agent` `cli` `evals` `third_party` `process` `ci` `build` (exactly one per title;
+    `assembly` `agent` `cli` `evals` `third_party` `process` `ci` `build` (exactly one per title;
     pick the area most affected)
   - Breaking change to the IR, file format or a public API: `!` after the scope, plus a
     `BREAKING CHANGE:` footer with the migration.
