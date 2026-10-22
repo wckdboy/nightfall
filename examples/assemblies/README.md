@@ -19,7 +19,10 @@ Every link outline is drawn roughly and solved from its constraints: the two-hol
 two arcs and two tangent lines around the pin holes, and the rocker and foot are rounded
 triangles whose sides are distance constraints driven by `b`, `d`, `e` and `g`, `h`, `i`.
 Mirrored legs reuse the same components with `hand` set to -1. Joint frames are the pin
-holes' axes, stacked 5 mm apart by joint offsets. The parts also use `sqrt` expressions,
+holes' axes, stacked 5 mm apart by joint offsets: the rocker, lower link, thigh and foot sit
+nearest the frame so the hip pins stop short of the crank links. A `sweep_joint` motion
+study found that the first stacking drove each lower crank link through a hip pin for about
+40 degrees of every turn; with this one, no two parts overlap or touch over a full turn. The parts also use `sqrt` expressions,
 booleans, a circular body pattern and fillets.
 
 `crank` drives the walk. Over a full turn every toe lands on Jansen's closed-form path within
