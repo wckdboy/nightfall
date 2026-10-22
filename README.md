@@ -299,6 +299,20 @@ and sorted `bodies`; errors write an `errors` array to stderr with codes, messag
 Pointers and available expression offsets. Exit codes are 0 for success, 1 for build/I/O
 failure, and 2 for usage errors (`nf --help`). An existing output is replaced only after
 successful encoding and a complete temporary-file write; input aliases are refused.
+Agents drive the same headless engine through `nf mcp`, a stdio Model Context Protocol
+server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general tools:
+`inspect_part`, `get_schema`, `measure`, `set_parameters`, `replace_part`, `undo`, `redo`,
+`open_part`, `save_part` and `export_step`. The authoritative state is the IR text; every
+mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
+whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
+`rollback` is false, and every error carries its JSON Pointer. Files are reachable only in
+the `--in` folder, a private scratch folder and each `--allow-path`. Evaluation runs in
+process without a deadline; the client's tool timeout bounds it. Register it with Claude Code:
+
+```sh
+claude mcp add nightfall -- build/occt/tools/cli/nf mcp --in examples/parts/mounting_plate.nightfall
+```
+
 The backend encodes in memory and preserves source snapshots. Backend implementers must add
 `IKernel::export_step(const std::vector<ShapePtr>&)` and rebuild for the new virtual interface;
 no document migration is needed. STEP carries geometry, without Nightfall history or selectors.
