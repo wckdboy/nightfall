@@ -3,6 +3,21 @@
 add_executable(nf main.cpp session.cpp mcp.cpp)
 target_link_libraries(nf PRIVATE nf_evaluator nf::warnings)
 set_target_properties(nf PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
+if(NF_WITH_STUDIES)
+  # RFC 0014: `nf study run`.
+  target_link_libraries(nf PRIVATE nf_study)
+  target_compile_definitions(nf PRIVATE NF_WITH_STUDIES)
+  set_target_properties(nf PROPERTIES BUILD_RPATH "${NF_STUDY_RPATH}")
+  if(NF_BUILD_TESTS)
+    add_test(NAME cli.study_run COMMAND nf study run
+      "${PROJECT_SOURCE_DIR}/examples/studies/thermal_slab.nightfall" conduction)
+    set_tests_properties(cli.study_run PROPERTIES LABELS "occt"
+      PASS_REGULAR_EXPRESSION "\"passed\":true")
+    add_test(NAME cli.study_unknown COMMAND nf study run
+      "${PROJECT_SOURCE_DIR}/examples/studies/thermal_slab.nightfall" missing)
+    set_tests_properties(cli.study_unknown PROPERTIES LABELS "occt" WILL_FAIL TRUE)
+  endif()
+endif()
 if(NF_BUILD_TESTS)
   add_executable(nf_cli_tests tests/build_tests.cpp tests/mcp_tests.cpp)
   add_dependencies(nf_cli_tests nf)

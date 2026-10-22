@@ -25,4 +25,6 @@ std::expected<ir::json::Object, ir::Errors> run_study(kernel_service::Evaluator&
                                                       const std::string& source,
                                                       const std::string& id,
                                                       const RunOptions& options = {});
+/// The `nf study` command: `nf study run <document> <study> [--size L] [--refine a,b,c]`.
+int run_study_command(int argc, char** argv);
 }  // namespace nf::study
