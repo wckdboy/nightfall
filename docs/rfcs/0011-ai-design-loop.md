@@ -1,10 +1,12 @@
 # RFC 0011: The AI design loop program
 
-- **Status:** Review
+- **Status:** Accepted
 - **Author(s):** The Nightfall Authors (agent-authored proposal at the maintainer's request)
 - **Phase:** 3 (proposed; this RFC defines its gates)
 - **Created:** 2026-10-22
 - **Issue:** [#248](https://github.com/wckdboy/nightfall/issues/248)
+- **Decided:** 2026-10-22 by the maintainer ("accepted, waive the wait, keep building"),
+  who waived the WORKFLOW §3 review period.
 
 ## Summary
 
