@@ -1,10 +1,11 @@
 # RFC 0014: Engineering studies in the feature IR
 
-- **Status:** Review
+- **Status:** Accepted
 - **Author(s):** Claude (agent), for the maintainer
 - **Phase:** 3 (Track 4 of RFC 0011, gate G4)
 - **Created:** 2026-10-22
-- **Decided:**
+- **Decided:** 2026-10-22, by the maintainer ("keep going, use open source. build it."): accepted
+  with the physics on MFEM instead of an owned core, and Netgen as the mesher.
 
 ## Summary
 
@@ -13,12 +14,14 @@ A part or assembly document gains an optional `studies` section. A study names i
 conditions by selector with explicit units, mesh settings, the quantities it reports and
 acceptance criteria. `nf study run` and the `run_study` agent tool execute a study out of
 process under a job lifecycle. Every result carries the digests of the document, geometry,
-mesh, mesher and solver it came from. Volume meshes come from **Netgen** (LGPL-2.1,
-dynamically linked, optional), which meshes OCCT shapes directly with curved second-order
-tetrahedra. The physics for the first gate is an owned, dependency-free Rust finite-element
-core, `nightfall-fem`: P2 tetrahedra for elasticity and heat, and Taylor–Hood P2–P1 for
-Stokes flow. Larger physics (contact, nonlinear materials, turbulence, transient) comes later
-through solver adapters, each with its own dependency RFC.
+mesh, mesher and solver it came from. Everything numerical is open source:
+
+- **Netgen** (LGPL-2.1, dynamically linked, optional) meshes OCCT shapes directly.
+- **MFEM** (BSD-3) solves the physics with high-order H1 elements: P2 elasticity and heat,
+  and Taylor–Hood P2–P1 Stokes.
+
+Larger physics (contact, nonlinear materials, turbulence, transient) comes later through more
+solver adapters, each with its own dependency RFC.
 
 ## Motivation
 
@@ -106,7 +109,7 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   1. Build: evaluate the document and resolve the selectors.
   2. Mesh: Netgen on the domain's OCCT solids, with the boundary faces carried through as
      mesh face groups.
-  3. Assemble and solve: `nightfall-fem`.
+  3. Assemble and solve: MFEM.
   4. Post-process: derived quantities and criteria.
   5. Write: the result file and an optional VTU field file.
   Cancellation (SIGTERM, or the tool's `cancel_study`) stops between iterations and writes
@@ -120,42 +123,56 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   reports each quantity per size with its observed order of convergence. This is how gate
   G4 is measured.
 
-### The finite-element core
+### The physics: MFEM
 
-`nightfall-fem` is a new Rust crate under `core/fem/rust`, with no dependencies, following
-RFC 0008's rules: no `unsafe` outside a reviewed FFI module, and `nf-study` calls it through
-a plain C ABI like the solver crates.
+MFEM v4.10 (BSD-3) is built serially (no MPI, no external solvers) as a shared library. The
+study runner keeps it in its own translation units. OCCT's `Handle` macro breaks MFEM's
+headers, so OCCT/Netgen and MFEM never share a translation unit, the same rule as OCCT and
+OpenUSD. The mesher hands the solver a plain tetrahedral mesh: points, tetrahedra, and
+boundary triangles tagged with their B-rep face numbers.
 
-- **Elements.** 10-node quadratic tetrahedra with curved boundary geometry from Netgen.
-  Taylor–Hood P2–P1 for Stokes. Quadrature is exact for the element order.
-- **Solvers.** Compressed sparse rows with deterministic assembly order.
-  - Elasticity and heat: conjugate gradients with an incomplete-Cholesky preconditioner.
-  - Stokes: MINRES with a block-diagonal preconditioner (velocity Laplacian, pressure mass
-    matrix).
-  - Iteration stops at a relative residual of 1e-10. A solve that misses it is an error,
-    never a silent result.
+- **Elements.** H1 P2 vector spaces with `ElasticityIntegrator` for structural, P2
+  `DiffusionIntegrator` for heat, and Taylor–Hood P2–P1 for Stokes.
+- **Solvers.** PCG with a Gauss–Seidel smoother for the SPD problems, and MINRES with a
+  block-diagonal preconditioner for Stokes. Iteration stops at a relative residual of 1e-12,
+  and a solve that misses it is an error, never a silent result. Algebraic multigrid
+  (hypre, Apache-2.0/MIT, which needs an MPI build) is the follow-up when meshes outgrow it.
 - **Boundary conditions.**
   - Fixed supports and prescribed temperatures or velocities are imposed strongly.
-  - Forces, pressures, fluxes and convection are integrated over the selected faces.
-  - A flow rate is imposed as a parabolic profile scaled to the requested flux on a
-    circular inlet, and refused on any other inlet shape in the first slice.
-- **Derived quantities.**
-  - Stresses and fluxes are evaluated at quadrature points and recovered at nodes.
-  - Reactions come from the assembled residual on constrained nodes. They must balance the
-    applied loads, and that balance is reported.
-  - Pressure drop is the difference of area-averaged pressures between boundaries.
+  - Forces, pressures, fluxes and convection are boundary integrals over the selected faces'
+    triangles.
+  - A flow rate becomes a parabolic profile scaled to the requested flux on a circular
+    inlet.
+- **Derived quantities.** Reactions come from the assembled residual on constrained DOFs,
+  and their balance against the applied loads is reported. Stress and flux come from the
+  solution gradient. Pressure drop is the difference of area-averaged boundary pressures.
 
-Owning this core is a deliberate first step, not a commitment to grow it forever. The gate
-cases need about 10⁴–10⁵ unknowns of linear, steady physics, which a small, fully tested
-crate solves in seconds. Physics beyond that goes through adapters.
+**Spike, 2026-10-22.** An OCCT 200 × 10 × 10 mm aluminium box, fixed at one end with 10 N at
+the tip, meshed by Netgen through nglib and solved by MFEM with P2 elasticity:
+
+| Max element size | Unknowns | Tip deflection error vs PL³/3EI | Solve time |
+| --- | --- | --- | --- |
+| 5 mm | 15,045 | −0.49% | 4.1 s |
+| 3.3 mm | 17,853 | −0.32% | 3.7 s |
+| 2.2 mm | 47,820 | −0.29% | 15.5 s |
+
+All three are inside the 2% gate. The −0.29% limit is real physics that beam theory leaves
+out, mostly the clamped root resisting lateral contraction.
+
+Integration notes from the spike:
+- Netgen's geometry must be constructed inside the library, through nglib's
+  `Ng_OCC_Load_BREP` with the shape written by `BRepTools::Write`. Constructing
+  `OCCGeometry` in client code fails a `dynamic_cast` across the dylib boundary.
+- Releasing nglib's mesh aborted in the spike, so the runner, a short-lived process,
+  releases nothing until exit. The cause is a follow-up.
+- MFEM reorients Netgen's tetrahedra on finalize.
 
 ### Solver adapters
 
 `nf-study` defines a solver interface. It takes the mesh, the materials and the resolved
-boundary conditions, and returns fields and quantities. `nightfall-fem` is its first
-implementation. Later adapters each need their own dependency RFC, and are listed here so
-the interface is shaped for them:
-- MFEM (BSD-3, v4.10) for high-order, transient and coupled physics;
+boundary conditions, and returns fields and quantities. MFEM is its first implementation.
+Later adapters each need their own dependency RFC, and are listed here so the interface is
+shaped for them:
 - FEBio (MIT) for contact and nonlinear solids;
 - SU2 (LGPL-2.1, dynamic, optional) for RANS flow;
 - PyFR (BSD-3, Metal) for high-order flow.
@@ -193,9 +210,10 @@ They pass on measured results, not on the agent's claims.
   accuracy on the Poiseuille gate. It is kept as the first fallback if Netgen's build proves
   impractical.
 - **Gmsh, TetGen, CGAL.** These are GPL or AGPL and are not allowed (§8).
-- **MFEM as the physics core now.** It is BSD-3 and excellent, but it is a large C++ build,
-  and the gate cases don't need it. Owning a small core keeps the first slice
-  dependency-free and fully testable. MFEM remains the planned adapter for advanced physics.
+- **An owned Rust finite-element core.** The first draft of this RFC proposed one, to stay
+  dependency-free. The maintainer chose open source instead: MFEM is mature and verified,
+  and the spike shows it meets the gate on the first try. MFEM's serial build takes 67 s on
+  ten cores and needs no other dependency.
 - **External solvers driven by input files only (CalculiX, OpenFOAM).** These are GPL.
   Whether a user-installed GPL binary driven by files is acceptable is a policy question
   this RFC doesn't answer. Nothing here depends on it.
@@ -247,8 +265,8 @@ order reported:
 
 - **Netgen on macOS arm64 against OCCT 7.9.3.** Netgen's OCC layer follows recent OCCT, and
   pinning both may need a patch. The fallback is fTetWild, after a §8 decision.
-- **Solver scale.** An owned CG with incomplete Cholesky is fine to a few 10⁵ unknowns.
-  Beyond that, MFEM with algebraic multigrid is the planned path.
+- **Solver scale.** Serial PCG with Gauss–Seidel took 15.5 s at 48k unknowns in the spike.
+  Hypre's algebraic multigrid needs MFEM's MPI build and is the planned next step.
 - **Singularities.** Re-entrant corners and point supports make peak stress mesh-dependent.
   `max_von_mises` therefore reports the convergence trend, and criteria can exclude regions
   near supports. Agents must be told this in the tool description.
