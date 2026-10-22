@@ -14,6 +14,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "nf/ir/migration.hpp"
+
 using namespace nf;
 using namespace nf::kernel_service;
 using Catch::Matchers::WithinAbs;
@@ -99,7 +101,8 @@ void exercise(const char* name, const char* parameter, std::array<double, 3> val
   const std::string text{std::istreambuf_iterator<char>{stream}, {}};
   auto document = ir::read_document(text);
   diagnostics(document);
-  CHECK(ir::json::parse(write(*document)).value() == ir::json::parse(text).value());
+  // The stored parts are version 1; written output is the migrated, current version.
+  CHECK(ir::json::parse(write(*document)).value() == ir::migrate(ir::json::parse(text).value()));
   auto input = std::ranges::find(document->params, parameter, &ir::Parameter::name);
   REQUIRE(input != document->params.end());
   auto backend = kernel::make_occt_kernel().value();

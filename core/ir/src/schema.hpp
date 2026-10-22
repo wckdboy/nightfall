@@ -3,6 +3,7 @@
 #pragma once
 #include <span>
 #include "nf/ir/document.hpp"
+#include "nf/ir/expression.hpp"
 
 namespace nf::ir::detail {
 struct Link {
@@ -27,4 +28,10 @@ struct SchemaResult {
 [[nodiscard]] SchemaResult check_feature(const json::Value& feature);
 // Requires a structurally valid document and links produced by check_schema.
 [[nodiscard]] Errors check_links(const Document& document, std::span<const Link> links);
+// RFC 0013 sections: component references and overrides, occurrence components and placements,
+// joint ends, frame selectors resolved in the joined occurrence's component scope, and value
+// and limit dimensions per degree of freedom. `links` are all of check_schema's links (scope
+// definitions); `assembly` are those outside root and inline-component features.
+[[nodiscard]] Errors check_assembly(const Document& document, std::span<const Link> links,
+                                    std::span<const Link> assembly, const ParameterValues& params);
 }  // namespace nf::ir::detail
