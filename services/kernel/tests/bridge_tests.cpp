@@ -10,6 +10,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -405,4 +406,76 @@ TEST_CASE("all twenty reference documents cross the C ABI with correct indexed g
     ++count;
   }
   CHECK(count == 20);
+}
+
+namespace {
+std::string strandbeest() {
+  std::ifstream stream(NF_ASSEMBLY_EXAMPLES_DIR "/strandbeest.nightfall", std::ios::binary);
+  REQUIRE(stream.is_open());
+  return {std::istreambuf_iterator<char>{stream}, {}};
+}
+}  // namespace
+
+TEST_CASE("C bridge builds an assembly's placed bodies for the app", "[bridge][assembly]") {
+  auto s = session();
+  const auto result = build(s.get(), strandbeest());
+  const auto m = manifest(result);
+  INFO(ir::json::canonical(m));
+  REQUIRE(m.find("errors")->if_array()->empty());
+  // 26 occurrences: the frame and crankshaft carry several bodies each, every link one.
+  const auto& bodies = *m.find("bodies")->if_array();
+  REQUIRE(bodies.size() == 32);
+  std::size_t faces = 0;
+  const auto* face_data = nf_result_faces(result.get(), &faces);
+  REQUIRE(face_data);
+  std::vector<bool> meshed(bodies.size(), false);
+  for (std::size_t i = 0; i < faces; ++i) meshed[face_data[i].body_index] = true;
+  CHECK(std::ranges::all_of(meshed, [](bool b) { return b; }));
+  // Placed bodies are named occurrence/body; each placed copy keeps its component's volume.
+  const auto body = [&](const char* id) -> const Value& {
+    for (const auto& b : bodies)
+      if (*b.find("id")->if_string() == id) return b;
+    FAIL("no body " << id);
+    return bodies.front();
+  };
+  const double link = (50 * 12 + 36 * std::numbers::pi - 18 * std::numbers::pi) * 4;
+  CHECK_THAT(*body("j_fl/plate").find("volume")->if_number(), WithinAbs(link, 1e-9 * link));
+  CHECK_THAT(*body("j_br/plate").find("volume")->if_number(), WithinAbs(link, 1e-9 * link));
+  // Different placements of one component are different bodies with different hashes.
+  CHECK(*body("j_fl/plate").find("hash")->if_string() !=
+        *body("j_br/plate").find("hash")->if_string());
+  // A drive edit moves the mechanism: the crank's bounds change, the frame's do not.
+  auto text = strandbeest();
+  const std::string drive = R"("value": "30.0 deg")";
+  REQUIRE(text.find(drive) != std::string::npos);
+  text.replace(text.find(drive), drive.size(), R"("value": "120 deg")");
+  const auto moved = manifest(build(s.get(), text));
+  REQUIRE(moved.find("errors")->if_array()->empty());
+  const auto& after = *moved.find("bodies")->if_array();
+  const auto bounds = [](const ir::json::Array& list, const char* id) {
+    for (const auto& b : list)
+      if (*b.find("id")->if_string() == id) return ir::json::canonical(*b.find("maximum"));
+    return std::string();
+  };
+  CHECK(bounds(after, "crank/front") != bounds(bodies, "crank/front"));
+  CHECK(bounds(after, "frame/plate") == bounds(bodies, "frame/plate"));
+}
+
+TEST_CASE("C bridge reports an assembly conflict with its pointer and no geometry",
+          "[bridge][assembly]") {
+  auto s = session();
+  auto text = strandbeest();
+  // Driving a hip as well over-constrains its leg.
+  const std::string hip = R"("id": "hip_fl",)";
+  REQUIRE(text.find(hip) != std::string::npos);
+  text.replace(text.find(hip), hip.size(), R"("id": "hip_fl", "value": "10 deg",)");
+  const auto result = build(s.get(), text);
+  const auto m = manifest(result);
+  const auto& errors = *m.find("errors")->if_array();
+  REQUIRE_FALSE(errors.empty());
+  CHECK(errors.front().find("pointer")->if_string()->starts_with("/joints/"));
+  CHECK(m.find("bodies")->if_array()->empty());
+  std::size_t vertices = 0;
+  CHECK(nf_result_vertices(result.get(), &vertices) == nullptr);
+  CHECK(vertices == 0);
 }
