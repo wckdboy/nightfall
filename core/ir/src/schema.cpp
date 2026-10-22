@@ -8,6 +8,10 @@
 #include <regex>
 #include <unordered_map>
 
+namespace nf::ir {
+std::string_view part_schema() noexcept { return detail::kPartSchema; }
+}  // namespace nf::ir
+
 namespace nf::ir::detail {
 namespace {
 using json::Value;
