@@ -301,6 +301,80 @@ impl Model<'_> {
             .collect()
     }
 
+    /// Every joint but a ball keeps its frames' z axes pointing the same way. The tilt rows
+    /// only ask z_b to be perpendicular to x_a and y_a, which a flipped part also satisfies.
+    fn aligned(&self, joint: usize, x: &[Placement]) -> bool {
+        let (a, b) = self.ends(joint, x);
+        self.asm.joints[joint].kind == JointKind::Ball || dot(b.axes[2], a.axes[2]) > 0.0
+    }
+
+    fn converged(&self, rows: &[Row], x: &[Placement], opt: &SolveOptions) -> bool {
+        rows.iter()
+            .all(|row| self.satisfied(row, self.residual(row, x), opt))
+            && (0..self.asm.joints.len()).all(|j| self.aligned(j, x))
+    }
+
+    fn cost(&self, rows: &[Row], x: &[Placement]) -> f64 {
+        rows.iter().map(|row| self.residual(row, x).powi(2)).sum()
+    }
+
+    /// The relative placement a joint puts frame b at in frame a: translation by its offsets,
+    /// then rotation by its angle, with driven coordinates at their targets and the others at
+    /// their values in `start` (a ball keeps its relative rotation).
+    fn motion(&self, joint: usize, start: &[Placement]) -> Placement {
+        let j = &self.asm.joints[joint];
+        if j.kind == JointKind::Ball {
+            let (a, b) = self.ends(joint, start);
+            let r = [0, 1, 2].map(|u| [0, 1, 2].map(|w| dot(a.axes[u], b.axes[w])));
+            return Placement {
+                rotation: r,
+                translation: [0.0; 3],
+            };
+        }
+        let (mut angle, mut t) = (0.0, [0.0; 3]);
+        for (k, &measure) in j.kind.free().iter().enumerate() {
+            let value = j.values[k].unwrap_or_else(|| self.measure(joint, measure, start));
+            match measure {
+                Angle => angle = value,
+                Offset(i) => t[i] = value,
+                Align(..) => {}
+            }
+        }
+        Placement::about_z(angle, t)
+    }
+
+    /// Places every occurrence reachable from a grounded one through a spanning tree of the
+    /// joints, in joint order, each child exactly through its joint ([`Self::motion`]). A tree
+    /// is then solved by construction; a loop starts with only its cut joints open.
+    fn seeded(&self, start: &[Placement]) -> Vec<Placement> {
+        let mut x = start.to_vec();
+        let mut placed: Vec<bool> = self.asm.occurrences.iter().map(|o| o.grounded).collect();
+        let mut grew = true;
+        while grew {
+            grew = false;
+            for (joint, j) in self.asm.joints.iter().enumerate() {
+                let (a, b) = self.ends[joint];
+                if placed[a] == placed[b] {
+                    continue;
+                }
+                let (fa, fb) = (j.frame_a.placement(), j.frame_b.placement());
+                let m = self.motion(joint, start);
+                if placed[a] {
+                    x[b] = x[a].compose(&fa).compose(&m).compose(&fb.inverse());
+                    placed[b] = true;
+                } else {
+                    x[a] = x[b]
+                        .compose(&fb)
+                        .compose(&m.inverse())
+                        .compose(&fa.inverse());
+                    placed[a] = true;
+                }
+                grew = true;
+            }
+        }
+        x
+    }
+
     fn satisfied(&self, row: &Row, residual: f64, opt: &SolveOptions) -> bool {
         let tolerance = if matches!(row.measure, Offset(_)) {
             opt.length_tolerance
@@ -632,7 +706,17 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
         }
     }
     let start: Vec<Placement> = asm.occurrences.iter().map(|o| o.placement).collect();
+    // From the authored placements first, which keeps a loop on the branch they describe; if
+    // that does not converge (or leaves a part flipped), from the spanning-tree seed, keeping
+    // whichever converges, or else the lower cost.
     let (mut x, mut iterations) = m.least_squares(&rows, start.clone(), opt);
+    if !m.converged(&rows, &x, opt) {
+        let (y, more) = m.least_squares(&rows, m.seeded(&start), opt);
+        iterations += more;
+        if m.converged(&rows, &y, opt) || m.cost(&rows, &y) < m.cost(&rows, &x) {
+            x = y;
+        }
+    }
     // Limits: pin a violated undriven coordinate to its nearest bound and solve again.
     for _ in 0..LIMIT_ROUNDS {
         let mut pinned = false;
@@ -669,7 +753,8 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
     let solved = rows
         .iter()
         .zip(&residuals)
-        .all(|(row, r)| m.satisfied(row, *r, opt));
+        .all(|(row, r)| m.satisfied(row, *r, opt))
+        && (0..asm.joints.len()).all(|j| m.aligned(j, &x));
     let mut report_rows = Vec::with_capacity(asm.joints.len());
     let mut conflicting = Vec::new();
     for (joint, j) in asm.joints.iter().enumerate() {
@@ -686,6 +771,7 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
             }
             ok &= m.satisfied(row, *r, opt);
         }
+        ok &= m.aligned(joint, &x);
         if !ok {
             conflicting.push(j.id.clone());
         }
