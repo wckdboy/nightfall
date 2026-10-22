@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -232,6 +233,21 @@ class IKernel {
                                                                         const ShapePtr&) {
     return std::unexpected(
         KernelError{"kernel", "proximity queries are not supported by this backend"});
+  }
+  /// RFC 0013 mass properties of a solid at its current placement, from exact volume
+  /// integrals: volume (mm^3), centroid (world mm) and the unit-density inertia tensor about
+  /// the centroid in world axes (row-major, mm^5; multiply by density for mass units), with
+  /// products of inertia as off-diagonal entries of the usual sign (-integral of xy dV).
+  /// Inputs are preserved. Backends without the query report it as unsupported.
+  struct MassProperties {
+    double volume = 0;
+    math::Vec3 centroid;
+    std::array<double, 9> inertia{};
+  };
+  [[nodiscard]] virtual std::expected<MassProperties, KernelError> mass_properties(
+      const ShapePtr&) {
+    return std::unexpected(
+        KernelError{"kernel", "mass properties are not supported by this backend"});
   }
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
