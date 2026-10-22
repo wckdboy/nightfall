@@ -5,8 +5,11 @@
 #include <algorithm>
 #include <map>
 #include <numbers>
+#include <optional>
+
 #include <numeric>
 #include <set>
+#include "nf/sketch/solve.h"
 
 #include "nf/math/constructors.hpp"
 #include "nf/math/refine.hpp"
@@ -430,14 +433,167 @@ void verify_constraints(const Value& inputs) {
     }
   }
 }
+/// Solves point, line, circle and arc coordinates with the RFC 0012 solver, from the authored
+/// values. Returns the inputs with solved coordinates, or nothing when there is nothing to solve
+/// or a constraint names an entity the solver does not handle (verification then applies as
+/// before). Conflicting constraints are an error naming every failing constraint.
+std::optional<Value> solve_constraints(const Value& inputs) {
+  const auto& constraints = *field(inputs, "constraints").if_array();
+  const auto& entities = *field(inputs, "entities").if_array();
+  if (constraints.empty() || constraints.size() > 4096 || entities.size() > 4096) return {};
+  std::map<std::string_view, std::uint32_t> index;
+  std::vector<nf_sketch_entity> flat;
+  std::vector<std::size_t> origin;  // flat index -> entity index
+  for (std::size_t i = 0; i < entities.size(); ++i) {
+    const auto& e = entities[i];
+    const auto& type = *field(e, "type").if_string();
+    nf_sketch_entity f{};
+    if (type == "point") {
+      const auto at = point2(field(e, "at"));
+      f = {NF_SKETCH_POINT, 0, {at.x, at.y, 0, 0, 0}};
+    } else if (type == "line") {
+      const auto a = point2(field(e, "start")), b = point2(field(e, "end"));
+      f = {NF_SKETCH_LINE, 0, {a.x, a.y, b.x, b.y, 0}};
+    } else if (type == "circle") {
+      const auto c = point2(field(e, "center"));
+      f = {NF_SKETCH_CIRCLE, 0, {c.x, c.y, number(field(e, "radius")), 0, 0}};
+    } else if (type == "arc") {
+      const auto c = point2(field(e, "center"));
+      f = {NF_SKETCH_ARC,
+           0,
+           {c.x, c.y, number(field(e, "radius")), number(field(e, "start_angle")),
+            number(field(e, "sweep_angle"))}};
+    } else {
+      continue;
+    }
+    index.emplace(*field(e, "id").if_string(), static_cast<std::uint32_t>(flat.size()));
+    flat.push_back(f);
+    origin.push_back(i);
+  }
+  static const std::map<std::string_view, std::uint32_t> kinds{
+      {"coincident", NF_SKETCH_COINCIDENT},
+      {"horizontal", NF_SKETCH_HORIZONTAL},
+      {"vertical", NF_SKETCH_VERTICAL},
+      {"parallel", NF_SKETCH_PARALLEL},
+      {"perpendicular", NF_SKETCH_PERPENDICULAR},
+      {"tangent", NF_SKETCH_TANGENT},
+      {"equal", NF_SKETCH_EQUAL},
+      {"symmetric", NF_SKETCH_SYMMETRIC},
+      {"midpoint", NF_SKETCH_MIDPOINT},
+      {"fixed", NF_SKETCH_FIXED},
+      {"distance", NF_SKETCH_DISTANCE},
+      {"angle", NF_SKETCH_ANGLE},
+      {"radius", NF_SKETCH_RADIUS}};
+  std::vector<nf_sketch_constraint> flat_constraints;
+  for (const auto& constraint : constraints) {
+    const auto kind = kinds.find(*field(constraint, "type").if_string());
+    if (kind == kinds.end()) return {};
+    nf_sketch_constraint c{kind->second, 0, {}, 0};
+    for (const auto& operand : *field(constraint, "entities").if_array()) {
+      const auto& id =
+          operand.if_string() ? *operand.if_string() : *field(operand, "entity").if_string();
+      const auto found = index.find(id);
+      if (found == index.end() || c.ref_count == 3) return {};  // outside the solver: verify only
+      std::uint32_t role = NF_SKETCH_WHOLE;
+      if (const auto* point = operand.find("point")) {
+        const auto& name = *point->if_string();
+        role = name == "start" ? NF_SKETCH_START : name == "end" ? NF_SKETCH_END : NF_SKETCH_CENTER;
+      }
+      c.refs[c.ref_count++] = {found->second, role};
+    }
+    if (const auto* value = constraint.find("value")) c.value = number(*value);
+    flat_constraints.push_back(c);
+  }
+  std::vector<nf_sketch_entity> solved(flat.size());
+  std::vector<std::uint8_t> under(flat.size()), failing(flat_constraints.size()),
+      redundant(flat_constraints.size());
+  nf_sketch_report report{};
+  std::size_t error_index = 0;
+  const auto status = nf_sketch_solve(flat.data(), flat.size(), flat_constraints.data(),
+                                      flat_constraints.size(), solved.data(), under.data(),
+                                      failing.data(), redundant.data(), &report, &error_index);
+  if (status == NF_SKETCH_INTERNAL) fail("/constraints", "sketch solver failed internally");
+  // Input problems keep their precise verification and profile diagnostics.
+  if (status != NF_SKETCH_OK) return {};
+  if (!report.solved) {
+    std::string named;
+    std::string first;
+    for (std::size_t j = 0; j < failing.size(); ++j)
+      if (failing[j]) {
+        const auto pointer = "/constraints/" + std::to_string(j);
+        if (first.empty()) first = pointer;
+        named += (named.empty() ? "" : ", ") + pointer;
+      }
+    fail(first.empty() ? "/constraints" : first,
+         "sketch constraints conflict: " +
+             (named.empty() ? std::string("no single constraint") : named));
+  }
+  // Rebuild the inputs with solved coordinates; everything else is copied unchanged.
+  const auto pair = [](double x, double y) { return Value(ir::json::Array{x, y}); };
+  ir::json::Array out(entities.begin(), entities.end());
+  for (std::size_t k = 0; k < solved.size(); ++k) {
+    const auto& v = solved[k].values;
+    std::map<std::string, Value> set;
+    switch (solved[k].kind) {
+      case NF_SKETCH_POINT:
+        set = {{"at", pair(v[0], v[1])}};
+        break;
+      case NF_SKETCH_LINE:
+        set = {{"start", pair(v[0], v[1])}, {"end", pair(v[2], v[3])}};
+        break;
+      case NF_SKETCH_CIRCLE:
+        set = {{"center", pair(v[0], v[1])}, {"radius", v[2]}};
+        break;
+      default:
+        set = {{"center", pair(v[0], v[1])},
+               {"radius", v[2]},
+               {"start_angle", v[3]},
+               {"sweep_angle", v[4]}};
+    }
+    ir::json::Object entity = *entities[origin[k]].if_object();
+    for (auto& member : entity)
+      if (const auto replacement = set.find(member.key); replacement != set.end())
+        member.value = replacement->second;
+    out[origin[k]] = std::move(entity);
+  }
+  ir::json::Object result = *inputs.if_object();
+  for (auto& member : result)
+    if (member.key == "entities") member.value = std::move(out);
+  return Value(std::move(result));
+}
 }  // namespace
 
 std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
                                                 const kernel::Plane* selected_plane) {
   return guarded([&] {
-    verify_constraints(inputs);
+    // Authored coordinates that already satisfy every constraint are used exactly as written.
+    // Otherwise the RFC 0012 solver moves them from there, and the same independent check
+    // verifies its result. Sketches the solver does not handle keep their original diagnostic.
+    // A solution the check rejects (a line collapsed to a point, say) is never published: the
+    // authored violation is reported with the reason.
+    std::optional<Value> solved;
+    try {
+      verify_constraints(inputs);
+    } catch (ir::Error& violation) {
+      // A conflict keeps the authored violation's pointer and residual, and names the rest.
+      try {
+        solved = solve_constraints(inputs);
+      } catch (const ir::Error& conflict) {
+        violation.message += "; " + conflict.message;
+        throw violation;
+      }
+      if (!solved) throw;
+      try {
+        verify_constraints(*solved);
+      } catch (const ir::Error& degenerate) {
+        violation.message +=
+            "; solving it would leave invalid geometry (" + degenerate.message + ")";
+        throw violation;
+      }
+    }
+    const Value& source = solved ? *solved : inputs;
     Sketch sketch;
-    sketch.plane = selected_plane ? *selected_plane : prepare_plane(field(inputs, "plane"));
+    sketch.plane = selected_plane ? *selected_plane : prepare_plane(field(source, "plane"));
     const auto add_curve = [&](math::NurbsCurve2 curve) {
       if (math::near(curve.point(curve.domain_start()), curve.point(curve.domain_end()),
                      kTolerance))
@@ -445,7 +601,7 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
       else
         sketch.segments.push_back(std::move(curve));
     };
-    const auto& entities = *field(inputs, "entities").if_array();
+    const auto& entities = *field(source, "entities").if_array();
     std::size_t curves = 0, control_points = 0;
     for (std::size_t i = 0; i < entities.size(); ++i) {
       const auto& entity = entities[i];

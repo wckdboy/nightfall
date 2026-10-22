@@ -48,7 +48,11 @@ struct BodyPattern {
 /// Swapping operands or reversing both preserves the angle; reversing one takes its supplement.
 /// Fixed whole entities and supported point references retain evaluated authored coordinates;
 /// they do not pin values from a previous document or prevent subsequent parameter edits.
-/// Coordinates are checked, never solved or moved. Unsupported operands fail explicitly.
+/// Authored coordinates that satisfy every constraint are used exactly as written. Otherwise
+/// points, lines, circles and arcs are solved from them (RFC 0012, nf/sketch/solve.h) and the
+/// result passes the same checks; a conflict or a solution with invalid geometry keeps the
+/// authored violation's pointer and residual and names the cause. Sketches whose constraints
+/// reference other entity kinds are checked only. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
 /// Revolve/rotation/pattern axes resolve named lines from the supplied evaluated axis sketch; map
 /// start and start-to-end direction through its plane. The evaluator may supply an already

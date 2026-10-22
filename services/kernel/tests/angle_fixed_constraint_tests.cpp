@@ -62,7 +62,7 @@ std::expected<Sketch, ir::Error> prepare(Value inputs, ir::Units units = {}) {
   return prepare_sketch(ir::FeatureInputs::compile(f).value().evaluate(units).value());
 }
 void rejects(Value inputs, const std::string& pointer, const std::string& message) {
-  const auto result = prepare(std::move(inputs));
+  const auto result = prepare(pinned(inputs));
   REQUIRE_FALSE(result);
   INFO(result.error().message);
   CHECK(result.error().code == "kernel");
@@ -104,14 +104,15 @@ ir::Document angled_part() {
   auto d = part();
   d.params.push_back({"theta", "45 deg", {}, {}, {}, {}});
   d.params.push_back({"required", "45 deg", {}, {}, {}, {}});
-  d.features[0].inputs = ir::json::parse(R"json({"plane":{"datum":"xy"},"entities":[
+  // Pinned so unsatisfied edits fail (see constraint_tests.cpp).
+  d.features[0].inputs = pinned(ir::json::parse(R"json({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"line","start":["-5 mm - 10 mm / tan(theta)",-10],"end":["5 mm - 10 mm / tan(theta)",-10]},
     {"id":"b","type":"line","start":["5 mm - 10 mm / tan(theta)",-10],"end":["5 mm + 10 mm / tan(theta)",10]},
     {"id":"c","type":"line","start":["5 mm + 10 mm / tan(theta)",10],"end":["-5 mm + 10 mm / tan(theta)",10]},
     {"id":"d","type":"line","start":["-5 mm + 10 mm / tan(theta)",10],"end":["-5 mm - 10 mm / tan(theta)",-10]}],
     "constraints":[{"type":"angle","entities":["a","b"],"value":"required"},
       {"type":"fixed","entities":["a"]},{"type":"fixed","entities":[{"entity":"b","point":"end"}]}]})json")
-                             .value();
+                                    .value());
   return d;
 }
 void solid(const Evaluation& result, double theta) {
@@ -164,7 +165,7 @@ TEST_CASE("angle dimensions have stable angular tolerance near zero and pi at di
       for (const double factor : {0.25, 4.0}) {
         const double actual = expected + (expected == kPi ? -1 : 1) * factor * angular;
         const auto result =
-            prepare(squares(actual, {angle("a", "b", expected)}, size), {"mm", "rad", {}});
+            prepare(pinned(squares(actual, {angle("a", "b", expected)}, size)), {"mm", "rad", {}});
         CHECK(static_cast<bool>(result) == (factor < 1));
         if (factor > 1) {
           REQUIRE_FALSE(result);

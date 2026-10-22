@@ -48,7 +48,7 @@ std::expected<Sketch, ir::Error> prepare(Value inputs, ir::Units units = {}) {
   return prepare_sketch(evaluated);
 }
 void rejects(Value inputs, const std::string& pointer, const std::string& message) {
-  const auto result = prepare(std::move(inputs));
+  const auto result = prepare(pinned(inputs));
   REQUIRE_FALSE(result);
   INFO(result.error().message);
   CHECK(result.error().code == "kernel");
@@ -152,11 +152,11 @@ TEST_CASE("line circle tangency checks radial gap and finite segment extent",
       for (const double sign : {-1.0, 1.0}) {
         CHECK(prepare(sketch(line_circle({0, sign * 2}, 2, reverse), {relation})));
         for (const double factor : {0.25, 4.0}) {
-          const auto gap = prepare(
-              sketch(line_circle({0, sign * (2 + factor * linear)}, 2, reverse), {relation}));
+          const auto gap = prepare(pinned(
+              sketch(line_circle({0, sign * (2 + factor * linear)}, 2, reverse), {relation})));
           CHECK(static_cast<bool>(gap) == (factor < 1));
-          const auto extent = prepare(
-              sketch(line_circle({sign * (5 + factor * linear), 2}, 2, reverse), {relation}));
+          const auto extent = prepare(pinned(
+              sketch(line_circle({sign * (5 + factor * linear), 2}, 2, reverse), {relation})));
           CHECK(static_cast<bool>(extent) == (factor < 1));
         }
       }
@@ -172,9 +172,9 @@ TEST_CASE("circle tangency distinguishes external internal and coincident contac
       CHECK(prepare(sketch({circle("a", {}, 5), circle("b", {contact, 0}, 2)}, {relation})));
       for (const double sign : {-1.0, 1.0})
         for (const double factor : {0.25, 4.0}) {
-          const auto result = prepare(
+          const auto result = prepare(pinned(
               sketch({circle("a", {}, 5), circle("b", {contact + sign * factor * linear, 0}, 2)},
-                     {relation}));
+                     {relation})));
           CHECK(static_cast<bool>(result) == (factor < 1));
         }
     }

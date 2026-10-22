@@ -52,7 +52,7 @@ std::expected<Sketch, ir::Error> prepare(Value inputs, ir::Units units = {}) {
   return prepare_sketch(evaluated);
 }
 void rejects(Value inputs, const std::string& pointer, const std::string& message) {
-  auto result = prepare(std::move(inputs));
+  auto result = prepare(pinned(inputs));
   REQUIRE_FALSE(result);
   INFO(result.error().message);
   CHECK(result.error().code == "kernel");
@@ -63,7 +63,8 @@ ir::Document point_part() {
   auto d = part();
   d.params.push_back({"width", "10 mm", {}, {}, {}, {}});
   d.params.push_back({"required", "10 mm", {}, {}, {}, {}});
-  d.features[0].inputs = ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
+  // Pinned so unsatisfied edits fail (see constraint_tests.cpp).
+  d.features[0].inputs = pinned(ir::json::parse(R"({"plane":{"datum":"xy"},"entities":[
     {"id":"a","type":"line","start":["-width / 2",-10],"end":["width / 2",-10]},
     {"id":"b","type":"line","start":["width / 2",-10],"end":["width / 2",10]},
     {"id":"c","type":"line","start":["width / 2",10],"end":["-width / 2",10]},
@@ -75,7 +76,7 @@ ir::Document point_part() {
     {"type":"distance","entities":[{"entity":"a","point":"start"},{"entity":"a","point":"end"}],"value":"required"},
     {"type":"midpoint","entities":["m","a"]},
     {"type":"symmetric","entities":["p","q","d"]}]})")
-                             .value();
+                                    .value());
   return d;
 }
 void solid(const Evaluation& result, double width) {
@@ -167,15 +168,15 @@ TEST_CASE("point constraint distances use absolute millimetre tolerances", "[poi
     for (const auto* kind : {"coincident", "distance"}) {
       const auto c =
           constraint(kind, {"p", "q"}, std::string_view(kind) == "distance" ? Value(0.0) : Value{});
-      CHECK(static_cast<bool>(prepare(sketch(points, {c}))) == (factor < 1));
+      CHECK(static_cast<bool>(prepare(pinned(sketch(points, {c})))) == (factor < 1));
     }
     auto entities = box();
     entities.insert(entities.end(),
                     {point("m", {error, -10}), point("p", {-7, 0}), point("q", {-3 + error, 0})});
-    CHECK(static_cast<bool>(prepare(sketch(entities, {constraint("midpoint", {"m", "a"})}))) ==
-          (factor < 1));
     CHECK(static_cast<bool>(prepare(
-              sketch(entities, {constraint("symmetric", {"p", "q", "d"})}))) == (factor < 1));
+              pinned(sketch(entities, {constraint("midpoint", {"m", "a"})})))) == (factor < 1));
+    CHECK(static_cast<bool>(prepare(pinned(
+              sketch(entities, {constraint("symmetric", {"p", "q", "d"})})))) == (factor < 1));
   }
   rejects(sketch({point("p", {}), point("q", {3, 4})}, {constraint("distance", {"p", "q"}, -5.0)}),
           "/value", "nonnegative");

@@ -58,7 +58,7 @@ std::expected<Sketch, ir::Error> prepare(Value inputs, ir::Units units = {}) {
   return prepare_sketch(evaluated);
 }
 void rejected(Value inputs, const std::string& suffix, const std::string& message) {
-  const auto result = prepare(std::move(inputs));
+  const auto result = prepare(pinned(inputs));
   REQUIRE_FALSE(result);
   CHECK(result.error().code == "kernel");
   CHECK(result.error().pointer == "/inputs/constraints/0" + suffix);
@@ -73,7 +73,9 @@ ir::Document constrained_circle() {
   auto d = part();
   d.params.push_back({"actual", "5 mm", {}, {}, {}, {}});
   d.params.push_back({"required", "5 mm", {}, {}, {}, {}});
-  d.features[0].inputs = circle("actual", {radius("a", "required")});
+  // Pinned: an unsatisfied edit must fail here to exercise cache invalidation (RFC 0012 would
+  // otherwise solve it).
+  d.features[0].inputs = pinned(circle("actual", {radius("a", "required")}));
   return d;
 }
 void check_cylinder(const Evaluation& evaluation, double r) {
@@ -121,16 +123,16 @@ TEST_CASE("sketch constraint orientation uses angular tolerance at different siz
       const auto x = math::Vec2{std::cos(a), std::sin(a)} * size;
       const auto y = math::Vec2{-std::sin(a), std::cos(a)} * size;
       for (auto constraint : {relation("horizontal", {"a"}), relation("vertical", {"b"})}) {
-        const auto result = prepare(quadrilateral({{}, x, x + y, y}, {constraint}));
+        const auto result = prepare(pinned(quadrilateral({{}, x, x + y, y}, {constraint})));
         CHECK(static_cast<bool>(result) == (factor < 1));
       }
-      const auto parallel =
-          prepare(quadrilateral({{0, 0}, {size, 0}, {size, size + size * std::tan(a)}, {0, size}},
-                                {relation("parallel", {"a", "c"})}));
+      const auto parallel = prepare(
+          pinned(quadrilateral({{0, 0}, {size, 0}, {size, size + size * std::tan(a)}, {0, size}},
+                               {relation("parallel", {"a", "c"})})));
       CHECK(static_cast<bool>(parallel) == (factor < 1));
-      const auto perpendicular =
-          prepare(quadrilateral({{0, 0}, {size, 0}, {size + size * std::tan(a), size}, {0, size}},
-                                {relation("perpendicular", {"a", "b"})}));
+      const auto perpendicular = prepare(
+          pinned(quadrilateral({{0, 0}, {size, 0}, {size + size * std::tan(a), size}, {0, size}},
+                               {relation("perpendicular", {"a", "b"})})));
       CHECK(static_cast<bool>(perpendicular) == (factor < 1));
     }
 }
@@ -155,9 +157,9 @@ TEST_CASE("sketch constraint dimensions use millimetre tolerance after unit conv
           "[constraints]") {
   constexpr double linear = 1e-6;
   for (const double factor : {0.25, 4.0}) {
-    CHECK(static_cast<bool>(prepare(rectangle({relation("equal", {"a", "b"})}, 10,
-                                              10 + factor * linear))) == (factor < 1));
-    CHECK(static_cast<bool>(prepare(circle(10.0, {radius("a", 10 + factor * linear)}))) ==
+    CHECK(static_cast<bool>(prepare(pinned(rectangle({relation("equal", {"a", "b"})}, 10,
+                                                     10 + factor * linear)))) == (factor < 1));
+    CHECK(static_cast<bool>(prepare(pinned(circle(10.0, {radius("a", 10 + factor * linear)})))) ==
           (factor < 1));
   }
   CHECK(prepare(circle(1.0, {radius("a", "10 mm")}), {"cm", "deg", {}}));

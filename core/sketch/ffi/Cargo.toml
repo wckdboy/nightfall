@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "nightfall-sketch-ffi"
+description = "Plain-C boundary for nightfall-sketch, linked into the C++ evaluator (RFC 0012)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+nightfall-sketch = { path = "../rust" }

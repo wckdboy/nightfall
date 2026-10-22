@@ -155,8 +155,12 @@ pub struct Solution {
 /// Input problems, found before any numerical work.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
-    /// A coordinate, radius, angle or constraint value is not finite or out of range.
-    InvalidValue { what: String },
+    /// A coordinate, radius, angle or constraint value is not finite or out of range. `entity`
+    /// names the entity, or is `None` for a constraint value.
+    InvalidValue {
+        entity: Option<String>,
+        what: String,
+    },
     /// Two entities share an id.
     DuplicateId(String),
     /// A constraint names an entity that does not exist (constraint index, entity id).
@@ -170,7 +174,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::InvalidValue { what } => write!(f, "invalid value: {what}"),
+            Error::InvalidValue { what, .. } => write!(f, "invalid value: {what}"),
             Error::DuplicateId(id) => write!(f, "duplicate entity id `{id}`"),
             Error::UnknownEntity(i, id) => write!(f, "constraint {i}: unknown entity `{id}`"),
             Error::Unsupported(i, why) => write!(f, "constraint {i}: {why}"),
@@ -204,26 +208,33 @@ enum Slot {
     },
 }
 
-fn finite(v: f64, what: impl FnOnce() -> String) -> Result<f64, Error> {
+fn invalid(entity: Option<&str>, what: String) -> Error {
+    Error::InvalidValue {
+        entity: entity.map(str::to_owned),
+        what,
+    }
+}
+
+fn finite(v: f64, entity: Option<&str>, what: impl FnOnce() -> String) -> Result<f64, Error> {
     if v.is_finite() {
         Ok(v)
     } else {
-        Err(Error::InvalidValue { what: what() })
+        Err(invalid(entity, what()))
     }
 }
 
-fn positive(v: f64, what: impl FnOnce() -> String) -> Result<f64, Error> {
+fn positive(v: f64, entity: Option<&str>, what: impl FnOnce() -> String) -> Result<f64, Error> {
     if v.is_finite() && v > 0.0 {
         Ok(v)
     } else {
-        Err(Error::InvalidValue { what: what() })
+        Err(invalid(entity, what()))
     }
 }
 
-fn point(p: Point, what: &str) -> Result<Vec2, Error> {
+fn point(p: Point, id: &str) -> Result<Vec2, Error> {
     Ok(Vec2::new(
-        finite(p[0], || format!("{what} x"))?,
-        finite(p[1], || format!("{what} y"))?,
+        finite(p[0], Some(id), || format!("{id} x"))?,
+        finite(p[1], Some(id), || format!("{id} y"))?,
     ))
 }
 
@@ -258,9 +269,7 @@ impl Model {
                 ),
                 Entity::Line { start, end } => {
                     if (start[0] - end[0]).hypot(start[1] - end[1]) <= MIN_LENGTH {
-                        return Err(Error::InvalidValue {
-                            what: format!("{id} has zero length"),
-                        });
+                        return Err(invalid(Some(id), format!("{id} has zero length")));
                     }
                     let curve = model
                         .sk
@@ -276,7 +285,7 @@ impl Model {
                     }
                 }
                 Entity::Circle { center, radius } => {
-                    let r = positive(*radius, || format!("{id} radius"))?;
+                    let r = positive(*radius, Some(id), || format!("{id} radius"))?;
                     let curve = model
                         .sk
                         .add_circle(point(*center, id)?, r, None, None)
@@ -292,13 +301,14 @@ impl Model {
                     start_angle,
                     sweep_angle,
                 } => {
-                    let r = positive(*radius, || format!("{id} radius"))?;
-                    let s = finite(*start_angle, || format!("{id} start angle"))?;
-                    let w = finite(*sweep_angle, || format!("{id} sweep angle"))?;
+                    let r = positive(*radius, Some(id), || format!("{id} radius"))?;
+                    let s = finite(*start_angle, Some(id), || format!("{id} start angle"))?;
+                    let w = finite(*sweep_angle, Some(id), || format!("{id} sweep angle"))?;
                     if w == 0.0 || w.abs() >= TAU {
-                        return Err(Error::InvalidValue {
-                            what: format!("{id} sweep angle (0 < |sweep| < 2π)"),
-                        });
+                        return Err(invalid(
+                            Some(id),
+                            format!("{id} sweep angle (0 < |sweep| < 2π)"),
+                        ));
                     }
                     let c = point(*center, id)?;
                     let at = |a: f64| Vec2::new(c.x + r * a.cos(), c.y + r * a.sin());
@@ -388,7 +398,7 @@ impl Model {
     }
 
     fn kinds(&self, i: usize, c: &Constraint) -> Result<Vec<ConstraintKind>, Error> {
-        let value = |v: f64| finite(v, || format!("constraint {i} value"));
+        let value = |v: f64| finite(v, None, || format!("constraint {i} value"));
         Ok(match c {
             Constraint::Coincident(a, b) => match (self.is_point(a), self.is_point(b)) {
                 (true, true) => vec![ConstraintKind::Coincident {
@@ -516,7 +526,7 @@ impl Model {
                 }]
             }
             Constraint::Radius(c, v) => {
-                let v = positive(*v, || format!("constraint {i} radius"))?;
+                let v = positive(*v, None, || format!("constraint {i} radius"))?;
                 match (self.slot(i, c)?, c.point) {
                     (Slot::Circle { curve, .. } | Slot::Arc { curve, .. }, None) => {
                         vec![ConstraintKind::Radius { c: curve, value: v }]
