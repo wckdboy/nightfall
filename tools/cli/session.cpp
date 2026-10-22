@@ -132,7 +132,7 @@ ir::json::Array error_entries(const ir::Errors& errors) {
 }
 
 void Session::adopt_invalid(std::string source, ir::Errors errors) {
-  state_ = State{std::move(source), {}, {}, {}, std::move(errors), {}};
+  state_ = State{std::move(source), {}, {}, {}, std::move(errors), {}, {}};
   undo_.clear();
   redo_.clear();
 }
@@ -252,7 +252,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
       return state;
     }
   }
-  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}, {}};
+  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}, {}, {}};
   auto& build = state.build;
   build.ok = state.evaluation.ok();
   for (const auto& f : state.evaluation.features) {
@@ -320,6 +320,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
           Object{{"solved", assembly->solved},        {"dof", numeric(assembly->dof)},
                  {"loops", numeric(assembly->loops)}, {"iterations", numeric(assembly->iterations)},
                  {"joints", std::move(joints)},       {"occurrences", std::move(occurrences)}};
+      state.assembly = std::move(*assembly);
     }
   }
   Array metrics;
@@ -674,8 +675,7 @@ std::expected<Object, ir::Errors> Session::clearance(const std::string& a,
                 {"on_b", point(c->on_b)}};
 }
 
-std::expected<Object, ir::Errors> Session::mass_properties(
-    const std::optional<std::string>& occurrence) const {
+std::map<std::string, double> Session::densities() const {
   std::map<std::string, double> density;
   for (const auto& o : state_.document.occurrences) {
     const auto c = std::ranges::find(state_.document.components, o.component, &ir::Component::id);
@@ -684,6 +684,21 @@ std::expected<Object, ir::Errors> Session::mass_properties(
     else if (c != state_.document.components.end() && c->density)
       density[o.id] = *c->density;
   }
+  return density;
+}
+
+std::expected<kernel_service::UrdfExport, ir::Errors> Session::export_urdf(
+    const std::string& mesh_dir, const std::string& name) const {
+  if (!state_.assembly)
+    return std::unexpected(ir::Errors{
+        {"not_an_assembly", "the document has no solved assembly to export", "/occurrences", {}}});
+  return kernel_service::export_urdf(kernel_, state_.document, *state_.assembly, densities(),
+                                     mesh_dir, name);
+}
+
+std::expected<Object, ir::Errors> Session::mass_properties(
+    const std::optional<std::string>& occurrence) const {
+  const auto density = densities();
   std::vector<std::string> only;
   if (occurrence) only.push_back(*occurrence);
   const auto m = kernel_service::mass_properties(kernel_, placed(state_.evaluation), density, only);

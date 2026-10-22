@@ -362,9 +362,32 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
     result.dof = report.dof;
     result.loops = report.loops;
     result.iterations = report.iterations;
-    for (std::size_t k = 0; k < joints.size(); ++k)
-      result.joints.push_back(
-          {document.joints[k].id, mm[k], rad[k], redundant[k] != 0, conflicting[k] != 0});
+    const auto local = [](const nf_frame& f) {
+      Placement p;
+      for (std::size_t r = 0; r < 3; ++r) {
+        p.rotation[3 * r] = f.x[r];
+        p.rotation[3 * r + 1] = f.y[r];
+        p.rotation[3 * r + 2] = f.z[r];
+      }
+      p.translation = {f.origin[0], f.origin[1], f.origin[2]};
+      return p;
+    };
+    for (std::size_t k = 0; k < joints.size(); ++k) {
+      const auto& c = joints[k];
+      AssemblyJoint joint{document.joints[k].id,
+                          mm[k],
+                          rad[k],
+                          redundant[k] != 0,
+                          conflicting[k] != 0,
+                          document.joints[k].kind,
+                          c.a,
+                          c.b,
+                          local(c.frame_a),
+                          local(c.frame_b),
+                          std::nullopt};
+      if (c.limited[0]) joint.limits = std::pair{c.lower[0], c.upper[0]};
+      result.joints.push_back(std::move(joint));
+    }
     for (std::size_t i = 0; i < flat.size(); ++i) {
       AssemblyOccurrence occurrence{document.occurrences[i].id, {}, {}};
       std::copy(std::begin(placements[i].rotation), std::end(placements[i].rotation),
