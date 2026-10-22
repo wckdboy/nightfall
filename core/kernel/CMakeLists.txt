@@ -9,7 +9,7 @@ target_include_directories(nf_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nf_kernel PUBLIC nf::math nf::occt PRIVATE nf::warnings)
 
 if(NF_BUILD_TESTS)
-  add_executable(nf_kernel_tests tests/occt_geom_tests.cpp tests/snapshot_tests.cpp tests/operations_tests.cpp tests/boolean_tests.cpp tests/revolution_tests.cpp tests/mirror_tests.cpp tests/face_plane_tests.cpp tests/step_tests.cpp tests/circular_profile_tests.cpp tests/planar_mass_tests.cpp tests/proximity_tests.cpp)
+  add_executable(nf_kernel_tests tests/occt_geom_tests.cpp tests/snapshot_tests.cpp tests/operations_tests.cpp tests/boolean_tests.cpp tests/revolution_tests.cpp tests/mirror_tests.cpp tests/face_plane_tests.cpp tests/step_tests.cpp tests/circular_profile_tests.cpp tests/planar_mass_tests.cpp tests/proximity_tests.cpp tests/inertia_tests.cpp)
   target_include_directories(nf_kernel_tests PRIVATE src)
   target_compile_definitions(nf_kernel_tests PRIVATE NF_RELEASE_PERFORMANCE=$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${NF_SANITIZE}>>>)
   target_sources(nf_kernel_tests PRIVATE tests/chamfer_tests.cpp)
