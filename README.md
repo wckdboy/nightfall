@@ -306,7 +306,11 @@ server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general t
 `open_part`, `save_part`, `export_step` and `export_mesh` (derived OBJ). The authoritative state is the IR text; every
 mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
 whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
-`rollback` is false, and every error carries its JSON Pointer. Files are reachable only in
+`rollback` is false, and every error carries its JSON Pointer. Sketch constraints solve (RFC 0012): every sketch of points, lines, circles and arcs reports
+its degrees of freedom, under-constrained entities and redundant constraints in each
+feature's `sketch` entry, and a rebuild that solved a sketch writes the solved coordinates
+back into the document's plain numbers, in its own units, listing them under
+`written_back`; coordinates authored as expressions stay as written. Files are reachable only in
 the `--in` folder, a private scratch folder and each `--allow-path`. Evaluation runs in
 process without a deadline; the client's tool timeout bounds it. Register it with Claude Code:
 

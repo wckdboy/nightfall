@@ -433,14 +433,21 @@ void verify_constraints(const Value& inputs) {
     }
   }
 }
-/// Solves point, line, circle and arc coordinates with the RFC 0012 solver, from the authored
-/// values. Returns the inputs with solved coordinates, or nothing when there is nothing to solve
-/// or a constraint names an entity the solver does not handle (verification then applies as
-/// before). Conflicting constraints are an error naming every failing constraint.
-std::optional<Value> solve_constraints(const Value& inputs) {
+/// The RFC 0012 solver's view of a sketch: solved inputs, whether every constraint holds, the
+/// conflict when not, and the report. Nothing when a constraint names an entity the solver does
+/// not handle or the input is invalid (verification then reports it as before).
+struct Analysis {
+  Value inputs;            // with solved coordinates
+  bool consistent = true;  // every constraint can hold
+  std::string conflict;    // "sketch constraints conflict: ..." when not
+  bool complete = true;    // every entity is a point, line, circle or arc
+  SketchReport report;
+};
+std::optional<Analysis> analyse_sketch(const Value& inputs) {
   const auto& constraints = *field(inputs, "constraints").if_array();
   const auto& entities = *field(inputs, "entities").if_array();
-  if (constraints.empty() || constraints.size() > 4096 || entities.size() > 4096) return {};
+  if (constraints.size() > 4096 || entities.size() > 4096) return {};
+  Analysis analysis;
   std::map<std::string_view, std::uint32_t> index;
   std::vector<nf_sketch_entity> flat;
   std::vector<std::size_t> origin;  // flat index -> entity index
@@ -464,6 +471,7 @@ std::optional<Value> solve_constraints(const Value& inputs) {
            {c.x, c.y, number(field(e, "radius")), number(field(e, "start_angle")),
             number(field(e, "sweep_angle"))}};
     } else {
+      analysis.complete = false;
       continue;
     }
     index.emplace(*field(e, "id").if_string(), static_cast<std::uint32_t>(flat.size()));
@@ -520,21 +528,24 @@ std::optional<Value> solve_constraints(const Value& inputs) {
   if (status == NF_SKETCH_INTERNAL) fail("/constraints", "sketch solver failed internally");
   // Input problems keep their precise verification and profile diagnostics.
   if (status != NF_SKETCH_OK) return {};
-  if (!report.solved) {
+  analysis.consistent = report.solved != 0;
+  if (!analysis.consistent) {
     std::string named;
-    std::string first;
     for (std::size_t j = 0; j < failing.size(); ++j)
-      if (failing[j]) {
-        const auto pointer = "/constraints/" + std::to_string(j);
-        if (first.empty()) first = pointer;
-        named += (named.empty() ? "" : ", ") + pointer;
-      }
+      if (failing[j])
+        named += (named.empty() ? "/constraints/" : ", /constraints/") + std::to_string(j);
     // Without a named constraint the solver refused its own answer (a collapsed curve) or
     // did not converge.
-    fail(first.empty() ? "/constraints" : first,
-         named.empty() ? std::string("solving it would leave invalid geometry or not converge")
-                       : "sketch constraints conflict: " + named);
+    analysis.conflict = named.empty()
+                            ? std::string("solving it would leave invalid geometry or not converge")
+                            : "sketch constraints conflict: " + named;
   }
+  analysis.report.dof = report.dof;
+  for (std::size_t k = 0; k < under.size(); ++k)
+    if (under[k])
+      analysis.report.underconstrained.emplace_back(*field(entities[origin[k]], "id").if_string());
+  for (std::size_t j = 0; j < redundant.size(); ++j)
+    if (redundant[j]) analysis.report.redundant.push_back("/constraints/" + std::to_string(j));
   // Rebuild the inputs with solved coordinates; everything else is copied unchanged.
   const auto pair = [](double x, double y) { return Value(ir::json::Array{x, y}); };
   ir::json::Array out(entities.begin(), entities.end());
@@ -566,7 +577,8 @@ std::optional<Value> solve_constraints(const Value& inputs) {
   ir::json::Object result = *inputs.if_object();
   for (auto& member : result)
     if (member.key == "entities") member.value = std::move(out);
-  return Value(std::move(result));
+  analysis.inputs = Value(std::move(result));
+  return analysis;
 }
 }  // namespace
 
@@ -576,27 +588,26 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
     // Authored coordinates that already satisfy every constraint are used exactly as written.
     // Otherwise the RFC 0012 solver moves them from there, and the same independent check
     // verifies its result. Sketches the solver does not handle keep their original diagnostic.
-    // A solution the check rejects (a line collapsed to a point, say) is never published: the
-    // authored violation is reported with the reason.
+    // A conflict, or a solution the check rejects (a line collapsed to a point, say), is never
+    // published: the authored violation keeps its pointer and residual and names the cause.
+    const auto analysis = analyse_sketch(inputs);
     std::optional<Value> solved;
     try {
       verify_constraints(inputs);
     } catch (ir::Error& violation) {
-      // A conflict keeps the authored violation's pointer and residual, and names the rest.
-      try {
-        solved = solve_constraints(inputs);
-      } catch (const ir::Error& conflict) {
-        violation.message += "; " + conflict.message;
+      if (!analysis) throw;
+      if (!analysis->consistent) {
+        violation.message += "; " + analysis->conflict;
         throw violation;
       }
-      if (!solved) throw;
       try {
-        verify_constraints(*solved);
+        verify_constraints(analysis->inputs);
       } catch (const ir::Error& degenerate) {
         violation.message +=
             "; solving it would leave invalid geometry (" + degenerate.message + ")";
         throw violation;
       }
+      solved = analysis->inputs;
     }
     const Value& source = solved ? *solved : inputs;
     Sketch sketch;
@@ -672,6 +683,11 @@ std::expected<Sketch, ir::Error> prepare_sketch(const Value& inputs,
         sketch.path_entities.emplace_back(sketch.paths[p].size(), id);
       for (std::size_t s = previous_segments; s < sketch.segments.size(); ++s)
         sketch.segment_entities.push_back(id);
+    }
+    if (analysis && analysis->complete) {
+      sketch.report = analysis->report;
+      sketch.report->solved = solved.has_value();
+      if (solved) sketch.report->entities = *field(*solved, "entities").if_array();
     }
     return sketch;
   });

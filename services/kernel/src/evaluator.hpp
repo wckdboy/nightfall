@@ -5,6 +5,7 @@
 #include <functional>
 #include <map>
 
+#include "model_inputs.hpp"
 #include "nf/ir/document.hpp"
 #include "nf/ir/hash.hpp"
 #include "nf/kernel/kernel.hpp"
@@ -16,6 +17,7 @@ struct FeatureState {
   FeatureStatus status = FeatureStatus::kFailed;
   std::optional<ir::Hash> hash;
   ir::Errors errors;
+  std::optional<SketchReport> sketch;  // sketch features the solver handles, built or cached
 };
 /// Operation-local roles rebound to this evaluation's IDs and current immutable snapshot.
 /// Sketch planes select generated faces by producer/role or all current faces via faces_of.
