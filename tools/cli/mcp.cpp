@@ -2,13 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "mcp.hpp"
 
+#include <fcntl.h>
+#include <mach-o/dyld.h>
+#include <spawn.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
+#include <thread>
 
 #include "nf/ir/patch.hpp"
 #include "session.hpp"
+
+extern char** environ;
 
 namespace nf::cli {
 namespace {
@@ -186,6 +195,26 @@ Array tools() {
            "loop are left out and listed; missing densities and default effort and velocity "
            "limits are reported as warnings.",
            schema({{"path", property("string", "destination .urdf file")}}, {"path"}), false, true),
+      tool("list_studies",
+           "The document's engineering studies (RFC 0014): id, kind, body, criteria, and the last "
+           "result when the document has not changed since it ran.",
+           schema({}), true),
+      tool("run_study",
+           "Run one study in a separate process: mesh the body (Netgen), solve (MFEM) and report "
+           "quantities (mm, MPa, N, K, W), each criterion's outcome, reactions or heat flows, and "
+           "provenance. `refine` runs several mesh sizes and reports the convergence order. Peak "
+           "stress at sharp corners and supports grows with refinement; judge it by the trend.",
+           schema({{"id", property("string", "study id")},
+                   {"size", property("number", "mesh size in mm, overriding the study's")},
+                   {"refine", Object{{"type", "array"},
+                                     {"items", Object{{"type", "number"}}},
+                                     {"description", "mesh sizes in mm, coarse to fine"}}},
+                   {"budget_s", property("number", "wall-clock limit in seconds (default 120)")}},
+                  {"id"}),
+           true),
+      tool("study_results",
+           "The last result of a study, if the document has not changed since it ran.",
+           schema({{"id", property("string", "study id")}}, {"id"}), true),
       tool(
           "sweep_joint",
           "Motion study: drive a revolute, cylindrical or slider joint from `from` to `to` "
@@ -270,6 +299,9 @@ struct Server {
   Session& session;
   Roots roots;
   std::optional<fs::path> document;
+  fs::path scratch;
+  // RFC 0014: the last result of each study, with the document text it ran on.
+  std::map<std::string, std::pair<std::string, Value>> studies;
 
   Object tool_result(const Value& body, bool is_error) {
     Object result{{"content", Array{Object{{"type", "text"}, {"text", ir::json::canonical(body)}}}},
@@ -297,6 +329,91 @@ struct Server {
                                  {"bytes", static_cast<double>(text.size())},
                                  {"sha256", ir::sha256(text).hex()}});
     return tool_result(std::move(extra), false);
+  }
+
+  Object study_error(std::string code, std::string message) {
+    return tool_result(Object{{"errors", Array{Object{{"code", std::move(code)},
+                                                      {"message", std::move(message)},
+                                                      {"pointer", "/studies"}}}}},
+                       true);
+  }
+  Object list_studies() {
+    Array list;
+    if (auto current = ir::json::parse(session.source()); current && current->find("studies"))
+      for (const auto& study : *current->find("studies")->if_array()) {
+        Object entry{{"id", *study.find("id")},
+                     {"kind", *study.find("kind")},
+                     {"body", *study.find("body")}};
+        if (const auto* criteria = study.find("criteria")) entry.push_back({"criteria", *criteria});
+        const auto found = studies.find(*study.find("id")->if_string());
+        if (found != studies.end() && found->second.first == session.source())
+          entry.push_back({"last_result", found->second.second});
+        list.push_back(std::move(entry));
+      }
+    return tool_result(Object{{"studies", std::move(list)}}, false);
+  }
+  /// RFC 0014: studies run out of process (`nf study run`) under a wall-clock budget.
+  Object run_study(const Value& args) {
+    const auto id = *string_arg(args, "id", true);
+    const double budget = number_arg(args, "budget_s", 120);
+    if (!(budget > 0) || budget > 3600) invalid_params("budget_s must be in (0, 3600]");
+    std::uint32_t length = 0;
+    _NSGetExecutablePath(nullptr, &length);
+    std::string self(length, '\0');
+    if (_NSGetExecutablePath(self.data(), &length) != 0)
+      return study_error("internal", "no executable path");
+    const auto source = session.source();
+    const auto input = scratch / "study.nightfall", output = scratch / "study.json";
+    publish(input, source);
+    std::vector<std::string> command{self.c_str(), "study", "run", input.string(), id};
+    if (const auto* size = args.find("size")) {
+      if (!size->if_number() || !(*size->if_number() > 0)) invalid_params("size must be positive");
+      command.insert(command.end(), {"--size", ir::json::format_number(*size->if_number())});
+    }
+    if (const auto* refine = args.find("refine")) {
+      std::string sizes;
+      if (!refine->if_array() || refine->if_array()->empty()) invalid_params("refine needs sizes");
+      for (const auto& v : *refine->if_array()) {
+        if (!v.if_number() || !(*v.if_number() > 0))
+          invalid_params("refine sizes must be positive");
+        sizes += (sizes.empty() ? "" : ",") + ir::json::format_number(*v.if_number());
+      }
+      command.insert(command.end(), {"--refine", sizes});
+    }
+    std::vector<char*> argv;
+    for (auto& c : command) argv.push_back(c.data());
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, output.c_str(),
+                                     O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    pid_t pid = 0;
+    const int spawned = posix_spawn(&pid, argv.front(), &actions, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (spawned != 0) return study_error("internal", "could not start the study runner");
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>(budget);
+    int status = 0;
+    while (true) {
+      const auto done = waitpid(pid, &status, WNOHANG);
+      if (done == pid) break;
+      if (done < 0 && errno != EINTR) return study_error("internal", "lost the study runner");
+      if (std::chrono::steady_clock::now() > deadline) {
+        kill(pid, SIGKILL);
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+        }
+        return study_error(
+            "budget", "the study did not finish within " + ir::json::format_number(budget) + " s");
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    auto parsed = ir::json::parse(load(output));
+    if ((code != 0 && code != 1 && code != 3) || !parsed)
+      return study_error("internal", "the study runner failed (exit " + std::to_string(code) + ")");
+    if (code == 1) return tool_result(*parsed, true);
+    studies[id] = {source, *parsed};
+    return tool_result(*parsed, false);
   }
 
   Object call(const std::string& name, const Value& args) {
@@ -412,6 +529,20 @@ struct Server {
                         {{"meshes", std::move(meshes)},
                          {"cut_joints", std::move(cut)},
                          {"warnings", std::move(warnings)}});
+    }
+    if (name == "list_studies") return list_studies();
+    if (name == "run_study") return run_study(args);
+    if (name == "study_results") {
+      const auto id = *string_arg(args, "id", true);
+      const auto found = studies.find(id);
+      if (found == studies.end() || found->second.first != session.source())
+        return tool_result(
+            Object{{"errors", Array{Object{{"code", "not_run"},
+                                           {"message", "run_study has not run " + id +
+                                                           " on the current document"},
+                                           {"pointer", "/studies"}}}}},
+            true);
+      return tool_result(found->second.second, false);
     }
     if (name == "sweep_joint") {
       for (const char* key : {"from", "to", "steps"})
@@ -569,7 +700,7 @@ int run_mcp(int argc, char** argv) {
       return 1;
     }
     Session session(**kernel, math::Tolerance::standard());
-    Server server{session, {}, {}};
+    Server server{session, {}, {}, {}, {}};
     auto scratch = (fs::temp_directory_path() / "nightfall-mcp-XXXXXX").string();
     if (!mkdtemp(scratch.data())) {
       std::cerr << "cannot create the scratch folder\n";
@@ -597,6 +728,7 @@ int run_mcp(int argc, char** argv) {
       }
     }
     server.roots.add(scratch);
+    server.scratch = scratch;
     for (const auto& dir : options->allow) server.roots.add(fs::absolute(dir));
     std::cerr << "nf mcp: scratch " << scratch << (options->input ? ", document " : "")
               << (options->input ? server.document->string() : "") << '\n';
