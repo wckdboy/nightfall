@@ -98,6 +98,16 @@ def unitless(value):
     return match.group(1) if match else None
 
 
+def infrastructure_error(run):
+    """True when the agent could not run at all (account limits, missing CLI, crashed
+    session before any turn); those tasks are reported as not run, never as agent failures."""
+    text = " ".join(str(run.get(k) or "") for k in ("result", "error")).lower()
+    if run.get("is_error") and any(m in text for m in ("session limit", "usage limit",
+                                                        "rate limit", "overloaded")):
+        return True
+    return "claude returned no json" in text or "no such file or directory: 'claude'" in text
+
+
 def make_tasks(nf, part_path, work):
     """Derives build/edit/repair tasks for one part, each with its starting document,
     prompt, golden metrics and the path the agent must save to."""
@@ -234,6 +244,8 @@ def main():
     parser.add_argument("--model", default="", help="claude runner: model override")
     parser.add_argument("--max-turns", type=int, default=60)
     parser.add_argument("--timeout", type=int, default=900, help="seconds per task")
+    parser.add_argument("--resume", action="store_true",
+                        help="keep scored tasks from an existing report in --out; rerun the rest")
     args = parser.parse_args()
 
     nf = Path(args.nf).resolve()
@@ -243,6 +255,11 @@ def main():
     only = {n for n in args.only.split(",") if n}
     parts = sorted(p for p in Path(args.parts).glob("*.nightfall") if not only or p.stem in only)
     results = []
+    kept = {}
+    if args.resume and (out / "report.json").exists():
+        for record in json.loads((out / "report.json").read_text())["tasks"]:
+            if record.get("passed") is not None:
+                kept[(record["part"], record["task"])] = record
     with tempfile.TemporaryDirectory(prefix="nightfall-evals-") as golden_work:
         for part_path in parts:
             original = json.loads(part_path.read_text())
@@ -250,6 +267,9 @@ def main():
                 if task["task"] not in kinds:
                     continue
                 label = f"{task['part']}.{task['task']}"
+                if (task["part"], task["task"]) in kept:
+                    results.append(kept[(task["part"], task["task"])])
+                    continue
                 work = out / label
                 shutil.rmtree(work, ignore_errors=True)
                 work.mkdir(parents=True)
@@ -268,7 +288,13 @@ def main():
                 except Exception as error:  # the harness keeps scoring the other tasks
                     record["run"] = {"error": str(error)[:500]}
                 record["seconds"] = round(time.monotonic() - started, 3)
-                if save_path.exists():
+                run = record["run"]
+                if infrastructure_error(run):
+                    # The agent never worked: no verdict about the agent, rerun with --resume.
+                    record.update(passed=None, errors=[{"code": "infrastructure",
+                                                        "message": run.get("result") or
+                                                        run.get("error", "")}])
+                elif save_path.exists():
                     evidence, errors = build(nf, save_path, work)
                     if errors:
                         record.update(passed=False, errors=errors)
@@ -279,9 +305,14 @@ def main():
                     record.update(passed=False, errors=[{"code": "no_output",
                                                          "message": "no result.nightfall saved"}])
                 results.append(record)
-                print(f"{'PASS' if record['passed'] else 'FAIL'} {label} "
+                verdict = {True: "PASS", False: "FAIL", None: "SKIP"}[record["passed"]]
+                print(f"{verdict} {label} "
                       f"({record['seconds']} s)", flush=True)
     summary = {kind: {"passed": sum(1 for r in results if r["task"] == kind and r["passed"]),
+                      "failed": sum(1 for r in results
+                                    if r["task"] == kind and r["passed"] is False),
+                      "not_run": sum(1 for r in results
+                                     if r["task"] == kind and r["passed"] is None),
                       "total": sum(1 for r in results if r["task"] == kind)} for kind in kinds}
     report = {"generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "runner": args.runner, "model": args.model or None, "nf": str(nf),

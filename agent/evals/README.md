@@ -32,7 +32,10 @@ python3 -I agent/evals/run.py --nf build/occt/tools/cli/nf --parts examples/part
   --out out/evals-claude --runner claude --tasks build,edit,repair
 ```
 
-`--only washer,hex_spacer` limits the parts; `--model` overrides the model.
+`--only washer,hex_spacer` limits the parts; `--model` overrides the model. A task whose session
+could not start (an account or rate limit, a missing `claude`) is reported as not run
+(`SKIP`, `passed: null`), never as an agent failure; `--resume` keeps every scored task
+from the existing report and reruns the rest.
 
 ## Reading a report
 
