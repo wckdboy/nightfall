@@ -90,6 +90,20 @@ class Session {
   /// and frame (plane origin/normal/x axis, cylinder origin/axis/radius) and adjacency. The
   /// indices are display order only; references are selectors built from the names.
   [[nodiscard]] std::expected<ir::json::Object, ir::Errors> topology(const std::string& body) const;
+  /// RFC 0013 queries over the current live bodies ("occurrence/body" in an assembly).
+  /// Interference pairs bodies of different occurrences; `only` keeps pairs touching those
+  /// occurrences. Clearance takes an occurrence id (all its bodies) or a body id per side.
+  [[nodiscard]] std::expected<ir::json::Object, ir::Errors> interference(
+      const std::vector<std::string>& only) const;
+  [[nodiscard]] std::expected<ir::json::Object, ir::Errors> clearance(const std::string& a,
+                                                                      const std::string& b) const;
+  /// A motion sweep: the joint's value from `from` to `to` (document angle units for rotary
+  /// joints, length units for sliders) in `steps` intervals, each re-solved from the current
+  /// document without changing it. Each step reports the solve, the placements of `report`
+  /// (all occurrences when empty) and, when asked, its interference.
+  [[nodiscard]] std::expected<ir::json::Object, ir::Errors> sweep(
+      const std::string& joint, double from, double to, std::size_t steps, bool interference,
+      const std::vector<std::string>& report);
 
  private:
   struct State {
