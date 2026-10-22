@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
-add_executable(nf main.cpp session.cpp mcp.cpp)
+add_executable(nf main.cpp session.cpp mcp.cpp kernel_serve.cpp)
 target_link_libraries(nf PRIVATE nf_evaluator nf::warnings)
 set_target_properties(nf PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
 if(NF_WITH_STUDIES)
@@ -19,7 +19,7 @@ if(NF_WITH_STUDIES)
   endif()
 endif()
 if(NF_BUILD_TESTS)
-  add_executable(nf_cli_tests tests/build_tests.cpp tests/mcp_tests.cpp)
+  add_executable(nf_cli_tests tests/build_tests.cpp tests/mcp_tests.cpp tests/kernel_serve_tests.cpp)
   add_dependencies(nf_cli_tests nf)
   target_include_directories(nf_cli_tests PRIVATE ${PROJECT_SOURCE_DIR}/core/kernel/src)
   target_compile_definitions(nf_cli_tests PRIVATE NF_CLI_PATH="${CMAKE_CURRENT_BINARY_DIR}/nf"
