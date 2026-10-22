@@ -7,6 +7,7 @@
 #include "schema.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 
 namespace nf::ir {
@@ -98,6 +99,16 @@ class Reader {
           {m.key, m.key.starts_with("x-") ? m.value : numeric(&m.value, at(pointer, m.key))});
     }
     return result;
+  }
+  /// RFC 0013 density in kg/m^3: a finite positive number.
+  std::optional<double> optional_density(const Value& v, const std::string& p) {
+    const auto* f = v.find("density");
+    if (!f) return std::nullopt;
+    if (!f->if_number() || !std::isfinite(*f->if_number()) || !(*f->if_number() > 0)) {
+      fail(at(p, "density"), "expected a positive density in kg/m^3");
+      return std::nullopt;
+    }
+    return *f->if_number();
   }
   std::optional<bool> optional_bool(const Value& v, std::string_view key, const std::string& p) {
     const auto* f = v.find(key);
@@ -222,7 +233,8 @@ std::expected<Document, Errors> decode(const Value& authored) {
   if (assembly) {
     r.optional_array(root, "components", [&](const Value& v, const std::string& p, auto& ids) {
       Component c;
-      if (!r.object(&v, p, {"id", "features", "reference", "params"}, c.extensions)) return;
+      if (!r.object(&v, p, {"id", "features", "reference", "params", "density"}, c.extensions))
+        return;
       c.id = r.id(v.find("id"), at(p, "id"), ids);
       if (c.id == "root") r.fail(at(p, "id"), "\"root\" names the document's own features");
       if (const auto* f = v.find("features")) {
@@ -244,17 +256,20 @@ std::expected<Document, Errors> decode(const Value& authored) {
       else if (!v.find("features") && !v.find("reference"))
         r.fail(p, "a component needs inline features or a reference");
       c.params = r.overrides(v, p);
+      c.density = r.optional_density(v, p);
       d.components.push_back(std::move(c));
     });
     r.optional_array(root, "occurrences", [&](const Value& v, const std::string& p, auto& ids) {
       Occurrence o;
-      if (!r.object(&v, p, {"id", "component", "params", "grounded", "placement"}, o.extensions))
+      if (!r.object(&v, p, {"id", "component", "params", "grounded", "placement", "density"},
+                    o.extensions))
         return;
       o.id = r.id(v.find("id"), at(p, "id"), ids);
       o.component = r.string(v.find("component"), at(p, "component"), true);
       o.params = r.overrides(v, p);
       o.grounded = r.optional_bool(v, "grounded", p);
       if (const auto* f = v.find("placement")) o.placement = *f;
+      o.density = r.optional_density(v, p);
       d.occurrences.push_back(std::move(o));
     });
     r.optional_array(root, "joints", [&](const Value& v, const std::string& p, auto& ids) {
@@ -378,6 +393,7 @@ Value encode(const Document& d) {
       }
       optional(o, "reference", c.reference);
       if (!c.params.empty()) o.push_back({"params", c.params});
+      optional(o, "density", c.density);
       components.push_back(extended(std::move(o), c.extensions));
     }
     root.push_back({"components", std::move(components)});
@@ -389,6 +405,7 @@ Value encode(const Document& d) {
       if (!o.params.empty()) e.push_back({"params", o.params});
       optional(e, "grounded", o.grounded);
       optional(e, "placement", o.placement);
+      optional(e, "density", o.density);
       occurrences.push_back(extended(std::move(e), o.extensions));
     }
     root.push_back({"occurrences", std::move(occurrences)});

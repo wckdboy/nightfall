@@ -2515,6 +2515,11 @@
       },
       "additionalProperties": false
     },
+    "density": {
+      "$comment": "kg/m^3",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
     "component": {
       "oneOf": [
         {
@@ -2532,6 +2537,9 @@
             },
             "params": {
               "$ref": "#/$defs/overrides"
+            },
+            "density": {
+              "$ref": "#/$defs/density"
             }
           },
           "required": [
@@ -2555,6 +2563,9 @@
             },
             "params": {
               "$ref": "#/$defs/overrides"
+            },
+            "density": {
+              "$ref": "#/$defs/density"
             }
           },
           "required": [
@@ -2590,6 +2601,9 @@
         },
         "placement": {
           "$ref": "#/$defs/placement"
+        },
+        "density": {
+          "$ref": "#/$defs/density"
         }
       },
       "required": [

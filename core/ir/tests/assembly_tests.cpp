@@ -130,3 +130,14 @@ TEST_CASE("IR v2: occurrences and joints edit through the typed document", "[ir]
     return e.code == "unknown_id" && e.pointer == "/joints/0/a/occurrence";
   }));
 }
+
+TEST_CASE("IR v2: densities decode on components and occurrences", "[ir][assembly]") {
+  const auto cases = corpus();
+  const auto d =
+      read_document(json::write(named(cases, "densities on a component and an occurrence")));
+  REQUIRE(d.has_value());
+  CHECK(d->components[0].density == 7850.0);
+  CHECK_FALSE(d->components[1].density.has_value());
+  CHECK_FALSE(d->occurrences[0].density.has_value());
+  CHECK(d->occurrences[1].density == 2700.5);
+}
