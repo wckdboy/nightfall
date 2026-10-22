@@ -28,7 +28,7 @@ All of these, with evidence linked:
 2. `patch_part` (RFC 6902) and `changed_bodies`
 3. `agent/evals/` suite over the 20 reference parts; CI job
 4. Sketch solver: [RFC 0012](../rfcs/0012-sketch-solver.md) (decision rule and spike protocol), the spike, `core/sketch/rust`
-5. IR v2 RFC: components, occurrences, frames, joints, studies; migration
+5. IR v2: [RFC 0013](../rfcs/0013-assemblies.md) (components, occurrences, frame joints, queries, URDF); studies get their own RFC
 6. SE(3) joint solver crate; interference and clearance queries; URDF export
 7. Study runner and job lifecycle; first adapters (fTetWild, FEBio) under their RFCs
 8. OCCT 8.0.1 upgrade RFC
