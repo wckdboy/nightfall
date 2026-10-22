@@ -13,7 +13,7 @@ The client starts the command as a child process and exchanges one JSON object p
 stdin and stdout. Each operand travels as STEP text, together with one sample point per face
 and per edge. Each result comes back as STEP text, together with every result face's history
 in the result's own STEP face order. The client keeps its own document, naming, undo,
-rendering and agent tools; Nightfall supplies booleans, fillets and chamfers. To read operands,
+rendering and agent tools; Nightfall supplies booleans, fillets, chamfers and shells. To read operands,
 `IKernel` gains `import_step(text)` and `edge_distance`.
 
 The first client is a fork of SolidCraft (Rust and truck, MIT OR Apache-2.0). It keeps its own
@@ -88,7 +88,22 @@ lineage.
  "operands": [OPERAND, OPERAND, ...]}
 {"id": 3, "op": "fillet",  "operands": [OPERAND], "edges": [3, 7], "radius": 2.0}
 {"id": 4, "op": "chamfer", "operands": [OPERAND], "edges": [3],    "distance": 1.0}
+{"id": 5, "op": "shell",   "operands": [OPERAND], "faces": [2],    "thickness": 2.0}
 ```
+
+`shell` hollows the solid inward to a wall `thickness` mm thick, leaving the listed client faces
+open. To run it, `IKernel` gains:
+
+```cpp
+/// Hollow inward to a wall `thickness` mm thick, removing `open` faces (none: a closed void).
+/// History maps each kept face to itself and each inner wall face to the face it offsets,
+/// with role "inner"; open faces are deleted.
+virtual std::expected<OperationResult, KernelError> shell(const ShapePtr&,
+    const std::vector<EntityPtr>& open, double thickness);
+```
+
+The default implementation reports it as unsupported. The OCCT backend uses
+`BRepOffsetAPI_MakeThickSolid` with arc joins.
 
 An operand is one solid:
 
@@ -113,6 +128,7 @@ An operand is one solid:
  "step": "ISO-10303-21; ...",
  "faces": [{"change": "kept|modified|split|merged|generated",
             "from": [{"operand": 0, "face": 4}, {"operand": 1, "edge": 2}],
+            "offset": [{"operand": 0, "face": 3}],
             "role": "fillet"}]}
 {"id": 2, "ok": false, "error": {"code": "unmatched_face", "message": "..."}}
 ```
@@ -128,6 +144,7 @@ An operand is one solid:
   - `split`: the input face had several images.
   - `merged`: the result face has several input faces.
   - `generated`: the result face has no input faces, only edges or a role.
+- `offset` lists the faces a shell's inner wall face offsets (role `inner`).
 - `ok: false` leaves the client's state unchanged. Error codes: `bad_request`,
   `unsupported`, `step_read`, `unmatched_face`, `unmatched_edge`, `operation_failed`,
   `too_large`.
