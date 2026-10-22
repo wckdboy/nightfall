@@ -3,6 +3,7 @@
 #include "session.hpp"
 
 #include <unistd.h>
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -392,6 +393,71 @@ std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
     offset += mesh->vertices.size();
   }
   return result;
+}
+
+std::expected<Object, ir::Errors> Session::topology(const std::string& body) const {
+  const auto found = state_.evaluation.bodies.find(body);
+  if (found == state_.evaluation.bodies.end() || !live(found->second))
+    return std::unexpected(ir::Errors{{"unknown_id", "no live body: " + body, "", {}}});
+  const auto& state = found->second;
+  auto faces = kernel_.faces(state.shape);
+  if (!faces)
+    return std::unexpected(ir::Errors{{faces.error().code, faces.error().message, "", {}}});
+  auto names_of = [&](const kernel::Entity& entity) {
+    Array names;
+    for (const auto& n : state.names)
+      if (n.entity && n.entity->kind() == entity.kind() && n.entity->same_as(entity)) {
+        Object name{{"created_by", n.feature}, {"role", n.role}};
+        if (!n.from.empty()) name.push_back({"from", n.from});
+        names.push_back(std::move(name));
+      }
+    return names;
+  };
+  struct EdgeRecord {
+    kernel::EntityPtr entity;
+    Array faces;
+  };
+  std::vector<EdgeRecord> edges;
+  Array face_entries;
+  for (std::size_t i = 0; i < faces->size(); ++i) {
+    const auto& info = (*faces)[i];
+    Object entry{{"index", numeric(i)}};
+    if (info.plane) {
+      entry.push_back({"type", "plane"});
+      entry.push_back({"origin", point(info.plane->origin)});
+      entry.push_back({"normal", point(info.plane->normal)});
+      entry.push_back({"x_axis", point(info.plane->x_axis)});
+    } else if (info.cylinder) {
+      entry.push_back({"type", "cylinder"});
+      entry.push_back({"origin", point(info.cylinder->axis.origin)});
+      entry.push_back({"axis", point(info.cylinder->axis.direction)});
+      entry.push_back({"radius", info.cylinder->radius});
+    } else {
+      entry.push_back({"type", "other"});
+    }
+    entry.push_back({"names", names_of(*info.entity)});
+    auto boundary = kernel_.edges(info.entity);
+    if (!boundary)
+      return std::unexpected(ir::Errors{{boundary.error().code, boundary.error().message, "", {}}});
+    for (const auto& edge : *boundary) {
+      auto known = std::find_if(edges.begin(), edges.end(),
+                                [&](const EdgeRecord& r) { return r.entity->same_as(*edge); });
+      if (known == edges.end()) known = edges.insert(edges.end(), EdgeRecord{edge, {}});
+      known->faces.push_back(numeric(i));
+    }
+    entry.push_back({"edges", numeric(boundary->size())});
+    face_entries.push_back(std::move(entry));
+  }
+  Array edge_entries;
+  for (std::size_t i = 0; i < edges.size(); ++i)
+    edge_entries.push_back(Object{
+        {"index", numeric(i)}, {"faces", edges[i].faces}, {"names", names_of(*edges[i].entity)}});
+  return Object{{"body", body},
+                {"faces", std::move(face_entries)},
+                {"edges", std::move(edge_entries)},
+                {"note",
+                 "indices are display order only; reference faces and edges through "
+                 "selectors built from created_by, role and from"}};
 }
 
 }  // namespace nf::cli

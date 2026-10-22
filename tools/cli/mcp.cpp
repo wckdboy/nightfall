@@ -21,7 +21,8 @@ constexpr std::string_view kVersions[] = {"2025-06-18", "2025-03-26", "2024-11-0
 constexpr std::string_view kInstructions =
     "Nightfall part documents are JSON feature programs (RFC 0005): named parameters with units, "
     "an ordered feature list and selectors instead of indices. Read the schema with get_schema, "
-    "the current part with inspect_part (or its raw text with get_part), change it with "
+    "the current part with inspect_part (or its raw text with get_part), its faces and edges "
+    "with body_topology, change it with "
     "set_parameters, patch_part (RFC 6902) "
     "or replace_part, then "
     "verify measured volume, area, centroid and bounds with measure. Mutating tools rebuild and "
@@ -109,6 +110,13 @@ Array tools() {
            schema({}), true),
       tool("get_part", "The current document text (JSON) and its SHA-256, valid or not.",
            schema({}), true),
+      tool("body_topology",
+           "Faces and edges of one live body with their generative names (created_by feature, "
+           "role, from sketch entity), analytic type and frame (plane origin/normal/x_axis, "
+           "cylinder origin/axis/radius) and adjacency. Indices are display order only: build "
+           "selectors from the names, for example {\"edges_of\": {\"created_by\": \"base\", "
+           "\"role\": \"cap_end\"}}.",
+           schema({{"body", property("string", "A live body id")}}, {"body"}), true),
       tool("measure",
            "Volume (mm^3), area (mm^2), centroid, bounds and topology counts of one live body, "
            "or of every live body with totals.",
@@ -236,6 +244,8 @@ struct Server {
       return tool_result(
           Object{{"document", session.source()}, {"sha256", ir::sha256(session.source()).hex()}},
           false);
+    if (name == "body_topology")
+      return outcome_object(session.topology(*string_arg(args, "body", true)));
     if (name == "measure") return outcome_object(session.measure(string_arg(args, "body", false)));
     if (name == "set_parameters") {
       std::map<std::string, std::string> values;
