@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "nf/ir/document.hpp"
+#include "nf/ir/migration.hpp"
 #include "nf/ir/parameters.hpp"
 #include "schema.hpp"
 
@@ -77,6 +78,70 @@ class Reader {
     return s;
   }
   template <class F>
+  void optional_array(const Value& root, std::string_view key, F each) {
+    if (root.find(key)) array(root, key, each);
+  }
+  /// Parameter overrides: an object of parameter IDs (or x- keys) to values.
+  Object overrides(const Value& v, const std::string& p) {
+    const auto* f = v.find("params");
+    if (!f) return {};
+    const auto pointer = at(p, "params");
+    if (!f->if_object()) {
+      fail(pointer, "expected an object of parameter overrides");
+      return {};
+    }
+    Object result;
+    for (const auto& m : *f->if_object()) {
+      if (!m.key.starts_with("x-") && !identifier(m.key))
+        fail(at(pointer, m.key), "parameter ID must match [a-z_][a-z0-9_]{0,63}");
+      result.push_back(
+          {m.key, m.key.starts_with("x-") ? m.value : numeric(&m.value, at(pointer, m.key))});
+    }
+    return result;
+  }
+  std::optional<bool> optional_bool(const Value& v, std::string_view key, const std::string& p) {
+    const auto* f = v.find(key);
+    if (!f) return std::nullopt;
+    if (!f->if_bool()) {
+      fail(at(p, key), "expected a boolean");
+      return std::nullopt;
+    }
+    return *f->if_bool();
+  }
+  std::optional<Feature> feature(const Value& v, const std::string& p,
+                                 std::unordered_set<std::string>& ids) {
+    Feature feature;
+    if (!object(&v, p, {"id", "type", "name", "suppressed", "inputs"}, feature.extensions))
+      return std::nullopt;
+    feature.id = id(v.find("id"), at(p, "id"), ids);
+    feature.type = string(v.find("type"), at(p, "type"));
+    if (!one_of(feature.type, {"sketch", "extrude", "revolve", "sweep", "loft", "fillet", "chamfer",
+                               "shell", "hole", "boolean", "pattern_linear", "pattern_circular",
+                               "mirror", "transform", "import", "script"}))
+      fail(at(p, "type"), "unknown feature type");
+    feature.name = optional_string(v, "name", p);
+    feature.suppressed = optional_bool(v, "suppressed", p);
+    if (const auto* f = v.find("inputs"); f && f->if_object())
+      feature.inputs = *f;
+    else
+      fail(at(p, "inputs"), "expected an object");
+    return feature;
+  }
+  JointEnd joint_end(const Value* v, const std::string& p) {
+    JointEnd end;
+    if (!object(v, p, {"occurrence", "frame", "rule", "offset", "flip"}, end.extensions))
+      return end;
+    end.occurrence = string(v->find("occurrence"), at(p, "occurrence"), true);
+    if (const auto* f = v->find("frame"); f && f->if_object())
+      end.frame = *f;
+    else
+      fail(at(p, "frame"), "expected a selector object");
+    end.rule = optional_string(*v, "rule", p);
+    if (const auto* f = v->find("offset")) end.offset = *f;
+    end.flip = optional_bool(*v, "flip", p);
+    return end;
+  }
+  template <class F>
   void array(const Value& root, std::string_view key, F each) {
     const auto* v = root.find(key);
     const std::string p = at("", key);
@@ -90,26 +155,31 @@ class Reader {
   }
 };
 
-std::expected<Document, Errors> decode(const Value& root) {
+std::expected<Document, Errors> decode(const Value& authored) {
   Reader r;
-  if (!root.if_object()) {
+  if (!authored.if_object()) {
     r.fail("", "expected a part document object");
     return std::unexpected(std::move(r.errors));
   }
-  if (r.string(root.find("format"), "/format") != "nightfall.part")
+  if (r.string(authored.find("format"), "/format") != "nightfall.part")
     r.fail("/format", "expected format nightfall.part");
-  const auto* version = root.find("version");
+  const auto* version = authored.find("version");
   const auto n = version ? version->if_integer() : std::nullopt;
-  if (!n || *n != kDocumentVersion)
+  if (!n || *n < 1 || *n > kDocumentVersion)
     r.fail("/version", n && *n > kDocumentVersion
                            ? "made by a newer Nightfall (version " + std::to_string(*n) + ")"
-                           : "unsupported version; expected 1");
+                           : "unsupported version; expected 1 or 2");
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));
+  // Older files migrate forward first (RFC 0005); assembly sections exist only from version 2.
+  const Value root = migrate(authored);
+  const bool assembly = *n >= 2;
 
   Document d;
   r.object(&root, "",
-           {"format", "version", "units", "meta", "params", "references", "features", "history_end",
-            "ui"},
+           assembly ? Names{"format", "version", "units", "meta", "params", "references",
+                            "features", "components", "occurrences", "joints", "history_end", "ui"}
+                    : Names{"format", "version", "units", "meta", "params", "references",
+                            "features", "history_end", "ui"},
            d.extensions);
   if (const auto* v = root.find("units");
       r.object(v, "/units", {"length", "angle"}, d.units.extensions)) {
@@ -147,28 +217,58 @@ std::expected<Document, Errors> decode(const Value& root) {
     d.references.push_back(std::move(ref));
   });
   r.array(root, "features", [&](const Value& v, const std::string& p, auto& ids) {
-    Feature feature;
-    if (!r.object(&v, p, {"id", "type", "name", "suppressed", "inputs"}, feature.extensions))
-      return;
-    feature.id = r.id(v.find("id"), at(p, "id"), ids);
-    feature.type = r.string(v.find("type"), at(p, "type"));
-    if (!one_of(feature.type, {"sketch", "extrude", "revolve", "sweep", "loft", "fillet", "chamfer",
-                               "shell", "hole", "boolean", "pattern_linear", "pattern_circular",
-                               "mirror", "transform", "import", "script"}))
-      r.fail(at(p, "type"), "unknown feature type");
-    feature.name = r.optional_string(v, "name", p);
-    if (const auto* f = v.find("suppressed")) {
-      if (f->if_bool())
-        feature.suppressed = *f->if_bool();
-      else
-        r.fail(at(p, "suppressed"), "expected a boolean");
-    }
-    if (const auto* f = v.find("inputs"); f && f->if_object())
-      feature.inputs = *f;
-    else
-      r.fail(at(p, "inputs"), "expected an object");
-    d.features.push_back(std::move(feature));
+    if (auto feature = r.feature(v, p, ids)) d.features.push_back(std::move(*feature));
   });
+  if (assembly) {
+    r.optional_array(root, "components", [&](const Value& v, const std::string& p, auto& ids) {
+      Component c;
+      if (!r.object(&v, p, {"id", "features", "reference", "params"}, c.extensions)) return;
+      c.id = r.id(v.find("id"), at(p, "id"), ids);
+      if (c.id == "root") r.fail(at(p, "id"), "\"root\" names the document's own features");
+      if (const auto* f = v.find("features")) {
+        if (!f->if_array()) {
+          r.fail(at(p, "features"), "expected an array");
+        } else {
+          std::vector<Feature> features;
+          std::unordered_set<std::string> feature_ids;
+          for (std::size_t i = 0; i < f->if_array()->size(); ++i)
+            if (auto feature = r.feature((*f->if_array())[i],
+                                         at(at(p, "features"), std::to_string(i)), feature_ids))
+              features.push_back(std::move(*feature));
+          c.features = std::move(features);
+        }
+      }
+      c.reference = r.optional_string(v, "reference", p);
+      if (v.find("features") && v.find("reference"))
+        r.fail(p, "a component has inline features or a reference, not both");
+      else if (!v.find("features") && !v.find("reference"))
+        r.fail(p, "a component needs inline features or a reference");
+      c.params = r.overrides(v, p);
+      d.components.push_back(std::move(c));
+    });
+    r.optional_array(root, "occurrences", [&](const Value& v, const std::string& p, auto& ids) {
+      Occurrence o;
+      if (!r.object(&v, p, {"id", "component", "params", "grounded", "placement"}, o.extensions))
+        return;
+      o.id = r.id(v.find("id"), at(p, "id"), ids);
+      o.component = r.string(v.find("component"), at(p, "component"), true);
+      o.params = r.overrides(v, p);
+      o.grounded = r.optional_bool(v, "grounded", p);
+      if (const auto* f = v.find("placement")) o.placement = *f;
+      d.occurrences.push_back(std::move(o));
+    });
+    r.optional_array(root, "joints", [&](const Value& v, const std::string& p, auto& ids) {
+      Joint j;
+      if (!r.object(&v, p, {"id", "kind", "a", "b", "value", "limits"}, j.extensions)) return;
+      j.id = r.id(v.find("id"), at(p, "id"), ids);
+      j.kind = r.string(v.find("kind"), at(p, "kind"));
+      j.a = r.joint_end(v.find("a"), at(p, "a"));
+      j.b = r.joint_end(v.find("b"), at(p, "b"));
+      if (const auto* f = v.find("value")) j.value = *f;
+      if (const auto* f = v.find("limits")) j.limits = *f;
+      d.joints.push_back(std::move(j));
+    });
+  }
   const auto* end = root.find("history_end");
   if (!end || !end->is_null()) {
     d.history_end = r.string(end, "/history_end");
@@ -184,10 +284,43 @@ std::expected<Document, Errors> decode(const Value& root) {
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));
   auto schema = detail::check_schema(root);
   if (!schema.errors.empty()) return std::unexpected(std::move(schema.errors));
-  auto references = detail::check_links(d, schema.links);
+  // Root feature links resolve in the root scope; each inline component's in its own scope.
+  std::vector<detail::Link> root_links, assembly_links;
+  std::vector<std::vector<detail::Link>> component_links(d.components.size());
+  for (auto& link : schema.links) {
+    if (link.pointer.starts_with("/features/")) {
+      root_links.push_back(link);
+      continue;
+    }
+    if (link.pointer.starts_with("/components/")) {
+      const auto slash = link.pointer.find('/', 12);
+      const auto k = std::stoul(link.pointer.substr(12, slash - 12));
+      const auto rest = link.pointer.substr(slash);
+      if (rest.starts_with("/features/") && k < component_links.size()) {
+        auto local = link;
+        local.pointer = rest;
+        component_links[k].push_back(std::move(local));
+        continue;
+      }
+    }
+    assembly_links.push_back(std::move(link));
+  }
+  Errors references = detail::check_links(d, root_links);
+  for (std::size_t k = 0; k < d.components.size(); ++k) {
+    if (!d.components[k].features) continue;
+    Document scope;
+    scope.features = *d.components[k].features;
+    scope.references = d.references;
+    for (auto error : detail::check_links(scope, component_links[k])) {
+      error.pointer = "/components/" + std::to_string(k) + error.pointer;
+      if (references.size() < 128) references.push_back(std::move(error));
+    }
+  }
   if (!references.empty()) return std::unexpected(std::move(references));
   auto parameters = evaluate_parameters(d.params);
   if (!parameters) return std::unexpected(std::move(parameters.error()));
+  auto assembled = detail::check_assembly(d, schema.links, assembly_links, parameters->values);
+  if (!assembled.empty()) return std::unexpected(std::move(assembled));
   return d;
 }
 
@@ -198,6 +331,14 @@ void optional(Object& o, std::string key, const std::optional<T>& value) {
 Value extended(Object o, const Object& extensions) {
   o.insert(o.end(), extensions.begin(), extensions.end());
   return Value(std::move(o));
+}
+
+Value encode_feature(const Feature& f) {
+  Object o{{"id", f.id}, {"type", f.type}};
+  optional(o, "name", f.name);
+  optional(o, "suppressed", f.suppressed);
+  o.push_back({"inputs", f.inputs});
+  return extended(std::move(o), f.extensions);
 }
 
 Value encode(const Document& d) {
@@ -216,24 +357,62 @@ Value encode(const Document& d) {
     references.push_back(
         extended({{"id", ref.id}, {"kind", ref.kind}, {"path", ref.path}, {"sha256", ref.sha256}},
                  ref.extensions));
-  for (const auto& f : d.features) {
-    Object o{{"id", f.id}, {"type", f.type}};
-    optional(o, "name", f.name);
-    optional(o, "suppressed", f.suppressed);
-    o.push_back({"inputs", f.inputs});
-    features.push_back(extended(std::move(o), f.extensions));
+  for (const auto& f : d.features) features.push_back(encode_feature(f));
+  Object root{{"format", "nightfall.part"},
+              {"version", Value(double(kDocumentVersion))},
+              {"units", extended({{"length", d.units.length}, {"angle", d.units.angle}},
+                                 d.units.extensions)},
+              {"meta", extended(std::move(meta), d.meta.extensions)},
+              {"params", std::move(params)},
+              {"references", std::move(references)},
+              {"features", std::move(features)}};
+  // RFC 0013 sections, in RFC order, only when present: plain parts stay unchanged.
+  if (!d.components.empty()) {
+    Array components;
+    for (const auto& c : d.components) {
+      Object o{{"id", c.id}};
+      if (c.features) {
+        Array list;
+        for (const auto& f : *c.features) list.push_back(encode_feature(f));
+        o.push_back({"features", std::move(list)});
+      }
+      optional(o, "reference", c.reference);
+      if (!c.params.empty()) o.push_back({"params", c.params});
+      components.push_back(extended(std::move(o), c.extensions));
+    }
+    root.push_back({"components", std::move(components)});
   }
-  return extended({{"format", "nightfall.part"},
-                   {"version", Value(double(kDocumentVersion))},
-                   {"units", extended({{"length", d.units.length}, {"angle", d.units.angle}},
-                                      d.units.extensions)},
-                   {"meta", extended(std::move(meta), d.meta.extensions)},
-                   {"params", std::move(params)},
-                   {"references", std::move(references)},
-                   {"features", std::move(features)},
-                   {"history_end", d.history_end ? Value(*d.history_end) : Value()},
-                   {"ui", d.ui}},
-                  d.extensions);
+  if (!d.occurrences.empty()) {
+    Array occurrences;
+    for (const auto& o : d.occurrences) {
+      Object e{{"id", o.id}, {"component", o.component}};
+      if (!o.params.empty()) e.push_back({"params", o.params});
+      optional(e, "grounded", o.grounded);
+      optional(e, "placement", o.placement);
+      occurrences.push_back(extended(std::move(e), o.extensions));
+    }
+    root.push_back({"occurrences", std::move(occurrences)});
+  }
+  if (!d.joints.empty()) {
+    const auto end = [](const JointEnd& e) {
+      Object o{{"occurrence", e.occurrence}, {"frame", e.frame}};
+      optional(o, "rule", e.rule);
+      optional(o, "offset", e.offset);
+      optional(o, "flip", e.flip);
+      return extended(std::move(o), e.extensions);
+    };
+    Array joints;
+    for (const auto& j : d.joints) {
+      Object o{{"id", j.id}, {"kind", j.kind}, {"a", end(j.a)}, {"b", end(j.b)}};
+      optional(o, "value", j.value);
+      optional(o, "limits", j.limits);
+      joints.push_back(extended(std::move(o), j.extensions));
+    }
+    root.push_back({"joints", std::move(joints)});
+  }
+  root.push_back({"history_end", d.history_end ? Value(*d.history_end) : Value()});
+  root.push_back({"ui", d.ui});
+  return extended(std::move(root), d.extensions);
 }
 
 bool bounded(const Value& v, int depth = 0) {
@@ -290,6 +469,38 @@ std::expected<std::string, Errors> write_document(const Document& document) {
     const auto p = at("/features", std::to_string(i));
     extensions(document.features[i].extensions, p, 3);
     check(document.features[i].inputs, at(p, "inputs"), 3);
+  }
+  for (std::size_t k = 0; k < document.components.size(); ++k) {
+    const auto& c = document.components[k];
+    const auto p = at("/components", std::to_string(k));
+    extensions(c.extensions, p, 3);
+    for (const auto& m : c.params) check(m.value, at(at(p, "params"), m.key), 4);
+    if (c.features)
+      for (std::size_t i = 0; i < c.features->size(); ++i) {
+        const auto f = at(at(p, "features"), std::to_string(i));
+        extensions((*c.features)[i].extensions, f, 5);
+        check((*c.features)[i].inputs, at(f, "inputs"), 5);
+      }
+  }
+  for (std::size_t k = 0; k < document.occurrences.size(); ++k) {
+    const auto& o = document.occurrences[k];
+    const auto p = at("/occurrences", std::to_string(k));
+    extensions(o.extensions, p, 3);
+    for (const auto& m : o.params) check(m.value, at(at(p, "params"), m.key), 4);
+    if (o.placement) check(*o.placement, at(p, "placement"), 3);
+  }
+  for (std::size_t k = 0; k < document.joints.size(); ++k) {
+    const auto& j = document.joints[k];
+    const auto p = at("/joints", std::to_string(k));
+    extensions(j.extensions, p, 3);
+    for (const auto* e : {&j.a, &j.b}) {
+      const auto q = at(p, e == &j.a ? "a" : "b");
+      extensions(e->extensions, q, 4);
+      check(e->frame, at(q, "frame"), 4);
+      if (e->offset) check(*e->offset, at(q, "offset"), 4);
+    }
+    if (j.value) check(*j.value, at(p, "value"), 3);
+    if (j.limits) check(*j.limits, at(p, "limits"), 3);
   }
   for (const auto& m : document.ui) check(m.value, at("/ui", m.key), 2);
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));

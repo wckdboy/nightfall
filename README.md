@@ -203,7 +203,10 @@ build/schema-venv/bin/pip install -r tools/schema-requirements.txt
 NF_SCHEMA_PYTHON=build/schema-venv/bin/python tools/check.sh
 ```
 
-The published [part schema](core/ir/schema/part-v1.schema.json) is generated from
+Documents are version 2 ([RFC 0013](https://github.com/wckdboy/nightfall/pull/263)): the version-1 layout plus
+optional `components`, `occurrences` and `joints`. Version-1 files open unchanged and are saved
+as version 2 by changing only their version number. The published part schemas,
+[version 2](core/ir/schema/part-v2.schema.json) and [version 1](core/ir/schema/part-v1.schema.json), are generated from
 `core/ir/schema/build_schema.py`; `tools/check.sh` rejects a stale generated copy.
 
 Part load/save also validates parameter expressions, dependencies and bounds. Values such as
