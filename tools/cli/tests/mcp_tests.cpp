@@ -15,10 +15,14 @@
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
+#include <array>
 #include <cerrno>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numbers>
 #include <set>
 #include <sstream>
 
@@ -185,8 +189,8 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
   }
   CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "body_topology",
                                           "measure", "set_parameters", "replace_part", "patch_part",
-                                          "undo", "redo", "open_part", "save_part", "export_step",
-                                          "export_mesh"});
+                                          "inspect_assembly", "drive_joints", "undo", "redo",
+                                          "open_part", "save_part", "export_step", "export_mesh"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
   CHECK(*inspected.find("ok")->if_bool());
@@ -737,4 +741,153 @@ TEST_CASE("mcp write-back keeps expressions and reports free sketches", "[cli-mc
       {kInitialize, call(1, "inspect_part")});
   REQUIRE(washer_like.replies.size() == 2);
   CHECK_FALSE(feature(content(washer_like.replies[1]), "outline")->find("sketch"));
+}
+
+namespace {
+/// RFC 0013 four-bar of one parametric link (ground 100, crank 40, coupler 120, rocker 80 mm);
+/// the crank angle is the parameter `theta`, and revolute joints sit on the pin holes' axes.
+constexpr const char* kFourBar = R"({"format":"nightfall.part","version":2,
+  "units":{"length":"mm","angle":"deg"},"meta":{},
+  "params":[{"name":"length","value":"100 mm"},{"name":"theta","value":"60 deg"}],
+  "references":[],"features":[],"history_end":null,"ui":{},
+  "components":[{"id":"link","features":[
+    {"id":"outline","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"r","type":"rect","corner":[-8,-8],"size":["length + 16 mm",16]},
+      {"id":"h0","type":"circle","center":[0,0],"radius":3},
+      {"id":"h1","type":"circle","center":["length",0],"radius":3}],"constraints":[]}},
+    {"id":"bar","type":"extrude","inputs":{"profile":{"sketch":"outline"},"distance":"5 mm",
+      "result":{"new":"bar","body_type":"brep"}}}]}],
+  "occurrences":[
+    {"id":"ground","component":"link","grounded":true},
+    {"id":"crank","component":"link","params":{"length":"40 mm"},
+     "placement":{"translation":[0,0,0],"rotation":[0,0,65]}},
+    {"id":"coupler","component":"link","params":{"length":"120 mm"},
+     "placement":{"translation":[21,34,0],"rotation":[0,0,-10]}},
+    {"id":"rocker","component":"link","params":{"length":"80 mm"},
+     "placement":{"translation":[100,0,0],"rotation":[0,0,80]}}],
+  "joints":[
+    {"id":"input","kind":"revolute","value":"theta",
+     "a":{"occurrence":"ground","frame":{"created_by":"bar","role":"side","from":"outline/h0"}},
+     "b":{"occurrence":"crank","frame":{"created_by":"bar","role":"side","from":"outline/h0"}}},
+    {"id":"elbow","kind":"revolute",
+     "a":{"occurrence":"crank","frame":{"created_by":"bar","role":"side","from":"outline/h1"}},
+     "b":{"occurrence":"coupler","frame":{"created_by":"bar","role":"side","from":"outline/h0"}}},
+    {"id":"wrist","kind":"revolute",
+     "a":{"occurrence":"coupler","frame":{"created_by":"bar","role":"side","from":"outline/h1"}},
+     "b":{"occurrence":"rocker","frame":{"created_by":"bar","role":"side","from":"outline/h1"}}},
+    {"id":"pivot","kind":"revolute",
+     "a":{"occurrence":"ground","frame":{"created_by":"bar","role":"side","from":"outline/h1"}},
+     "b":{"occurrence":"rocker","frame":{"created_by":"bar","role":"side","from":"outline/h0"}}}]})";
+const Value& occurrence(const Value& assembly, const char* id) {
+  for (const auto& o : *assembly.find("occurrences")->if_array())
+    if (*o.find("id")->if_string() == id) return o;
+  FAIL("no occurrence " << id);
+  return assembly;
+}
+/// The crank's far pin centre (local (40, 0, 2.5)) in world coordinates.
+std::array<double, 3> crank_pin(const Value& assembly) {
+  const auto& o = occurrence(assembly, "crank");
+  const auto& r = *o.find("rotation")->if_array();
+  const auto& t = *o.find("translation")->if_array();
+  std::array<double, 3> p{};
+  for (std::size_t i = 0; i < 3; ++i)
+    p[i] = *r[3 * i].if_number() * 40 + *r[3 * i + 2].if_number() * 2.5 + *t[i].if_number();
+  return p;
+}
+void solved(const Value& assembly) {
+  INFO(ir::json::canonical(assembly));
+  CHECK(*assembly.find("solved")->if_bool());
+  CHECK(number(assembly, "dof") == 0);
+  CHECK(number(assembly, "loops") == 1);
+  REQUIRE(ids(assembly, "joints").size() == 4);
+  for (const auto& j : ids(assembly, "joints")) {
+    CHECK(number(j, "residual_mm") <= 1e-9);
+    CHECK(number(j, "residual_rad") <= 1e-9);
+  }
+}
+}  // namespace
+
+TEST_CASE("mcp solves, drives and exports a four-bar assembly", "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("four_bar.nightfall");
+  write(input, kFourBar);
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "inspect_assembly"), call(2, "inspect_part"),
+             call(3, "drive_joints", R"({"values":{"input":"90 deg"}})"),
+             // Driving the rocker as well over-constrains the loop: rolled back.
+             call(4, "drive_joints", R"({"values":{"pivot":"150 deg"}})"),
+             call(5, "drive_joints", R"({"values":{"missing":"1 deg"}})"),
+             call(6, "measure", R"({"body":"crank/bar"})"),
+             call(7, "export_step", R"({"path":"crank.step","bodies":["crank/bar"]})"),
+             call(8, "get_part"), call(9, "undo"), call(10, "inspect_assembly")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 11);
+  const auto& initial = content(process.replies[1]);
+  solved(initial);
+  auto pin = crank_pin(initial);
+  CHECK_THAT(std::abs(std::atan2(pin[1], pin[0])), WithinAbs(std::numbers::pi / 3, 1e-9));
+  CHECK_THAT(pin[2], WithinAbs(2.5, 1e-9));
+  CHECK(ids(occurrence(initial, "crank"), "bodies") == Array{"crank/bar"});
+  // The placed bodies are the part's results, each with its component's exact volume.
+  const auto bar = [](double length) {
+    return ((length + 16) * 16 - 2 * std::numbers::pi * 9) * 5;
+  };
+  const auto& part = content(process.replies[2]);
+  CHECK(*part.find("ok")->if_bool());
+  CHECK(ids(part, "bodies").size() == 4);
+  for (const auto& [id, length] : {std::pair{"ground/bar", 100.0},
+                                   {"crank/bar", 40.0},
+                                   {"coupler/bar", 120.0},
+                                   {"rocker/bar", 80.0}}) {
+    CAPTURE(id);
+    CHECK_THAT(number(body(part, id), "volume"), WithinAbs(bar(length), 1e-6));
+  }
+  CHECK(part.find("assembly"));
+  // Driven to 90 degrees: the loop re-solves, and only the moving links change.
+  const auto& driven = content(process.replies[3]);
+  solved(*driven.find("assembly"));
+  pin = crank_pin(*driven.find("assembly"));
+  CHECK_THAT(std::abs(std::atan2(pin[1], pin[0])), WithinAbs(std::numbers::pi / 2, 1e-9));
+  const auto changed = ids(driven, "changed_bodies");
+  CHECK(std::ranges::find(changed, Value("ground/bar")) == changed.end());
+  CHECK(std::ranges::find(changed, Value("crank/bar")) != changed.end());
+  const auto& conflict = ids(content(process.replies[4], true), "errors");
+  REQUIRE_FALSE(conflict.empty());
+  CHECK(conflict.front().find("pointer")->if_string()->starts_with("/joints/"));
+  CHECK(conflict.front().find("message")->if_string()->find("joints conflict") !=
+        std::string::npos);
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  // The conflict rolled back: the crank is still at 90 degrees, measured and exported.
+  CHECK_THAT(number(content(process.replies[6]), "volume"), WithinAbs(bar(40), 1e-6));
+  content(process.replies[7]);
+  const auto exported = reload(temp.path("crank.step"));
+  CHECK_THAT(exported->measures().volume, WithinAbs(bar(40), 1e-6));
+  const auto document = ir::json::parse(*content(process.replies[8]).find("document")->if_string());
+  REQUIRE(document);
+  const auto& joints = *document->find("joints")->if_array();
+  CHECK(*joints[0].find("value")->if_string() == "90 deg");
+  CHECK_FALSE(joints[3].find("value"));
+  // Undo restores the parameter-driven drive.
+  content(process.replies[9]);
+  pin = crank_pin(content(process.replies[10]));
+  CHECK_THAT(std::abs(std::atan2(pin[1], pin[0])), WithinAbs(std::numbers::pi / 3, 1e-9));
+  CHECK(read(input) == kFourBar);
+}
+
+TEST_CASE("mcp inspect_assembly reports a plain part as not an assembly", "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("plate.nightfall");
+  write(input, source(part(2)));
+  const auto process = serve(temp, {"--in", input.string()},
+                             {kInitialize, call(1, "inspect_assembly"),
+                              call(2, "drive_joints", R"({"values":{"a":"1 deg"}})")});
+  REQUIRE(process.replies.size() == 3);
+  CHECK(*ids(content(process.replies[1], true), "errors").front().find("code")->if_string() ==
+        "not_an_assembly");
+  CHECK(*ids(content(process.replies[2], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  CHECK_FALSE(content(process.replies[2], true).find("assembly"));
 }

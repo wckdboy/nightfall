@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "session.hpp"
 
+#include "assembly.hpp"
+
 #include <unistd.h>
 #include <algorithm>
 #include <array>
@@ -128,7 +130,7 @@ ir::json::Array error_entries(const ir::Errors& errors) {
 }
 
 void Session::adopt_invalid(std::string source, ir::Errors errors) {
-  state_ = State{std::move(source), {}, {}, {}, std::move(errors)};
+  state_ = State{std::move(source), {}, {}, {}, std::move(errors), {}};
   undo_.clear();
   redo_.clear();
 }
@@ -142,6 +144,7 @@ Object Session::Build::json() const {
                 {"added_bodies", added},
                 {"removed_bodies", removed}};
   if (!written_back.empty()) result.push_back({"written_back", written_back});
+  if (assembly) result.push_back({"assembly", *assembly});
   return result;
 }
 
@@ -260,7 +263,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
       return state;
     }
   }
-  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}};
+  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}, {}};
   auto& build = state.build;
   build.ok = state.evaluation.ok();
   for (const auto& f : state.evaluation.features) {
@@ -284,6 +287,51 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
                                         {"solved", f.sketch->solved}}});
     }
     build.features.push_back(std::move(entry));
+  }
+  // RFC 0013: an assembly publishes its occurrences' bodies at their solved placements, as
+  // "occurrence/body"; the root part's own bodies are not separate results.
+  if (!state.document.occurrences.empty() && build.ok) {
+    auto assembly = kernel_service::evaluate_assembly(evaluator_, kernel_, state.document);
+    state.evaluation.bodies.clear();
+    if (!assembly) {
+      build.ok = false;
+      state.assembly_errors = assembly.error();
+      build.assembly = Object{{"solved", false}, {"errors", error_entries(assembly.error())}};
+    } else {
+      Array joints, occurrences;
+      for (const auto& j : assembly->joints)
+        joints.push_back(Object{{"id", j.id},
+                                {"residual_mm", j.residual_mm},
+                                {"residual_rad", j.residual_rad},
+                                {"redundant", j.redundant}});
+      for (const auto& o : assembly->occurrences) {
+        Array rotation, translation{o.placement.translation.x, o.placement.translation.y,
+                                    o.placement.translation.z};
+        for (const double r : o.placement.rotation) rotation.push_back(r);
+        Array bodies;
+        for (const auto& [id, shape] : o.bodies) {
+          kernel_service::BodyState body;
+          body.shape = shape;
+          // Identity of a placed body: its occurrence, body and exact placement and size.
+          body.hash = ir::sha256(ir::json::canonical(Object{{"occurrence", o.id},
+                                                            {"body", id},
+                                                            {"rotation", rotation},
+                                                            {"translation", translation},
+                                                            {"volume", shape->measures().volume},
+                                                            {"area", shape->measures().area}}));
+          state.evaluation.bodies.emplace(o.id + "/" + id, std::move(body));
+          bodies.push_back(o.id + "/" + id);
+        }
+        occurrences.push_back(Object{{"id", o.id},
+                                     {"rotation", std::move(rotation)},
+                                     {"translation", std::move(translation)},
+                                     {"bodies", std::move(bodies)}});
+      }
+      build.assembly =
+          Object{{"solved", assembly->solved},        {"dof", numeric(assembly->dof)},
+                 {"loops", numeric(assembly->loops)}, {"iterations", numeric(assembly->iterations)},
+                 {"joints", std::move(joints)},       {"occurrences", std::move(occurrences)}};
+    }
   }
   Array metrics;
   for (const auto& [id, body] : state.evaluation.bodies)
@@ -335,6 +383,7 @@ std::expected<Session::Build, ir::Errors> Session::commit(std::string source, bo
     ir::Errors errors;
     for (const auto& f : state->evaluation.features)
       errors.insert(errors.end(), f.errors.begin(), f.errors.end());
+    errors.insert(errors.end(), state->assembly_errors.begin(), state->assembly_errors.end());
     return std::unexpected(std::move(errors));
   }
   // An adopted invalid document is not history: nothing can restore it.
@@ -393,20 +442,22 @@ Object Session::inspect() const {
         if (m.key != "id") entry.push_back(m);
     features.push_back(std::move(entry));
   }
-  return {{"document_sha256", ir::sha256(state_.source).hex()},
-          {"units", Object{{"length", d.units.length}, {"angle", d.units.angle}}},
-          {"meta",
-           Object{{"name", optional_string(d.meta.name)}, {"doc", optional_string(d.meta.doc)}}},
-          {"params", std::move(params)},
-          {"history_end", optional_string(d.history_end)},
-          {"features", std::move(features)},
-          {"bodies", state_.build.bodies},
-          {"ok", state_.build.ok},
-          {"errors", error_entries(state_.errors)},
-          {"kernel", std::string(kernel_.identity())},
-          {"feature_status_counts", feature_counts(state_.evaluation)},
-          {"can_undo", can_undo()},
-          {"can_redo", can_redo()}};
+  Object result{{"document_sha256", ir::sha256(state_.source).hex()},
+                {"units", Object{{"length", d.units.length}, {"angle", d.units.angle}}},
+                {"meta", Object{{"name", optional_string(d.meta.name)},
+                                {"doc", optional_string(d.meta.doc)}}},
+                {"params", std::move(params)},
+                {"history_end", optional_string(d.history_end)},
+                {"features", std::move(features)},
+                {"bodies", state_.build.bodies},
+                {"ok", state_.build.ok},
+                {"errors", error_entries(state_.errors)},
+                {"kernel", std::string(kernel_.identity())},
+                {"feature_status_counts", feature_counts(state_.evaluation)},
+                {"can_undo", can_undo()},
+                {"can_redo", can_redo()}};
+  if (state_.build.assembly) result.push_back({"assembly", *state_.build.assembly});
+  return result;
 }
 
 std::expected<Object, ir::Errors> Session::measure(const std::optional<std::string>& body) const {
