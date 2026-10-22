@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "nightfall-sketch"
+description = "Nightfall's 2D sketch constraint solving over the vendored SolidCraft solver (RFC 0012)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+solidcraft-sketch = { path = "../../../third_party/solidcraft-sketch/sketch" }
+solidcraft-geom = { path = "../../../third_party/solidcraft-sketch/geom" }
