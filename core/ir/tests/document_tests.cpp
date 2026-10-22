@@ -14,7 +14,7 @@ using namespace nf::ir;
 namespace {
 
 constexpr std::string_view kPart = R"({
-  "format": "nightfall.part", "version": 1,
+  "format": "nightfall.part", "version": 2,
   "units": {"length": "mm", "angle": "deg"},
   "meta": {"name": "Mounting bracket", "doc": "A parametric plate"},
   "params": [{"name": "width", "value": "40 mm", "min": "10 mm", "max": "200 mm"},
@@ -92,7 +92,7 @@ TEST_CASE("IR document: readable save preserves content and edits", "[ir][docume
   auto doc = read_ok();
   auto written = write_document(doc);
   REQUIRE(written.has_value());
-  CHECK(written->starts_with("{\n  \"format\": \"nightfall.part\",\n  \"version\": 1,\n"));
+  CHECK(written->starts_with("{\n  \"format\": \"nightfall.part\",\n  \"version\": 2,\n"));
   CHECK(written->ends_with("\n"));
   CHECK(*json::parse(*written) == *json::parse(kPart));
   CHECK(write_document(read_ok(*written)) == *written);
@@ -115,7 +115,7 @@ TEST_CASE("IR document: readable save preserves content and edits", "[ir][docume
 
 TEST_CASE("IR document: extensions and opaque input data round trip", "[ir][document]") {
   auto text =
-      replace(std::string(kPart), "\"version\": 1,", "\"version\": 1, \"x-plugin\": [1, {}],");
+      replace(std::string(kPart), "\"version\": 2,", "\"version\": 2, \"x-plugin\": [1, {}],");
   text = replace(text, "\"length\": \"mm\"", "\"x-display\": true, \"length\": \"mm\"");
   text = replace(text, "\"name\": \"width\"", "\"name\": \"width\", \"x-source\": {\"a/b~c\": 1}");
   text = replace(text, "\"kind\": \"svg\"", "\"kind\": \"svg\", \"x-origin\": null");
@@ -164,10 +164,10 @@ TEST_CASE("IR document: format and version are checked before document fields", 
         read_document(std::string(R"({"format":"nightfall.part","version":)") + version + "}"),
         "schema", "/version");
   }
-  const auto newer = read_document(R"({"format":"nightfall.part","version":2,"future":true})");
+  const auto newer = read_document(R"({"format":"nightfall.part","version":3,"future":true})");
   has_error(newer, "schema", "/version");
   REQUIRE(newer.error().size() == 1);
-  CHECK(newer.error()[0].message.find("newer Nightfall (version 2)") != std::string::npos);
+  CHECK(newer.error()[0].message.find("newer Nightfall (version 3)") != std::string::npos);
 }
 
 TEST_CASE("IR document: field errors carry escaped JSON Pointers", "[ir][document]") {
@@ -188,7 +188,7 @@ TEST_CASE("IR document: field errors carry escaped JSON Pointers", "[ir][documen
         {"\"suppressed\": false", "\"suppressed\": 1", "/features/1/suppressed"},
         {"\"name\": \"Base plate\"", "\"name\": null", "/features/1/name"},
         {"\"history_end\": \"base\"", "\"history_end\": 1", "/history_end"},
-        {"\"version\": 1,", "\"version\": 1, \"mist/ake~\": 0,", "/mist~1ake~0"},
+        {"\"version\": 2,", "\"version\": 2, \"mist/ake~\": 0,", "/mist~1ake~0"},
         {"\"value\": \"40 mm\"", "\"value\": \"40 mm\", \"vlaue\": 2", "/params/0/vlaue"}}) {
     INFO(from);
     has_error(read_document(replace(std::string(kPart), from, to)), "schema", pointer);
