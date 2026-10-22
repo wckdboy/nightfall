@@ -23,4 +23,6 @@ struct PlainMesh {
 /// Meshes the solid in a BREP file with Netgen, elements up to `max_size` millimetres. Throws
 /// std::runtime_error when Netgen cannot load or mesh it.
 PlainMesh mesh_brep(const std::string& path, double max_size);
+/// The mesher and its pinned build, for result provenance.
+const char* mesher_identity();
 }  // namespace nf::study
