@@ -187,10 +187,11 @@ std::expected<Document, Errors> decode(const Value& authored) {
 
   Document d;
   r.object(&root, "",
-           assembly ? Names{"format", "version", "units", "meta", "params", "references",
-                            "features", "components", "occurrences", "joints", "history_end", "ui"}
-                    : Names{"format", "version", "units", "meta", "params", "references",
-                            "features", "history_end", "ui"},
+           assembly
+               ? Names{"format", "version", "units", "meta", "params", "references", "features",
+                       "components", "occurrences", "joints", "studies", "history_end", "ui"}
+               : Names{"format", "version", "units", "meta", "params", "references", "features",
+                       "history_end", "ui"},
            d.extensions);
   if (const auto* v = root.find("units");
       r.object(v, "/units", {"length", "angle"}, d.units.extensions)) {
@@ -272,6 +273,10 @@ std::expected<Document, Errors> decode(const Value& authored) {
       o.density = r.optional_density(v, p);
       d.occurrences.push_back(std::move(o));
     });
+    r.optional_array(root, "studies", [&](const Value& v, const std::string& p, auto& ids) {
+      if (const auto* id = v.find("id"); id && id->if_string()) (void)r.id(id, at(p, "id"), ids);
+      d.studies.push_back(v);
+    });
     r.optional_array(root, "joints", [&](const Value& v, const std::string& p, auto& ids) {
       Joint j;
       if (!r.object(&v, p, {"id", "kind", "a", "b", "value", "limits"}, j.extensions)) return;
@@ -318,6 +323,8 @@ std::expected<Document, Errors> decode(const Value& authored) {
         continue;
       }
     }
+    // A study's selectors name root features of the body it runs on; the runner resolves them.
+    if (link.pointer.starts_with("/studies/")) continue;
     assembly_links.push_back(std::move(link));
   }
   Errors references = detail::check_links(d, root_links);
@@ -427,6 +434,7 @@ Value encode(const Document& d) {
     }
     root.push_back({"joints", std::move(joints)});
   }
+  if (!d.studies.empty()) root.push_back({"studies", Array(d.studies.begin(), d.studies.end())});
   root.push_back({"history_end", d.history_end ? Value(*d.history_end) : Value()});
   root.push_back({"ui", d.ui});
   return extended(std::move(root), d.extensions);

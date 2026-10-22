@@ -10582,5 +10582,1089 @@
    "code": "schema",
    "pointer": "/components/0/density"
   }
+ },
+ {
+  "name": "a structural study",
+  "schema_valid": true,
+  "valid": true,
+  "document": {
+   "format": "nightfall.part",
+   "version": 2,
+   "units": {
+    "length": "mm",
+    "angle": "deg"
+   },
+   "meta": {
+    "name": "Arm"
+   },
+   "params": [
+    {
+     "name": "link_len",
+     "value": "120 mm"
+    },
+    {
+     "name": "elbow",
+     "value": "35 deg"
+    },
+    {
+     "name": "length",
+     "value": "100 mm"
+    }
+   ],
+   "references": [
+    {
+     "id": "motor",
+     "kind": "part",
+     "path": "motor.nightfall",
+     "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "features": [
+    {
+     "id": "s",
+     "type": "sketch",
+     "inputs": {
+      "plane": {
+       "datum": "xy"
+      },
+      "entities": [
+       {
+        "id": "r",
+        "type": "rect",
+        "corner": [
+         -20,
+         -20
+        ],
+        "size": [
+         40,
+         40
+        ]
+       },
+       {
+        "id": "pin",
+        "type": "circle",
+        "center": [
+         0,
+         0
+        ],
+        "radius": 6
+       }
+      ],
+      "constraints": []
+     }
+    },
+    {
+     "id": "base",
+     "type": "extrude",
+     "inputs": {
+      "profile": {
+       "sketch": "s"
+      },
+      "distance": "10 mm",
+      "result": {
+       "new": "body",
+       "body_type": "brep"
+      }
+     }
+    }
+   ],
+   "components": [
+    {
+     "id": "link",
+     "features": [
+      {
+       "id": "ls",
+       "type": "sketch",
+       "inputs": {
+        "plane": {
+         "datum": "xy"
+        },
+        "entities": [
+         {
+          "id": "bar",
+          "type": "rect",
+          "corner": [
+           0,
+           -5
+          ],
+          "size": [
+           "length",
+           10
+          ]
+         },
+         {
+          "id": "hole",
+          "type": "circle",
+          "center": [
+           5,
+           0
+          ],
+          "radius": 3
+         }
+        ],
+        "constraints": []
+       }
+      },
+      {
+       "id": "bore",
+       "type": "extrude",
+       "inputs": {
+        "profile": {
+         "sketch": "ls"
+        },
+        "distance": "5 mm",
+        "result": {
+         "new": "link_body",
+         "body_type": "brep"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "motor",
+     "reference": "motor",
+     "params": {
+      "shaft_d": "8 mm"
+     }
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "base",
+     "component": "root",
+     "grounded": true
+    },
+    {
+     "id": "upper",
+     "component": "link",
+     "params": {
+      "length": "link_len"
+     }
+    },
+    {
+     "id": "lower",
+     "component": "link",
+     "params": {
+      "length": "link_len * 0.8"
+     },
+     "placement": {
+      "translation": [
+       0,
+       0,
+       "link_len"
+      ],
+      "rotation": [
+       0,
+       0,
+       "elbow"
+      ]
+     }
+    },
+    {
+     "id": "drive",
+     "component": "motor"
+    }
+   ],
+   "joints": [
+    {
+     "id": "shoulder",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "faces_of": "body",
+       "where": {
+        "type": "cylinder",
+        "radius": 6
+       },
+       "expect": "one"
+      }
+     },
+     "b": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "expect": "one"
+      },
+      "rule": "cylinder_axis"
+     },
+     "value": "0 deg",
+     "limits": [
+      "-90 deg",
+      "90 deg"
+     ]
+    },
+    {
+     "id": "elbow_joint",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "from": "ls/hole"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "end"
+      },
+      "flip": true
+     },
+     "value": [
+      "elbow"
+     ]
+    },
+    {
+     "id": "mount",
+     "kind": "rigid",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "end"
+      },
+      "rule": "plane_centroid"
+     },
+     "b": {
+      "occurrence": "drive/rotor",
+      "frame": {
+       "faces_of": "housing"
+      },
+      "offset": {
+       "translation": [
+        0,
+        0,
+        "2 mm"
+       ],
+       "rotation": [
+        0,
+        "90 deg",
+        0
+       ]
+      }
+     }
+    },
+    {
+     "id": "table",
+     "kind": "planar",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "start"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "start"
+      }
+     },
+     "value": [
+      "1 mm",
+      null,
+      "10 deg"
+     ],
+     "limits": [
+      [
+       "0 mm",
+       "5 mm"
+      ],
+      null,
+      null
+     ]
+    }
+   ],
+   "history_end": null,
+   "ui": {},
+   "studies": [
+    {
+     "id": "tip_load",
+     "kind": "static_structural",
+     "body": "plate",
+     "material": {
+      "youngs_modulus": "69 GPa",
+      "poisson_ratio": 0.33
+     },
+     "boundaries": [
+      {
+       "id": "root",
+       "type": "fixed",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       }
+      },
+      {
+       "id": "tip",
+       "type": "force",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       },
+       "value": [
+        "0 N",
+        "0 N",
+        "-10 N"
+       ]
+      }
+     ],
+     "mesh": {
+      "size": "3 mm"
+     },
+     "criteria": [
+      {
+       "quantity": "max_von_mises",
+       "below": "40 MPa"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "a study of an unknown kind",
+  "schema_valid": false,
+  "valid": false,
+  "document": {
+   "format": "nightfall.part",
+   "version": 2,
+   "units": {
+    "length": "mm",
+    "angle": "deg"
+   },
+   "meta": {
+    "name": "Arm"
+   },
+   "params": [
+    {
+     "name": "link_len",
+     "value": "120 mm"
+    },
+    {
+     "name": "elbow",
+     "value": "35 deg"
+    },
+    {
+     "name": "length",
+     "value": "100 mm"
+    }
+   ],
+   "references": [
+    {
+     "id": "motor",
+     "kind": "part",
+     "path": "motor.nightfall",
+     "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "features": [
+    {
+     "id": "s",
+     "type": "sketch",
+     "inputs": {
+      "plane": {
+       "datum": "xy"
+      },
+      "entities": [
+       {
+        "id": "r",
+        "type": "rect",
+        "corner": [
+         -20,
+         -20
+        ],
+        "size": [
+         40,
+         40
+        ]
+       },
+       {
+        "id": "pin",
+        "type": "circle",
+        "center": [
+         0,
+         0
+        ],
+        "radius": 6
+       }
+      ],
+      "constraints": []
+     }
+    },
+    {
+     "id": "base",
+     "type": "extrude",
+     "inputs": {
+      "profile": {
+       "sketch": "s"
+      },
+      "distance": "10 mm",
+      "result": {
+       "new": "body",
+       "body_type": "brep"
+      }
+     }
+    }
+   ],
+   "components": [
+    {
+     "id": "link",
+     "features": [
+      {
+       "id": "ls",
+       "type": "sketch",
+       "inputs": {
+        "plane": {
+         "datum": "xy"
+        },
+        "entities": [
+         {
+          "id": "bar",
+          "type": "rect",
+          "corner": [
+           0,
+           -5
+          ],
+          "size": [
+           "length",
+           10
+          ]
+         },
+         {
+          "id": "hole",
+          "type": "circle",
+          "center": [
+           5,
+           0
+          ],
+          "radius": 3
+         }
+        ],
+        "constraints": []
+       }
+      },
+      {
+       "id": "bore",
+       "type": "extrude",
+       "inputs": {
+        "profile": {
+         "sketch": "ls"
+        },
+        "distance": "5 mm",
+        "result": {
+         "new": "link_body",
+         "body_type": "brep"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "motor",
+     "reference": "motor",
+     "params": {
+      "shaft_d": "8 mm"
+     }
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "base",
+     "component": "root",
+     "grounded": true
+    },
+    {
+     "id": "upper",
+     "component": "link",
+     "params": {
+      "length": "link_len"
+     }
+    },
+    {
+     "id": "lower",
+     "component": "link",
+     "params": {
+      "length": "link_len * 0.8"
+     },
+     "placement": {
+      "translation": [
+       0,
+       0,
+       "link_len"
+      ],
+      "rotation": [
+       0,
+       0,
+       "elbow"
+      ]
+     }
+    },
+    {
+     "id": "drive",
+     "component": "motor"
+    }
+   ],
+   "joints": [
+    {
+     "id": "shoulder",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "faces_of": "body",
+       "where": {
+        "type": "cylinder",
+        "radius": 6
+       },
+       "expect": "one"
+      }
+     },
+     "b": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "expect": "one"
+      },
+      "rule": "cylinder_axis"
+     },
+     "value": "0 deg",
+     "limits": [
+      "-90 deg",
+      "90 deg"
+     ]
+    },
+    {
+     "id": "elbow_joint",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "from": "ls/hole"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "end"
+      },
+      "flip": true
+     },
+     "value": [
+      "elbow"
+     ]
+    },
+    {
+     "id": "mount",
+     "kind": "rigid",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "end"
+      },
+      "rule": "plane_centroid"
+     },
+     "b": {
+      "occurrence": "drive/rotor",
+      "frame": {
+       "faces_of": "housing"
+      },
+      "offset": {
+       "translation": [
+        0,
+        0,
+        "2 mm"
+       ],
+       "rotation": [
+        0,
+        "90 deg",
+        0
+       ]
+      }
+     }
+    },
+    {
+     "id": "table",
+     "kind": "planar",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "start"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "start"
+      }
+     },
+     "value": [
+      "1 mm",
+      null,
+      "10 deg"
+     ],
+     "limits": [
+      [
+       "0 mm",
+       "5 mm"
+      ],
+      null,
+      null
+     ]
+    }
+   ],
+   "history_end": null,
+   "ui": {},
+   "studies": [
+    {
+     "id": "tip_load",
+     "kind": "transient_magic",
+     "body": "plate",
+     "material": {
+      "youngs_modulus": "69 GPa",
+      "poisson_ratio": 0.33
+     },
+     "boundaries": [
+      {
+       "id": "root",
+       "type": "fixed",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       }
+      },
+      {
+       "id": "tip",
+       "type": "force",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       },
+       "value": [
+        "0 N",
+        "0 N",
+        "-10 N"
+       ]
+      }
+     ],
+     "mesh": {
+      "size": "3 mm"
+     },
+     "criteria": [
+      {
+       "quantity": "max_von_mises",
+       "below": "40 MPa"
+      }
+     ]
+    }
+   ]
+  },
+  "error": {
+   "code": "schema",
+   "pointer": "/studies/0/kind"
+  }
+ },
+ {
+  "name": "two studies with one id",
+  "schema_valid": true,
+  "valid": false,
+  "document": {
+   "format": "nightfall.part",
+   "version": 2,
+   "units": {
+    "length": "mm",
+    "angle": "deg"
+   },
+   "meta": {
+    "name": "Arm"
+   },
+   "params": [
+    {
+     "name": "link_len",
+     "value": "120 mm"
+    },
+    {
+     "name": "elbow",
+     "value": "35 deg"
+    },
+    {
+     "name": "length",
+     "value": "100 mm"
+    }
+   ],
+   "references": [
+    {
+     "id": "motor",
+     "kind": "part",
+     "path": "motor.nightfall",
+     "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "features": [
+    {
+     "id": "s",
+     "type": "sketch",
+     "inputs": {
+      "plane": {
+       "datum": "xy"
+      },
+      "entities": [
+       {
+        "id": "r",
+        "type": "rect",
+        "corner": [
+         -20,
+         -20
+        ],
+        "size": [
+         40,
+         40
+        ]
+       },
+       {
+        "id": "pin",
+        "type": "circle",
+        "center": [
+         0,
+         0
+        ],
+        "radius": 6
+       }
+      ],
+      "constraints": []
+     }
+    },
+    {
+     "id": "base",
+     "type": "extrude",
+     "inputs": {
+      "profile": {
+       "sketch": "s"
+      },
+      "distance": "10 mm",
+      "result": {
+       "new": "body",
+       "body_type": "brep"
+      }
+     }
+    }
+   ],
+   "components": [
+    {
+     "id": "link",
+     "features": [
+      {
+       "id": "ls",
+       "type": "sketch",
+       "inputs": {
+        "plane": {
+         "datum": "xy"
+        },
+        "entities": [
+         {
+          "id": "bar",
+          "type": "rect",
+          "corner": [
+           0,
+           -5
+          ],
+          "size": [
+           "length",
+           10
+          ]
+         },
+         {
+          "id": "hole",
+          "type": "circle",
+          "center": [
+           5,
+           0
+          ],
+          "radius": 3
+         }
+        ],
+        "constraints": []
+       }
+      },
+      {
+       "id": "bore",
+       "type": "extrude",
+       "inputs": {
+        "profile": {
+         "sketch": "ls"
+        },
+        "distance": "5 mm",
+        "result": {
+         "new": "link_body",
+         "body_type": "brep"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "motor",
+     "reference": "motor",
+     "params": {
+      "shaft_d": "8 mm"
+     }
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "base",
+     "component": "root",
+     "grounded": true
+    },
+    {
+     "id": "upper",
+     "component": "link",
+     "params": {
+      "length": "link_len"
+     }
+    },
+    {
+     "id": "lower",
+     "component": "link",
+     "params": {
+      "length": "link_len * 0.8"
+     },
+     "placement": {
+      "translation": [
+       0,
+       0,
+       "link_len"
+      ],
+      "rotation": [
+       0,
+       0,
+       "elbow"
+      ]
+     }
+    },
+    {
+     "id": "drive",
+     "component": "motor"
+    }
+   ],
+   "joints": [
+    {
+     "id": "shoulder",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "faces_of": "body",
+       "where": {
+        "type": "cylinder",
+        "radius": 6
+       },
+       "expect": "one"
+      }
+     },
+     "b": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "expect": "one"
+      },
+      "rule": "cylinder_axis"
+     },
+     "value": "0 deg",
+     "limits": [
+      "-90 deg",
+      "90 deg"
+     ]
+    },
+    {
+     "id": "elbow_joint",
+     "kind": "revolute",
+     "a": {
+      "occurrence": "upper",
+      "frame": {
+       "created_by": "bore",
+       "role": "side",
+       "from": "ls/hole"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "end"
+      },
+      "flip": true
+     },
+     "value": [
+      "elbow"
+     ]
+    },
+    {
+     "id": "mount",
+     "kind": "rigid",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "end"
+      },
+      "rule": "plane_centroid"
+     },
+     "b": {
+      "occurrence": "drive/rotor",
+      "frame": {
+       "faces_of": "housing"
+      },
+      "offset": {
+       "translation": [
+        0,
+        0,
+        "2 mm"
+       ],
+       "rotation": [
+        0,
+        "90 deg",
+        0
+       ]
+      }
+     }
+    },
+    {
+     "id": "table",
+     "kind": "planar",
+     "a": {
+      "occurrence": "base",
+      "frame": {
+       "created_by": "base",
+       "role": "start"
+      }
+     },
+     "b": {
+      "occurrence": "lower",
+      "frame": {
+       "created_by": "bore",
+       "role": "start"
+      }
+     },
+     "value": [
+      "1 mm",
+      null,
+      "10 deg"
+     ],
+     "limits": [
+      [
+       "0 mm",
+       "5 mm"
+      ],
+      null,
+      null
+     ]
+    }
+   ],
+   "history_end": null,
+   "ui": {},
+   "studies": [
+    {
+     "id": "tip_load",
+     "kind": "static_structural",
+     "body": "plate",
+     "material": {
+      "youngs_modulus": "69 GPa",
+      "poisson_ratio": 0.33
+     },
+     "boundaries": [
+      {
+       "id": "root",
+       "type": "fixed",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       }
+      },
+      {
+       "id": "tip",
+       "type": "force",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       },
+       "value": [
+        "0 N",
+        "0 N",
+        "-10 N"
+       ]
+      }
+     ],
+     "mesh": {
+      "size": "3 mm"
+     },
+     "criteria": [
+      {
+       "quantity": "max_von_mises",
+       "below": "40 MPa"
+      }
+     ]
+    },
+    {
+     "id": "tip_load",
+     "kind": "static_structural",
+     "body": "plate",
+     "material": {
+      "youngs_modulus": "69 GPa",
+      "poisson_ratio": 0.33
+     },
+     "boundaries": [
+      {
+       "id": "root",
+       "type": "fixed",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       }
+      },
+      {
+       "id": "tip",
+       "type": "force",
+       "faces": {
+        "created_by": "s",
+        "role": "side"
+       },
+       "value": [
+        "0 N",
+        "0 N",
+        "-10 N"
+       ]
+      }
+     ],
+     "mesh": {
+      "size": "3 mm"
+     },
+     "criteria": [
+      {
+       "quantity": "max_von_mises",
+       "below": "40 MPa"
+      }
+     ]
+    }
+   ]
+  },
+  "error": {
+   "code": "schema",
+   "pointer": "/studies/1/id"
+  }
  }
 ]
