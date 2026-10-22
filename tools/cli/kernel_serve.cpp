@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <string_view>
 #include <thread>
@@ -27,6 +28,7 @@ using Clock = std::chrono::steady_clock;
 constexpr int kProtocol = 1;
 constexpr std::size_t kMaxLine = std::size_t{64} << 20;
 constexpr double kDefaultSampleTolerance = 1e-3;
+constexpr double kInf = std::numeric_limits<double>::infinity();
 
 /// A request that fails with an RFC 0015 error code; the server keeps serving.
 struct Failure {
@@ -134,18 +136,26 @@ class Server {
     const auto* step = member(v, "step").if_string();
     if (!step) fail("bad_request", "an operand's step must be a string");
     auto solids = value_or_fail(kernel_.import_step(*step), "step_read");
-    if (solids.size() != 1) fail("step_read", "an operand is exactly one solid");
-    Operand result{solids.front(), {}, {}, {}, {}};
+    auto shape = solids.front();
+    if (solids.size() > 1) {
+      // A body in several pieces: one snapshot holding them all, as a union of apart solids.
+      const std::vector<kernel::ShapePtr> rest(solids.begin() + 1, solids.end());
+      shape = value_or_fail(kernel_.boolean_operation(shape, rest, kernel::BooleanOp::kUnion),
+                            "step_read")
+                  .shape;
+    }
+    Operand result{shape, {}, {}, {}, {}};
     for (auto& face : value_or_fail(kernel_.faces(result.shape), "step_read"))
       result.faces.push_back(std::move(face.entity));
     result.face_owners.resize(result.faces.size());
+    const auto boxes = face_boxes(result);
     const auto& samples = array(member(v, "faces"), "faces");
     for (std::size_t i = 0; i < samples.size(); ++i) {
       const auto p = point(samples[i]);
       std::vector<std::size_t> near;
       for (std::size_t f = 0; f < result.faces.size(); ++f)
-        if (value_or_fail(kernel_.face_distance(result.faces[f], p), "unmatched_face") <=
-            tolerance_)
+        if (boxes[f].contains(p) && value_or_fail(kernel_.face_distance(result.faces[f], p),
+                                                  "unmatched_face") <= tolerance_)
           near.push_back(f);
       if (near.size() != 1)
         fail("unmatched_face", "operand " + std::to_string(number) + " face sample " +
@@ -156,6 +166,51 @@ class Server {
     if (const auto* edges = v.find("edges"))
       for (const auto& e : array(*edges, "edges")) result.edge_points.push_back(point(e));
     return result;
+  }
+  struct Box {
+    math::Vec3 lo{kInf, kInf, kInf}, hi{-kInf, -kInf, -kInf};
+    void add(math::Vec3 p) {
+      lo = {std::min(lo.x, p.x), std::min(lo.y, p.y), std::min(lo.z, p.z)};
+      hi = {std::max(hi.x, p.x), std::max(hi.y, p.y), std::max(hi.z, p.z)};
+    }
+    [[nodiscard]] bool contains(math::Vec3 p) const {
+      return p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y && p.z >= lo.z && p.z <= hi.z;
+    }
+  };
+  /// Each face's bounds from a coarse mesh, grown by its deflection and the sample tolerance:
+  /// a sample outside a face's box is farther than the tolerance from it, so only the faces
+  /// whose boxes hold a sample are measured exactly.
+  std::vector<Box> face_boxes(const Operand& operand) {
+    const auto& m = operand.shape->measures();
+    const double size =
+        std::max({m.maximum.x - m.minimum.x, m.maximum.y - m.minimum.y, m.maximum.z - m.minimum.z});
+    const double deflection = std::max(size * 1e-2, 1e3 * math::Tolerance::standard().linear);
+    std::vector<Box> boxes(operand.faces.size());
+    const auto mesh = kernel_.tessellate(operand.shape, {deflection, 0.5, 1'000'000});
+    if (!mesh) {
+      // Without a mesh, every face is a candidate.
+      for (auto& b : boxes) b = {{-kInf, -kInf, -kInf}, {kInf, kInf, kInf}};
+      return boxes;
+    }
+    for (const auto& face : mesh->faces) {
+      const auto f = std::ranges::find_if(operand.faces,
+                                          [&](const auto& e) { return e->same_as(*face.face); });
+      if (f == operand.faces.end()) continue;
+      auto& box = boxes[static_cast<std::size_t>(f - operand.faces.begin())];
+      for (std::uint32_t i = face.first_index; i < face.first_index + face.index_count; ++i)
+        box.add(mesh->vertices[mesh->indices[i]].position);
+    }
+    const double grow = deflection + tolerance_;
+    for (std::size_t f = 0; f < boxes.size(); ++f) {
+      auto& b = boxes[f];
+      if (b.lo.x > b.hi.x) {
+        b = {{-kInf, -kInf, -kInf}, {kInf, kInf, kInf}};  // a face the mesh did not cover
+        continue;
+      }
+      b.lo = b.lo - math::Vec3{grow, grow, grow};
+      b.hi = b.hi + math::Vec3{grow, grow, grow};
+    }
+    return boxes;
   }
   const std::vector<kernel::EntityPtr>& edges(Operand& operand) {
     if (operand.edges.empty())
