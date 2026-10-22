@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 
+#include "kernel_serve.hpp"
 #include "mcp.hpp"
 #include "session.hpp"
 #ifdef NF_WITH_STUDIES
@@ -23,7 +24,8 @@ double elapsed(Clock::time_point start) {
 Value numeric(std::size_t n) { return static_cast<double>(n); }
 constexpr std::string_view kUsage =
     "nf build part.nightfall --out part.step [--set name=expression ...]\n"
-    "nf mcp [--in part.nightfall] [--allow-path DIR ...]";
+    "nf mcp [--in part.nightfall] [--allow-path DIR ...]\n"
+    "nf kernel serve [--timeout SECONDS]";
 [[noreturn]] void fail(std::string code, std::string message) {
   throw ir::Errors{{std::move(code), std::move(message), "", {}}};
 }
@@ -83,6 +85,8 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (argc >= 2 && std::string_view(argv[1]) == "mcp") return cli::run_mcp(argc, argv);
+  if (argc >= 3 && std::string_view(argv[1]) == "kernel" && std::string_view(argv[2]) == "serve")
+    return cli::run_kernel_serve(argc, argv);
 #ifdef NF_WITH_STUDIES
   if (argc >= 2 && std::string_view(argv[1]) == "study")
     return study::run_study_command(argc, argv);
