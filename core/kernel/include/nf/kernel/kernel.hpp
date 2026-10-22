@@ -218,6 +218,20 @@ class IKernel {
     return std::unexpected(
         KernelError{"kernel", "face mass properties are not supported by this backend"});
   }
+  /// RFC 0013 interference and clearance between two solids, at their current placements:
+  /// the minimum distance (0 when they touch or overlap) with a closest point on each, and the
+  /// exact volume of their common part (0 when they are apart or only touch). Inputs are
+  /// preserved. Backends without the query report it as unsupported.
+  struct Proximity {
+    double distance = 0;
+    math::Vec3 on_a, on_b;
+    double common_volume = 0;
+  };
+  [[nodiscard]] virtual std::expected<Proximity, KernelError> proximity(const ShapePtr&,
+                                                                        const ShapePtr&) {
+    return std::unexpected(
+        KernelError{"kernel", "proximity queries are not supported by this backend"});
+  }
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
