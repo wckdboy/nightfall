@@ -7,6 +7,14 @@ name = "nightfall-assembly"
 version = "0.0.1"
 
 [[package]]
+name = "nightfall-ffi"
+version = "0.0.1"
+dependencies = [
+ "nightfall-assembly",
+ "nightfall-sketch",
+]
+
+[[package]]
 name = "nightfall-kernel"
 version = "0.0.1"
 dependencies = [
@@ -31,13 +39,6 @@ version = "0.0.1"
 dependencies = [
  "solidcraft-geom",
  "solidcraft-sketch",
-]
-
-[[package]]
-name = "nightfall-sketch-ffi"
-version = "0.0.1"
-dependencies = [
- "nightfall-sketch",
 ]
 
 [[package]]
