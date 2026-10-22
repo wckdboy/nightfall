@@ -34,4 +34,8 @@ if(NF_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/urdf_tests.py" "$<TARGET_FILE:nf>"
     "${PROJECT_SOURCE_DIR}/examples/assemblies")
   set_tests_properties(cli.urdf_export PROPERTIES LABELS "occt")
+  if(NF_WITH_STUDIES)
+    target_compile_definitions(nf_cli_tests PRIVATE NF_WITH_STUDIES
+      NF_STUDY_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/studies")
+  endif()
 endif()

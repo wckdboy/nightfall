@@ -33,6 +33,7 @@ extern char** environ;
 using namespace nf;
 using namespace nf::kernel_service::test;
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 namespace fs = std::filesystem;
 using ir::json::Array;
 using ir::json::Object;
@@ -201,6 +202,9 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
                                           "measure_clearance",
                                           "mass_properties",
                                           "export_urdf",
+                                          "list_studies",
+                                          "run_study",
+                                          "study_results",
                                           "sweep_joint",
                                           "undo",
                                           "redo",
@@ -1005,3 +1009,44 @@ TEST_CASE("mcp reports mass properties from component and occurrence densities",
   CHECK_FALSE(part_mass.find("total"));
   CHECK(ids(part_mass, "occurrences").front().find("density")->is_null());
 }
+
+#ifdef NF_WITH_STUDIES
+TEST_CASE("mcp runs engineering studies out of process", "[cli-mcp][study]") {
+  Temp temp;
+  const auto input = temp.path("cantilever.nightfall");
+  write(input, read(fs::path(NF_STUDY_EXAMPLES_DIR) / "cantilever.nightfall"));
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "list_studies"), call(2, "run_study", R"({"id":"tip_load"})"),
+       call(3, "study_results", R"({"id":"tip_load"})"),
+       call(4, "set_parameters", R"({"values":{"length":"100 mm"}})"),
+       call(5, "study_results", R"({"id":"tip_load"})"),
+       call(6, "run_study", R"({"id":"tip_load"})"), call(7, "run_study", R"({"id":"missing"})"),
+       call(8, "run_study", R"({"id":"tip_load","budget_s":0.01})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 9);
+  const auto studies = ids(content(process.replies[1]), "studies");
+  REQUIRE(studies.size() == 1);
+  CHECK(*studies[0].find("kind")->if_string() == "static_structural");
+  // 10 N at the tip of a 200 mm aluminium beam: PL^3 / 3EI = 0.4638 mm.
+  const double beam = 10 * std::pow(200.0, 3) / (3 * 69000 * (1e4 / 12));
+  const auto& first = content(process.replies[2]);
+  const double long_tip = number(*first.find("quantities"), "max_displacement");
+  CHECK_THAT(long_tip, WithinRel(beam, 0.02));
+  CHECK(*first.find("passed")->if_bool());
+  CHECK(ir::json::canonical(content(process.replies[3])) == ir::json::canonical(first));
+  // After an edit the cached result no longer describes the document.
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "not_run");
+  // Half the length: a cantilever's tip deflection scales with L^3 (shear adds under 1%).
+  const double short_tip =
+      number(*content(process.replies[6]).find("quantities"), "max_displacement");
+  CHECK_THAT(short_tip / long_tip, WithinRel(0.125, 0.01));
+  const auto missing = ids(content(process.replies[7], true), "errors");
+  CHECK(*missing.front().find("code")->if_string() == "unknown_id");
+  CHECK(*missing.front().find("pointer")->if_string() == "/studies");
+  CHECK(*ids(content(process.replies[8], true), "errors").front().find("code")->if_string() ==
+        "budget");
+}
+#endif

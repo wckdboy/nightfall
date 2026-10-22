@@ -306,7 +306,7 @@ Agents drive the same headless engine through `nf mcp`, a stdio Model Context Pr
 server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general tools:
 `inspect_part`, `get_part`, `get_schema`, `body_topology`, `measure`, `set_parameters`, `patch_part` (RFC 6902),
 `replace_part`, `inspect_assembly`, `drive_joints`, `check_interference`, `measure_clearance`,
-`mass_properties`, `export_urdf`, `sweep_joint`, `undo`, `redo`,
+`mass_properties`, `export_urdf`, `list_studies`, `run_study`, `study_results`, `sweep_joint`, `undo`, `redo`,
 `open_part`, `save_part`, `export_step` and `export_mesh` (derived OBJ). The authoritative state is the IR text; every
 mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
 whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
@@ -327,7 +327,10 @@ and the inertia tensor per occurrence and for the assembly, from exact volume in
 `density` (kg/m³) on each component or occurrence. `export_urdf` writes the solved assembly as URDF
 (metres, kilograms, radians) with an OBJ mesh per occurrence: a spanning tree from the grounded
 occurrence, revolute, prismatic and fixed joints, link frames on the joint frames so the file
-does not depend on the pose it was exported at, and loop-closing joints listed as cut. Files are reachable only in
+does not depend on the pose it was exported at, and loop-closing joints listed as cut. `run_study` runs an RFC 0014 engineering study (static structural or
+steady thermal) in a separate `nf study run` process under a time budget: Netgen meshes the
+body, MFEM solves, and the reply carries quantities, criteria, reactions or heat flows and
+provenance; `study_results` returns it while the document is unchanged. Files are reachable only in
 the `--in` folder, a private scratch folder and each `--allow-path`. Evaluation runs in
 process without a deadline; the client's tool timeout bounds it. Register it with Claude Code:
 
