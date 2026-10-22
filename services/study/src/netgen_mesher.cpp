@@ -15,6 +15,8 @@ namespace nglib {
 }  // namespace nglib
 
 namespace nf::study {
+const char* mesher_identity() { return "netgen 6.2.2604 " NF_NETGEN_BUILD_ID; }
+
 PlainMesh mesh_brep(const std::string& path, double max_size) {
   if (!(max_size > 0)) throw std::runtime_error("mesh size must be positive");
   netgen::printmessage_importance = 0;
