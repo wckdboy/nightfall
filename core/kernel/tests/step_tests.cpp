@@ -269,3 +269,27 @@ TEST_CASE("STEP import rejects text without closed solids", "[step-kernel]") {
     CHECK_FALSE(imported.error().message.empty());
   }
 }
+
+TEST_CASE("Edge distance measures to the trimmed edge and rejects faces", "[step-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = box(*kernel);
+  std::vector<EntityPtr> edges;
+  for (const auto& face : kernel->faces(source).value())
+    for (const auto& edge : kernel->edges(face.entity).value())
+      if (std::ranges::none_of(edges, [&](const auto& e) { return e->same_as(*edge); }))
+        edges.push_back(edge);
+  REQUIRE(edges.size() == 12);
+  // The box spans x 2..5, y -1..3, z 7..12.
+  for (const auto& [p, expected] :
+       {std::pair{Vec3{3.5, -3, 12}, 2.0}, std::pair{Vec3{2, -4, 9.5}, 3.0},
+        std::pair{Vec3{2, -1, 9.5}, 0.0}}) {
+    std::vector<double> d;
+    for (const auto& edge : edges) d.push_back(kernel->edge_distance(edge, p).value());
+    CHECK_THAT(std::ranges::min(d), WithinAbs(expected, 1e-9));
+    CHECK(std::ranges::count_if(d, [&](double x) { return x < expected + 1e-6; }) == 1);
+  }
+  const auto face = kernel->faces(source).value().front().entity;
+  REQUIRE_FALSE(kernel->edge_distance(face, {}));
+  REQUIRE_FALSE(
+      kernel->edge_distance(edges.front(), {std::numeric_limits<double>::infinity(), 0, 0}));
+}

@@ -554,6 +554,26 @@ class OcctKernel final : public IKernel {
       return value;
     });
   }
+  std::expected<double, KernelError> edge_distance(const EntityPtr& input,
+                                                   math::Vec3 position) override {
+    return guarded([&] {
+      if (!finite(position)) fail("distance query requires a finite world point");
+      const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(input);
+      if (!entity || !entity->snapshot || entity->snapshot->geometry.IsNull() ||
+          entity->geometry.IsNull() || entity->geometry.ShapeType() != TopAbs_EDGE)
+        fail("edge query requires an edge from this backend");
+      TopTools_IndexedMapOfShape edges;
+      TopExp::MapShapes(entity->snapshot->geometry, TopAbs_EDGE, edges);
+      if (!edges.Contains(entity->geometry)) fail("edge is absent from its owning snapshot");
+      BRepBuilderAPI_MakeVertex vertex(point(position));
+      const BRepExtrema_DistShapeShape distance(vertex.Shape(), entity->geometry,
+                                                Precision::Confusion());
+      if (!distance.IsDone() || distance.NbSolution() == 0) fail("edge distance query failed");
+      const auto value = distance.Value();
+      if (!std::isfinite(value) || value < 0) fail("edge distance is not finite and nonnegative");
+      return value;
+    });
+  }
   std::expected<FaceMass, KernelError> face_mass(const EntityPtr& input) override {
     return guarded([&] {
       GProp_GProps properties;
