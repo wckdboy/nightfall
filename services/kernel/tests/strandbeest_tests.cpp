@@ -99,7 +99,8 @@ TEST_CASE("the Strandbeest walks on Jansen's closed-form toe path", "[assembly][
       const auto& p = occurrence(*result, std::string("foot_") + leg).placement;
       const auto& r = p.rotation;
       const double x = r[0] * toe_x + r[1] * hand * toe_y + p.translation.x;
-      const double y = r[3] * toe_x + r[4] * hand * toe_y + p.translation.y;
+      // The walker stands with z up: Jansen's plane is the world's x-z plane.
+      const double y = r[6] * toe_x + r[7] * hand * toe_y + p.translation.z;
       const auto expected = toe((crank + phase) * kPi / 180, hand);
       CHECK_THAT(x, WithinAbs(expected.x, 1e-9));
       CHECK_THAT(y, WithinAbs(expected.y, 1e-9));
@@ -158,8 +159,9 @@ TEST_CASE("the Strandbeest's links clear each other and the pins over a full tur
 
 TEST_CASE("the Strandbeest's mass is balanced front to back at every crank angle",
           "[assembly][showcase][mass]") {
-  // The back half mirrors the front half about the frame's mid-plane, z = 2 mm, at every
-  // pose (the back pair runs half a turn behind), so the centre of mass stays on that plane.
+  // The back half mirrors the front half about the frame's mid-plane at every pose (the back
+  // pair runs half a turn behind), so the centre of mass stays on that plane: y = -2 mm, with
+  // the walker standing z up.
   auto kernel = kernel::make_occt_kernel().value();
   Evaluator evaluator(*kernel, {256, 256 * 1024 * 1024});
   for (const double crank : {0.0, 75.0, 210.0}) {
@@ -185,6 +187,6 @@ TEST_CASE("the Strandbeest's mass is balanced front to back at every crank angle
     const auto mass = mass_properties(*kernel, bodies, density).value();
     CHECK(mass.without_density.empty());
     CHECK_THAT(mass.total.mass, WithinAbs(expected, 1e-9 * expected));
-    CHECK_THAT(mass.total.centroid.z, WithinAbs(2, 1e-9));
+    CHECK_THAT(mass.total.centroid.y, WithinAbs(-2, 1e-9));  // depth z = 2 stands at y = -2
   }
 }

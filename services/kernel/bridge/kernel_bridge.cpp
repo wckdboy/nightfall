@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 #include "kernel_bridge.h"
+#include "assembly.hpp"
 #include "evaluator.hpp"
 
 #include <algorithm>
 #include <atomic>
+#include <map>
 #include <unordered_map>
 
 using namespace nf;
@@ -75,8 +77,41 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
       errors.emplace_back(std::move(value));
     }
   }
+  // RFC 0013: an assembly's geometry is its occurrences' bodies at their solved placements,
+  // named "occurrence/body"; the root's own bodies are not separate results. A joint conflict
+  // fails the build with its pointer and no geometry, like a failed feature.
+  const auto* live = &evaluated->bodies;
+  std::map<std::string, BodyState> placed;
   if (errors.empty()) {
-    for (const auto& [id, body] : evaluated->bodies) {
+    auto document = ir::read_document(source);
+    if (!document) throw document.error();
+    if (!document->occurrences.empty()) {
+      const auto assembly = evaluate_assembly(s.evaluator, *s.kernel, *document);
+      if (!assembly) {
+        for (const auto& error : assembly.error()) errors.emplace_back(diagnostic(error));
+      } else {
+        for (const auto& o : assembly->occurrences)
+          for (const auto& [id, shape] : o.bodies) {
+            Array placement;
+            for (const double r : o.placement.rotation) placement.push_back(r);
+            for (const double t :
+                 {o.placement.translation.x, o.placement.translation.y, o.placement.translation.z})
+              placement.push_back(t);
+            BodyState body;
+            body.shape = shape;
+            body.hash = ir::sha256(ir::json::canonical(Object{{"occurrence", o.id},
+                                                              {"body", id},
+                                                              {"placement", std::move(placement)},
+                                                              {"volume", shape->measures().volume},
+                                                              {"area", shape->measures().area}}));
+            placed.emplace(o.id + "/" + id, std::move(body));
+          }
+      }
+      live = &placed;
+    }
+  }
+  if (errors.empty()) {
+    for (const auto& [id, body] : *live) {
       if (!body.shape) continue;  // consumed/suppressed bodies have no live geometry
       const auto remaining = settings.max_triangles - result->indices.size() / 3;
       if (remaining == 0) fail("bounds", "total mesh budget exceeded");
