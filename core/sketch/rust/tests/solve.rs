@@ -461,6 +461,9 @@ fn two_hundred_constraints_solve_well_inside_a_frame() {
     assert_eq!(solved.report.dof, 0);
     let (_, top_last) = line_ends(&solved.entities, &format!("v{n}"));
     assert!(near(top_last, [400.0, 10.0]), "{top_last:?}");
-    // Generous for debug builds; release measured 0.41 ms in the RFC 0012 spike.
-    assert!(elapsed.as_secs_f64() < 0.5, "{elapsed:?}");
+    // Timing is meaningful only for optimized code (the RFC 0012 spike measured 0.41 ms in
+    // release); debug builds on shared CI runners only check correctness.
+    if !cfg!(debug_assertions) {
+        assert!(elapsed.as_secs_f64() < 0.05, "{elapsed:?}");
+    }
 }
