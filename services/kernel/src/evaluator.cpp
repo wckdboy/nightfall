@@ -284,7 +284,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                                  feature.type == "loft" || feature.type == "sweep";
     const bool pattern_feature = feature.type == "pattern_linear" ||
                                  feature.type == "pattern_circular" || feature.type == "mirror";
-    result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
+    result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}, {}});
     auto& record = result.features.back();
     auto affected = targets(feature, previous);
     previous.emplace(feature.id, affected);
@@ -775,7 +775,10 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         }
       if (!keep_tools)
         for (const auto& tool : tools) result.bodies[tool] = {{}, {}, {}, "input_failed"};
-      if (output->sketch) sketches[feature.id] = output;
+      if (output->sketch) {
+        sketches[feature.id] = output;
+        record.sketch = output->sketch->report;
+      }
       if (cached)
         ++result.cache_hits;
       else
