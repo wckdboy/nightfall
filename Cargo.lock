@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "nightfall-assembly"
+version = "0.0.1"
+
+[[package]]
 name = "nightfall-kernel"
 version = "0.0.1"
 dependencies = [
