@@ -40,7 +40,7 @@
       "name": "occt",
       "displayName": "Release + OpenCASCADE (RFC 0001)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_OCCT": "ON" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NF_WITH_OCCT": "ON", "NF_WITH_STUDIES": "ON" }
     },
     {
       "name": "bakeoff",
