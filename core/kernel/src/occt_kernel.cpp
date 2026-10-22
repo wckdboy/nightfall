@@ -15,6 +15,7 @@
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
@@ -26,6 +27,7 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <DESTEP_Parameters.hxx>
+#include <GProp_GProps.hxx>
 #include <Message_Messenger.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
@@ -521,6 +523,18 @@ class OcctKernel final : public IKernel {
       const auto value = distance.Value();
       if (!std::isfinite(value) || value < 0) fail("face distance is not finite and nonnegative");
       return value;
+    });
+  }
+  std::expected<FaceMass, KernelError> face_mass(const EntityPtr& input) override {
+    return guarded([&] {
+      GProp_GProps properties;
+      BRepGProp::SurfaceProperties(checked_face(input), properties);
+      if (!(properties.Mass() > 0)) fail("face has no area");
+      const auto c = properties.CentreOfMass();
+      const math::Vec3 centroid{c.X(), c.Y(), c.Z()};
+      if (!finite(centroid) || !std::isfinite(properties.Mass()))
+        fail("face mass properties are not finite");
+      return FaceMass{properties.Mass(), centroid};
     });
   }
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
