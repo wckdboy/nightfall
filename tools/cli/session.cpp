@@ -3,6 +3,8 @@
 #include "session.hpp"
 
 #include "assembly.hpp"
+#include "assembly_queries.hpp"
+#include "nf/ir/patch.hpp"
 
 #include <unistd.h>
 #include <algorithm>
@@ -650,6 +652,134 @@ std::expected<Object, ir::Errors> Session::topology(const std::string& body) con
                 {"note",
                  "indices are display order only; reference faces and edges through "
                  "selectors built from created_by, role and from"}};
+}
+
+namespace {
+std::vector<kernel_service::PlacedBody> placed(const kernel_service::Evaluation& evaluation) {
+  std::vector<kernel_service::PlacedBody> bodies;
+  for (const auto& [id, body] : evaluation.bodies)
+    if (live(body)) bodies.emplace_back(id, body.shape);
+  return bodies;
+}
+std::expected<Object, ir::Errors> interference_of(kernel::IKernel& kernel,
+                                                  const kernel_service::Evaluation& evaluation,
+                                                  const std::vector<std::string>& only) {
+  std::size_t candidates = 0;
+  const auto found =
+      kernel_service::check_interference(kernel, placed(evaluation), only, &candidates);
+  if (!found) return std::unexpected(found.error());
+  Array overlapping, touching;
+  double total = 0;
+  for (const auto& f : *found) {
+    if (f.touching) {
+      touching.push_back(Array{f.a, f.b});
+    } else {
+      overlapping.push_back(Object{{"a", f.a}, {"b", f.b}, {"volume", f.volume}});
+      total += f.volume;
+    }
+  }
+  return Object{{"overlapping", std::move(overlapping)},
+                {"touching", std::move(touching)},
+                {"overlap_volume", total},
+                {"pairs_checked", numeric(candidates)}};
+}
+}  // namespace
+
+std::expected<Object, ir::Errors> Session::interference(
+    const std::vector<std::string>& only) const {
+  for (const auto& id : only)
+    if (std::ranges::none_of(state_.evaluation.bodies, [&](const auto& body) {
+          return kernel_service::occurrence_of(body.first) == id;
+        }))
+      return std::unexpected(
+          ir::Errors{{"unknown_id", "no live bodies in occurrence " + id, "", {}}});
+  return interference_of(kernel_, state_.evaluation, only);
+}
+
+std::expected<Object, ir::Errors> Session::clearance(const std::string& a,
+                                                     const std::string& b) const {
+  const auto side = [&](const std::string& id) {
+    std::vector<kernel_service::PlacedBody> bodies;
+    for (const auto& body : placed(state_.evaluation))
+      if (body.first == id || kernel_service::occurrence_of(body.first) == id)
+        bodies.push_back(body);
+    return bodies;
+  };
+  const auto sa = side(a), sb = side(b);
+  if (sa.empty() || sb.empty())
+    return std::unexpected(
+        ir::Errors{{"unknown_id", "no live body or occurrence " + (sa.empty() ? a : b), "", {}}});
+  const auto c = kernel_service::measure_clearance(kernel_, sa, sb);
+  if (!c) return std::unexpected(c.error());
+  return Object{{"distance", c->distance},
+                {"a", c->a},
+                {"b", c->b},
+                {"on_a", point(c->on_a)},
+                {"on_b", point(c->on_b)}};
+}
+
+std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, double from, double to,
+                                                 std::size_t steps, bool interference,
+                                                 const std::vector<std::string>& report) {
+  const auto& joints = state_.document.joints;
+  const auto found = std::ranges::find(joints, joint, &ir::Joint::id);
+  if (found == joints.end())
+    return std::unexpected(ir::Errors{{"unknown_id", "no joint " + joint, "/joints", {}}});
+  if (steps < 1 || steps > 360 || !std::isfinite(from) || !std::isfinite(to))
+    return std::unexpected(
+        ir::Errors{{"invalid_value", "a sweep needs finite bounds and 1 to 360 steps", "", {}}});
+  const auto rotary = found->kind == "revolute" || found->kind == "cylindrical";
+  if (!rotary && found->kind != "slider")
+    return std::unexpected(ir::Errors{
+        {"unsupported", "sweeps drive revolute, cylindrical and slider joints", "/joints", {}}});
+  const auto unit = rotary ? state_.document.units.angle : state_.document.units.length;
+  const auto pointer = "/joints/" + std::to_string(found - joints.begin()) + "/value";
+  auto document = ir::json::parse(state_.source).value();
+  Array results;
+  std::size_t solved = 0, clashing = 0;
+  for (std::size_t k = 0; k <= steps; ++k) {
+    const double value = from + (to - from) * static_cast<double>(k) / static_cast<double>(steps);
+    auto patched = ir::apply_patch(
+        document, Array{Object{{"op", "add"},
+                               {"path", pointer},
+                               {"value", ir::json::format_number(value) + " " + unit}}});
+    if (!patched) return std::unexpected(patched.error());
+    Object entry{{"value", value}};
+    auto state = evaluate(ir::json::write(*patched), false);
+    if (!state || !state->build.ok || !state->build.assembly) {
+      ir::Errors errors = state ? state->assembly_errors : state.error();
+      entry.push_back({"solved", false});
+      entry.push_back({"errors", error_entries(errors)});
+      results.push_back(std::move(entry));
+      continue;
+    }
+    ++solved;
+    const Value assembly = *state->build.assembly;
+    entry.push_back({"solved", true});
+    entry.push_back({"dof", *assembly.find("dof")});
+    Object placements;
+    for (const auto& o : *assembly.find("occurrences")->if_array()) {
+      const auto& id = *o.find("id")->if_string();
+      if (!report.empty() && std::ranges::find(report, id) == report.end()) continue;
+      Array matrix = *o.find("rotation")->if_array();
+      for (const auto& t : *o.find("translation")->if_array()) matrix.push_back(t);
+      placements.push_back({id, std::move(matrix)});
+    }
+    entry.push_back({"placements", std::move(placements)});
+    if (interference) {
+      auto clash = interference_of(kernel_, state->evaluation, {});
+      if (!clash) return std::unexpected(clash.error());
+      if (!Value(*clash).find("overlapping")->if_array()->empty()) ++clashing;
+      entry.push_back({"interference", std::move(*clash)});
+    }
+    results.push_back(std::move(entry));
+  }
+  Object summary{{"joint", joint},
+                 {"unit", unit},
+                 {"steps", std::move(results)},
+                 {"solved_steps", numeric(solved)}};
+  if (interference) summary.push_back({"steps_with_overlap", numeric(clashing)});
+  return summary;
 }
 
 }  // namespace nf::cli

@@ -159,6 +159,39 @@ Array tools() {
                    {"rollback", rollback_property()}},
                   {"values"}),
            false),
+      tool("check_interference",
+           "Bodies of different occurrences that overlap (with their exact common volume in "
+           "mm^3) or touch, at the current solved placements (RFC 0013).",
+           schema(
+               {{"occurrences",
+                 Object{{"type", "array"},
+                        {"items", Object{{"type", "string"}}},
+                        {"description", "keep pairs involving these occurrences; omit for all"}}}}),
+           true),
+      tool("measure_clearance",
+           "Minimum distance in mm between two occurrences or bodies, with the closest bodies "
+           "and points (0 when they touch or overlap).",
+           schema({{"a", property("string", "occurrence id or occurrence/body id")},
+                   {"b", property("string", "occurrence id or occurrence/body id")}},
+                  {"a", "b"}),
+           true),
+      tool(
+          "sweep_joint",
+          "Motion study: drive a revolute, cylindrical or slider joint from `from` to `to` "
+          "(document angle or length units) in `steps` intervals, re-solving each step without "
+          "changing the document; reports placements and, unless disabled, interference.",
+          schema(
+              {{"joint", property("string", "joint id")},
+               {"from", property("number", "first value")},
+               {"to", property("number", "last value")},
+               {"steps", property("integer", "intervals, 1 to 360")},
+               {"interference", property("boolean", "check interference each step (default true)")},
+               {"occurrences",
+                Object{{"type", "array"},
+                       {"items", Object{{"type", "string"}}},
+                       {"description", "occurrences whose placements to report; omit for all"}}}},
+              {"joint", "from", "to", "steps"}),
+          true),
       tool("undo", "Restore the document before the last change.", schema({}), false),
       tool("redo", "Reapply the last undone change.", schema({}), false),
       tool("open_part", "Load a .nightfall document from an allowed folder as the session.",
@@ -340,6 +373,20 @@ struct Server {
       auto patched = ir::apply_patch(current, patch);
       if (!patched) return tool_result(Object{{"errors", error_entries(patched.error())}}, true);
       return outcome(session.replace(ir::json::write(*patched), bool_arg(args, "rollback", true)));
+    }
+    if (name == "check_interference")
+      return outcome_object(session.interference(strings_arg(args, "occurrences")));
+    if (name == "measure_clearance")
+      return outcome_object(
+          session.clearance(*string_arg(args, "a", true), *string_arg(args, "b", true)));
+    if (name == "sweep_joint") {
+      const double steps = number_arg(args, "steps", 0);
+      if (steps != std::floor(steps) || steps < 1 || steps > 360)
+        invalid_params("steps must be an integer from 1 to 360");
+      return outcome_object(
+          session.sweep(*string_arg(args, "joint", true), number_arg(args, "from", 0),
+                        number_arg(args, "to", 0), static_cast<std::size_t>(steps),
+                        bool_arg(args, "interference", true), strings_arg(args, "occurrences")));
     }
     if (name == "undo") return outcome(session.undo());
     if (name == "redo") return outcome(session.redo());
