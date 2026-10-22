@@ -55,7 +55,8 @@ struct Component {
   std::string id;
   std::optional<std::vector<Feature>> features;
   std::optional<std::string> reference;
-  json::Object params;  // parameter overrides for every occurrence: name -> value
+  json::Object params;            // parameter overrides for every occurrence: name -> value
+  std::optional<double> density;  // kg/m^3, for mass properties; an occurrence's overrides it
   json::Object extensions;
 };
 /// RFC 0013: a placed instance. `component` is a component ID or "root", the document's own
@@ -66,6 +67,7 @@ struct Occurrence {
   json::Object params;  // parameter overrides for this occurrence: name -> value
   std::optional<bool> grounded;
   std::optional<json::Value> placement;
+  std::optional<double> density;  // kg/m^3; overrides the component's
   json::Object extensions;
 };
 /// One end of a joint: a frame derived from the single entity `frame` selects in `occurrence`
