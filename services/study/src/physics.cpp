@@ -17,6 +17,8 @@ constexpr double kTolerance = 1e-12;  // relative residual of the iterative solv
 constexpr int kMaxIterations = 100000;
 
 std::unique_ptr<mfem::Mesh> build(const PlainMesh& plain) {
+  // MFEM reports reoriented Netgen elements on its stdout stream; results go to stdout as JSON.
+  mfem::out.Disable();
   const int nv = static_cast<int>(plain.node_count());
   const int ne = static_cast<int>(plain.tet_count());
   const int nb = static_cast<int>(plain.triangle_count());
@@ -72,6 +74,8 @@ std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vecto
   return SolverStats{unknowns, cg.GetNumIterations(), norm > 0 ? cg.GetFinalNorm() / norm : 0};
 }
 }  // namespace
+
+const char* solver_identity() { return "mfem 4.10 " NF_MFEM_BUILD_ID; }
 
 std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& plain,
                                                               const StructuralInput& input) {

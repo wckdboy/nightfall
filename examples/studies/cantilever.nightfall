@@ -1,0 +1,114 @@
+{
+  "format": "nightfall.part",
+  "version": 2,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Cantilever",
+    "doc": "An aluminium beam, 200 x 10 x 10 mm, fixed at one end with 10 N down at the tip: the RFC 0014 structural gate case. Beam theory gives a tip deflection of PL^3/3EI = 0.4638 mm."
+  },
+  "params": [
+    {
+      "name": "length",
+      "value": "200 mm",
+      "doc": "Beam length"
+    },
+    {
+      "name": "side",
+      "value": "10 mm",
+      "doc": "Square section side"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "section",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "yz"
+        },
+        "entities": [
+          {
+            "id": "square",
+            "type": "rect",
+            "corner": [
+              0,
+              0
+            ],
+            "size": [
+              "side",
+              "side"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "beam",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "section"
+        },
+        "distance": "length",
+        "result": {
+          "new": "beam",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "studies": [
+    {
+      "id": "tip_load",
+      "kind": "static_structural",
+      "body": "beam",
+      "material": {
+        "youngs_modulus": "69 GPa",
+        "poisson_ratio": 0.33
+      },
+      "boundaries": [
+        {
+          "id": "root",
+          "type": "fixed",
+          "faces": {
+            "created_by": "beam",
+            "role": "cap_start"
+          }
+        },
+        {
+          "id": "tip",
+          "type": "force",
+          "faces": {
+            "created_by": "beam",
+            "role": "cap_end"
+          },
+          "value": [
+            "0 N",
+            "0 N",
+            "-10 N"
+          ]
+        }
+      ],
+      "mesh": {
+        "size": "3.3 mm"
+      },
+      "criteria": [
+        {
+          "quantity": "max_displacement",
+          "below": "0.5 mm"
+        },
+        {
+          "quantity": "max_von_mises",
+          "below": "40 MPa"
+        }
+      ]
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}
