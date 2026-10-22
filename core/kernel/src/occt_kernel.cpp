@@ -32,15 +32,19 @@
 #include <Message_Messenger.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
+#include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Version.hxx>
 #include <StepData_StepModel.hxx>
 #include <TopExp.hxx>
+#include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
+#include <Transfer_TransientProcess.hxx>
+#include <XSControl_TransferReader.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Cylinder.hxx>
@@ -228,6 +232,30 @@ class OcctKernel final : public IKernel {
       if (writer.WriteStream(stream) != IFSelect_RetDone || !stream.good())
         fail("STEP text encoding failed");
       return stream.str();
+    });
+  }
+  std::expected<std::vector<ShapePtr>, KernelError> import_step(std::string_view text) override {
+    return guarded([&] {
+      if (text.empty()) fail("STEP import requires text");
+      std::istringstream stream{std::string(text)};
+      stream.imbue(std::locale::classic());
+      STEPControl_Reader reader;
+      if (reader.ReadStream("import.step", stream) != IFSelect_RetDone)
+        fail("STEP text could not be read");
+      Handle(Message_Messenger) messages = new Message_Messenger;
+      messages->ChangePrinters().Clear();
+      reader.WS()->TransferReader()->TransientProcess()->SetMessenger(messages);
+      reader.SetSystemLengthUnit(1);
+      if (reader.TransferRoots() == 0) fail("STEP text holds no shapes");
+      const auto shape = reader.OneShape();
+      if (TopExp_Explorer(shape, TopAbs_SHELL, TopAbs_SOLID).More() ||
+          TopExp_Explorer(shape, TopAbs_FACE, TopAbs_SHELL).More())
+        fail("STEP text holds shells or faces outside a solid");
+      std::vector<ShapePtr> solids;
+      for (TopExp_Explorer it(shape, TopAbs_SOLID); it.More(); it.Next())
+        solids.push_back(checked(it.Current()));
+      if (solids.empty()) fail("STEP text holds no solids");
+      return solids;
     });
   }
   std::expected<Mesh, KernelError> tessellate(const ShapePtr& input,
