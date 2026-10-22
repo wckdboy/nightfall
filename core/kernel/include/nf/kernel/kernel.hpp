@@ -166,6 +166,14 @@ class IKernel {
   /// empty lists and null/foreign snapshots. No files are opened; serialize backend access.
   [[nodiscard]] virtual std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>&) = 0;
+  /// RFC 0015: decode STEP text into validated closed solids in millimetres, one snapshot per
+  /// solid in file order, each with faces() in the file's ADVANCED_FACE order. No files are
+  /// opened. Reject text without solids, shells or faces outside a solid, and invalid solids.
+  /// Backends without the query report it as unsupported.
+  [[nodiscard]] virtual std::expected<std::vector<ShapePtr>, KernelError> import_step(
+      std::string_view) {
+    return std::unexpected(KernelError{"kernel", "STEP import is not supported by this backend"});
+  }
   /// Derive an indexed display mesh from a deep copy; preserve exact geometry/triangulations.
   /// Handles retain original faces across facade teardown. Reject null/foreign snapshots,
   /// non-finite settings, deflections below kernel tolerances, angles > pi, incomplete faces
