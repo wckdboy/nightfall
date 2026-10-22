@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <sstream>
 
 #include <catch2/catch_test_macros.hpp>
@@ -182,9 +183,9 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
     CHECK(*tool.find("inputSchema")->find("type")->if_string() == "object");
     CHECK(tool.find("annotations")->find("readOnlyHint")->if_bool());
   }
-  CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "measure",
-                                          "set_parameters", "replace_part", "patch_part", "undo",
-                                          "redo", "open_part", "save_part", "export_step",
+  CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "body_topology",
+                                          "measure", "set_parameters", "replace_part", "patch_part",
+                                          "undo", "redo", "open_part", "save_part", "export_step",
                                           "export_mesh"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
@@ -547,4 +548,52 @@ TEST_CASE("mcp export_mesh writes a closed outward OBJ whose volume matches the 
   CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
         "failed");
   CHECK_FALSE(fs::exists(temp.path("partial.obj")));
+}
+
+TEST_CASE("mcp body_topology lists faces and edges with generative names and frames", "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("plate.nightfall");
+  write(input, source(part()));
+  const auto washer = fs::path(NF_REFERENCE_PARTS_DIR) / "washer.nightfall";
+  const auto process =
+      serve(temp, {"--in", input.string(), "--allow-path", washer.parent_path().string()},
+            {kInitialize, call(1, "body_topology", R"({"body":"plate"})"),
+             call(2, "body_topology", R"({"body":"ghost"})"),
+             call(3, "open_part", "{\"path\":" + ir::json::canonical(Value(washer.string())) + "}"),
+             call(4, "body_topology", R"({"body":"part"})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 5);
+  const auto& plate = content(process.replies[1]);
+  const auto& faces = ids(plate, "faces");
+  REQUIRE(faces.size() == 6);
+  std::set<std::string> roles;
+  for (const auto& face : faces) {
+    CHECK(*face.find("type")->if_string() == "plane");
+    CHECK(number(face, "edges") == 4);
+    const auto& names = ids(face, "names");
+    REQUIRE_FALSE(names.empty());
+    for (const auto& n : names) {
+      CHECK(*n.find("created_by")->if_string() == "base");
+      roles.insert(*n.find("role")->if_string());
+    }
+  }
+  CHECK(roles.count("cap_start") == 1);
+  CHECK(roles.count("cap_end") == 1);
+  CHECK(roles.count("side") == 1);
+  const auto& edges = ids(plate, "edges");
+  REQUIRE(edges.size() == 12);
+  for (const auto& edge : edges) CHECK(ids(edge, "faces").size() == 2);
+  CHECK(*ids(content(process.replies[2], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  // The washer: two cylindrical radii, axes along Z.
+  const auto& ring = content(process.replies[4]);
+  std::set<int> radii;
+  for (const auto& face : ids(ring, "faces"))
+    if (*face.find("type")->if_string() == "cylinder") {
+      radii.insert(static_cast<int>(std::lround(number(face, "radius"))));
+      const auto& axis = *face.find("axis")->if_array();
+      CHECK_THAT(std::abs(*axis[2].if_number()), WithinAbs(1, 1e-12));
+    }
+  CHECK(radii == std::set<int>{5, 12});
 }
