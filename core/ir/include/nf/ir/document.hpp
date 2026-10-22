@@ -78,4 +78,7 @@ inline constexpr std::size_t kMaxDocumentBytes = 16 * 1024 * 1024;
 /// Optional fields preserve omission; a default-constructed Document is an empty part.
 [[nodiscard]] std::expected<std::string, Errors> write_document(const Document& document);
 
+/// The published JSON Schema (2020-12) of a version-1 part document, embedded at build time.
+[[nodiscard]] std::string_view part_schema() noexcept;
+
 }  // namespace nf::ir
