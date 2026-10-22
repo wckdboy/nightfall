@@ -13,7 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "assembly.hpp"
 #include "evaluator.hpp"
+#include "urdf.hpp"
 
 namespace nf::cli {
 
@@ -111,6 +113,10 @@ class Session {
   /// and centre of volume only and are left out of the total. `occurrence` keeps one.
   [[nodiscard]] std::expected<ir::json::Object, ir::Errors> mass_properties(
       const std::optional<std::string>& occurrence) const;
+  /// RFC 0013 URDF export of the solved assembly (see kernel_service::export_urdf); mesh
+  /// paths start with `mesh_dir`.
+  [[nodiscard]] std::expected<kernel_service::UrdfExport, ir::Errors> export_urdf(
+      const std::string& mesh_dir, const std::string& name) const;
   /// A motion sweep: the joint's value from `from` to `to` (document angle units for rotary
   /// joints, length units for sliders) in `steps` intervals, each re-solved from the current
   /// document without changing it. Each step reports the solve, the placements of `report`
@@ -127,7 +133,9 @@ class Session {
     Build build;
     ir::Errors errors;           // document-level errors of an adopted invalid source
     ir::Errors assembly_errors;  // RFC 0013 evaluation errors, part of a failed build
+    std::optional<kernel_service::AssemblyResult> assembly;  // the solve, for exports
   };
+  [[nodiscard]] std::map<std::string, double> densities() const;
   /// With `write_back`, a rebuild that solved a sketch rewrites the authored plain numbers to
   /// the solved coordinates and evaluates the rewritten document instead.
   [[nodiscard]] std::expected<State, ir::Errors> evaluate(std::string source,

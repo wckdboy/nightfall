@@ -39,3 +39,19 @@ claude mcp add strandbeest -- build/occt/tools/cli/nf mcp --in examples/assembli
 
 Then ask, for example, to set `crank` to 120 deg and measure `foot_fl/plate`, or to export
 the assembly with `export_mesh`.
+
+## Six-joint arm
+
+[arm.nightfall](arm.nightfall) is a serial arm of seven parts and six revolute joints: base
+yaw, shoulder, elbow, wrist roll, wrist pitch and tool roll, driven by parameters `q1` to `q6`.
+Each joint mates two boss faces, so its axis is their normal through their centroid
+(`plane_centroid`); the shoulder is limited to ±120°. It is the URDF export's reference: at
+several poses, forward kinematics from the exported URDF alone reproduces every part's solved
+placement within 4e-15 m (`tools/cli/tests/urdf_tests.py`), and MuJoCo 3.16 loading the same
+file agrees.
+
+```sh
+build/occt/tools/cli/nf mcp --in examples/assemblies/arm.nightfall
+# then: export_urdf {"path": "arm.urdf"}
+```
+

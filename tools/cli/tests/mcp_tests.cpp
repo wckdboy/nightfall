@@ -200,6 +200,7 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
                                           "check_interference",
                                           "measure_clearance",
                                           "mass_properties",
+                                          "export_urdf",
                                           "sweep_joint",
                                           "undo",
                                           "redo",

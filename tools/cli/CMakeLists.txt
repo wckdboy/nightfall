@@ -13,4 +13,10 @@ if(NF_BUILD_TESTS)
   set_target_properties(nf_cli_tests PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
   catch_discover_tests(nf_cli_tests TEST_PREFIX "cli." EXTRA_ARGS --rng-seed=20261018
     PROPERTIES LABELS "occt")
+  # RFC 0013 URDF export, checked by forward kinematics independent of the engine.
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(NAME cli.urdf_export COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/urdf_tests.py" "$<TARGET_FILE:nf>"
+    "${PROJECT_SOURCE_DIR}/examples/assemblies")
+  set_tests_properties(cli.urdf_export PROPERTIES LABELS "occt")
 endif()
