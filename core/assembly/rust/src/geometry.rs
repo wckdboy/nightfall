@@ -110,6 +110,30 @@ impl Placement {
         let r = self.rotation;
         finite(self.translation) && orthonormal([r[0], r[1], r[2]])
     }
+    /// `self · other`: `other` first, then `self`.
+    pub(crate) fn compose(&self, other: &Self) -> Self {
+        Self {
+            rotation: mat_mul(&self.rotation, &other.rotation),
+            translation: self.apply_point(other.translation),
+        }
+    }
+    pub(crate) fn inverse(&self) -> Self {
+        let r = self.rotation;
+        let rotation = [0, 1, 2].map(|i| [r[0][i], r[1][i], r[2][i]]);
+        let t = mat_vec(&rotation, self.translation);
+        Self {
+            rotation,
+            translation: scale(t, -1.0),
+        }
+    }
+    /// Rotation by `angle` about z, then translation by `t`.
+    pub(crate) fn about_z(angle: f64, t: Vec3) -> Self {
+        let (c, s) = (angle.cos(), angle.sin());
+        Self {
+            rotation: [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]],
+            translation: t,
+        }
+    }
     /// Left perturbation: rotation by `w` about the world origin's axes, translation by `v`.
     pub(crate) fn perturbed(&self, w: Vec3, v: Vec3) -> Self {
         let r = mat_mul(&exp_so3(w), &self.rotation);
@@ -159,5 +183,12 @@ impl Frame {
     }
     pub(crate) fn is_valid(&self) -> bool {
         finite(self.origin) && orthonormal([self.x, self.y, self.z])
+    }
+    /// The frame as a placement in its occurrence: its axes are the rotation's columns.
+    pub(crate) fn placement(&self) -> Placement {
+        Placement {
+            rotation: [0, 1, 2].map(|i| [self.x[i], self.y[i], self.z[i]]),
+            translation: self.origin,
+        }
     }
 }

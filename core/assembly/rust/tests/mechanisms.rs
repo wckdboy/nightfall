@@ -441,3 +441,138 @@ fn hostile_input_is_an_error_and_never_panics() {
     a.occurrences[1].placement.translation = [1e150, -1e150, 1e150];
     let _ = solve(&a, &SolveOptions::default());
 }
+
+type M3 = [[f64; 3]; 3];
+fn mul(a: &M3, b: &M3) -> M3 {
+    let mut c = [[0.0; 3]; 3];
+    for i in 0..3 {
+        for j in 0..3 {
+            c[i][j] = (0..3).map(|k| a[i][k] * b[k][j]).sum();
+        }
+    }
+    c
+}
+fn mv(a: &M3, v: [f64; 3]) -> [f64; 3] {
+    [0, 1, 2].map(|i| (0..3).map(|k| a[i][k] * v[k]).sum())
+}
+/// A frame as a transform from its axes to the occurrence's (columns x, y, z).
+fn frame_pose(f: &Frame) -> (M3, [f64; 3]) {
+    let r = [0, 1, 2].map(|i| [f.x[i], f.y[i], f.z[i]]);
+    (r, f.origin)
+}
+fn compose(a: &(M3, [f64; 3]), b: &(M3, [f64; 3])) -> (M3, [f64; 3]) {
+    let t = mv(&a.0, b.1);
+    (mul(&a.0, &b.0), [0, 1, 2].map(|i| a.1[i] + t[i]))
+}
+fn inverse(a: &(M3, [f64; 3])) -> (M3, [f64; 3]) {
+    let rt = [0, 1, 2].map(|i| [a.0[0][i], a.0[1][i], a.0[2][i]]);
+    let t = mv(&rt, a.1);
+    (rt, [-t[0], -t[1], -t[2]])
+}
+fn rz(q: f64) -> (M3, [f64; 3]) {
+    let (c, s) = (q.cos(), q.sin());
+    ([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], [0.0; 3])
+}
+
+/// A six-joint serial arm: yaw, shoulder, elbow, wrist roll, wrist pitch, tool roll. Each joint
+/// is a revolute pair of frames; every link is authored at the identity, far from any pose.
+fn arm(q: [f64; 6]) -> Assembly {
+    let z = [0.0, 0.0, 1.0];
+    let y = [0.0, 1.0, 0.0];
+    let x = [1.0, 0.0, 0.0];
+    // (frame on the parent, frame on the child), axes: z, y, y, z, y, z.
+    let frames = [
+        (
+            Frame::new([0.0, 0.0, 30.0], z, x),
+            Frame::new([0.0, 0.0, 0.0], z, x),
+        ),
+        (
+            Frame::new([0.0, 20.0, 45.0], y, x),
+            Frame::new([0.0, -10.0, 15.0], y, x),
+        ),
+        (
+            Frame::new([0.0, 10.0, 135.0], y, x),
+            Frame::new([0.0, -10.0, 12.0], y, x),
+        ),
+        (
+            Frame::new([0.0, 0.0, 120.0], z, x),
+            Frame::new([0.0, 0.0, 0.0], z, x),
+        ),
+        (
+            Frame::new([0.0, 10.0, 20.0], y, z),
+            Frame::new([0.0, -10.0, 8.0], y, z),
+        ),
+        (
+            Frame::new([0.0, 0.0, 25.0], z, x),
+            Frame::new([0.0, 0.0, 0.0], z, x),
+        ),
+    ];
+    let names = [
+        "base", "turret", "upper", "forearm", "wrist", "hand", "flange",
+    ];
+    let mut occurrences = vec![occ(names[0], true, Placement::IDENTITY)];
+    occurrences.extend(
+        names[1..]
+            .iter()
+            .map(|n| occ(n, false, Placement::IDENTITY)),
+    );
+    let joints = frames
+        .iter()
+        .enumerate()
+        .map(|(k, (a, b))| {
+            let mut j = Joint::new(
+                &format!("q{}", k + 1),
+                JointKind::Revolute,
+                names[k],
+                (*a).unwrap(),
+                names[k + 1],
+                (*b).unwrap(),
+            );
+            j.values = vec![Some(q[k])];
+            j
+        })
+        .collect();
+    Assembly {
+        occurrences,
+        joints,
+    }
+}
+
+#[test]
+fn a_driven_serial_arm_solves_far_from_its_authored_pose() {
+    let poses = [
+        [0.0, 0.0, 0.0, -45.0, 0.0, 0.0],
+        [45.0, 90.0, 45.0, -45.0, 90.0, 180.0],
+        [-120.0, -75.0, 110.0, 170.0, -35.0, -90.0],
+        [179.0, -179.0, 135.0, -135.0, 170.0, -170.0],
+    ];
+    for degrees in poses {
+        let q = degrees.map(f64::to_radians);
+        let asm = arm(q);
+        let s = solve(&asm, &SolveOptions::default()).unwrap();
+        assert_solved(&s);
+        assert_eq!(s.report.dof, 0, "{degrees:?}");
+        // Forward kinematics: child = parent · frame_a · Rz(q) · frame_b⁻¹.
+        let mut parent = (Placement::IDENTITY.rotation, [0.0; 3]);
+        for (k, j) in asm.joints.iter().enumerate() {
+            let child = compose(
+                &compose(&compose(&parent, &frame_pose(&j.frame_a)), &rz(q[k])),
+                &inverse(&frame_pose(&j.frame_b)),
+            );
+            let got = &s.placements[k + 1];
+            for i in 0..3 {
+                assert!(
+                    (got.translation[i] - child.1[i]).abs() <= 1e-9,
+                    "{degrees:?} link {k}"
+                );
+                for c in 0..3 {
+                    assert!(
+                        (got.rotation[i][c] - child.0[i][c]).abs() <= 1e-9,
+                        "{degrees:?} link {k}"
+                    );
+                }
+            }
+            parent = child;
+        }
+    }
+}
