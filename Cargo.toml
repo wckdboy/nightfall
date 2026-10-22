@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 # SPDX-License-Identifier: Apache-2.0
 [workspace]
-members = ["core/math/rust", "core/kernel/native", "core/kernel/rust", "core/sketch/rust", "core/sketch/ffi"]
+members = ["core/math/rust", "core/assembly/rust", "core/kernel/native", "core/kernel/rust", "core/sketch/rust", "core/sketch/ffi"]
 exclude = ["third_party/solidcraft-sketch/sketch", "third_party/solidcraft-sketch/geom"]
 default-members = ["core/math/rust"]
 resolver = "3"
