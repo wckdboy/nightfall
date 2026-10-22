@@ -306,7 +306,7 @@ Agents drive the same headless engine through `nf mcp`, a stdio Model Context Pr
 server ([RFC 0011](docs/rfcs/0011-ai-design-loop.md), Review) with few general tools:
 `inspect_part`, `get_part`, `get_schema`, `body_topology`, `measure`, `set_parameters`, `patch_part` (RFC 6902),
 `replace_part`, `inspect_assembly`, `drive_joints`, `check_interference`, `measure_clearance`,
-`sweep_joint`, `undo`, `redo`,
+`mass_properties`, `sweep_joint`, `undo`, `redo`,
 `open_part`, `save_part`, `export_step` and `export_mesh` (derived OBJ). The authoritative state is the IR text; every
 mutating tool validates, rebuilds and replies with the build evidence above plus the bodies
 whose geometry changed, appeared or vanished. A failed feature rolls the change back unless
@@ -322,7 +322,9 @@ residuals and placements. A joint conflict fails the build and rolls back like a
 feature; `drive_joints` sets joint values by id. `check_interference` reports bodies of different
 occurrences that overlap (exact common volume) or touch, `measure_clearance` the smallest gap
 with its closest points, and `sweep_joint` drives one joint through a range, re-solving and
-checking interference at each step without changing the document. Files are reachable only in
+checking interference at each step without changing the document. `mass_properties` gives mass, centre of mass
+and the inertia tensor per occurrence and for the assembly, from exact volume integrals and a
+`density` (kg/m³) on each component or occurrence. Files are reachable only in
 the `--in` folder, a private scratch folder and each `--allow-path`. Evaluation runs in
 process without a deadline; the client's tool timeout bounds it. Register it with Claude Code:
 

@@ -81,8 +81,9 @@ struct Catalog {
             throw std::logic_error("unsupported schema reference sibling: " + sibling.key);
       } else if (k != "$schema" && k != "$id" && k != "$comment" && k != "title" && k != "type" &&
                  k != "enum" && k != "const" && k != "required" && k != "minimum" &&
-                 k != "maximum" && k != "minItems" && k != "maxItems" && k != "minLength" &&
-                 k != "x-nf-reference" && k != "x-nf-definition" && k != "x-nf-value") {
+                 k != "exclusiveMinimum" && k != "maximum" && k != "minItems" && k != "maxItems" &&
+                 k != "minLength" && k != "x-nf-reference" && k != "x-nf-definition" &&
+                 k != "x-nf-value") {
         throw std::logic_error("unsupported schema keyword: " + k);
       }
     }
@@ -156,6 +157,9 @@ class Checker {
             bound && (std::string_view(key) == "minimum" ? *v.if_number() < *bound->if_number()
                                                          : *v.if_number() > *bound->if_number()))
           fail(p, "number outside allowed range");
+      if (const auto* bound = s.find("exclusiveMinimum");
+          bound && !(*v.if_number() > *bound->if_number()))
+        fail(p, "number outside allowed range");
     }
     if (const auto* str = v.if_string()) {
       if (const auto* pattern = s.find("pattern");

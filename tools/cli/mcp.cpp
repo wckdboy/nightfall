@@ -175,6 +175,11 @@ Array tools() {
                    {"b", property("string", "occurrence id or occurrence/body id")}},
                   {"a", "b"}),
            true),
+      tool("mass_properties",
+           "Mass, center of mass and inertia tensor (kg m^2 about the center, assembly axes) "
+           "per occurrence and for the assembly, from exact volume integrals and the density "
+           "(kg/m^3) on each occurrence or its component.",
+           schema({{"occurrence", property("string", "one occurrence; omit for all")}}), true),
       tool(
           "sweep_joint",
           "Motion study: drive a revolute, cylindrical or slider joint from `from` to `to` "
@@ -355,6 +360,8 @@ struct Server {
     if (name == "measure_clearance")
       return outcome_object(
           session.clearance(*string_arg(args, "a", true), *string_arg(args, "b", true)));
+    if (name == "mass_properties")
+      return outcome_object(session.mass_properties(string_arg(args, "occurrence", false)));
     if (name == "sweep_joint") {
       const double steps = number_arg(args, "steps", 0);
       if (steps != std::floor(steps) || steps < 1 || steps > 360)

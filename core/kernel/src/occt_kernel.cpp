@@ -566,6 +566,26 @@ class OcctKernel final : public IKernel {
       return result;
     });
   }
+  std::expected<MassProperties, KernelError> mass_properties(const ShapePtr& input) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source) fail("mass shape belongs to an incompatible backend");
+      GProp_GProps volume;
+      BRepGProp::VolumeProperties(source->geometry, volume);
+      if (!(volume.Mass() > 0)) fail("shape has no volume");
+      const auto c = volume.CentreOfMass();
+      // GProp's matrix is about the centre of mass, with products of inertia as -integral xy.
+      const auto matrix = volume.MatrixOfInertia();
+      MassProperties result{volume.Mass(), {c.X(), c.Y(), c.Z()}, {}};
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+          result.inertia[static_cast<std::size_t>(3 * i + j)] = matrix.Value(i + 1, j + 1);
+      if (!std::isfinite(result.volume) || !finite(result.centroid) ||
+          !std::ranges::all_of(result.inertia, [](double x) { return std::isfinite(x); }))
+        fail("mass properties are not finite");
+      return result;
+    });
+  }
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {
     return guarded([&] {
       const auto& p = input.plane;
