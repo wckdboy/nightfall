@@ -57,7 +57,7 @@ pub enum Entity {
 }
 
 /// Which point of an entity a reference means (RFC 0005 `local_entity`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Role {
     Start,
     End,
@@ -248,6 +248,138 @@ struct Model {
     slots: HashMap<String, Slot>,
 }
 
+/// A defining point of an entity: its id and role (`None` for a point entity).
+type Key = (String, Option<Role>);
+
+/// The defining points of an entity and their authored positions.
+fn point_keys(id: &str, entity: &Entity) -> Vec<(Key, Point)> {
+    let key = |role| (id.to_owned(), role);
+    match entity {
+        Entity::Point { at } => vec![(key(None), *at)],
+        Entity::Line { start, end } => vec![
+            (key(Some(Role::Start)), *start),
+            (key(Some(Role::End)), *end),
+        ],
+        Entity::Circle { center, .. } => vec![(key(Some(Role::Center)), *center)],
+        Entity::Arc {
+            center,
+            radius,
+            start_angle,
+            sweep_angle,
+        } => {
+            let at = |a: f64| [center[0] + radius * a.cos(), center[1] + radius * a.sin()];
+            vec![
+                (key(Some(Role::Center)), *center),
+                (key(Some(Role::Start)), at(*start_angle)),
+                (key(Some(Role::End)), at(start_angle + sweep_angle)),
+            ]
+        }
+    }
+}
+
+/// Points joined by point-to-point coincidences, which become one solver point. SolidCraft
+/// measures tangency at a shared end point linearly (the radius is perpendicular to the line
+/// there); between separate points tied by a coincidence it falls back to the distance from
+/// the centre, which is quadratic near tangency and leaves the touch point about 5e-5 mm off
+/// for a 1e-10 residual. Two fixed classes, or two points of one entity, are never merged, so
+/// conflicts and zero-length curves are still reported by their own constraints.
+struct Shared {
+    /// Each merged point's class; points absent here are not shared.
+    class: HashMap<Key, usize>,
+    /// Where a class's solver point starts: a fixed member's authored position, if any.
+    start: HashMap<usize, Point>,
+}
+
+impl Shared {
+    fn find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+
+    fn new(sketch: &Sketch) -> Self {
+        let mut keys: Vec<(Key, Point)> = Vec::new();
+        let mut entity_of: HashMap<&str, &Entity> = HashMap::new();
+        for (id, entity) in &sketch.entities {
+            entity_of.insert(id, entity);
+            keys.extend(point_keys(id, entity));
+        }
+        let index: HashMap<Key, usize> = keys
+            .iter()
+            .enumerate()
+            .map(|(i, (k, _))| (k.clone(), i))
+            .collect();
+        let key_of = |r: &Ref| -> Option<usize> {
+            match (entity_of.get(r.entity.as_str()), r.point) {
+                (Some(Entity::Point { .. }), None) => index.get(&(r.entity.clone(), None)).copied(),
+                (Some(_), Some(role)) => index.get(&(r.entity.clone(), Some(role))).copied(),
+                _ => None,
+            }
+        };
+        let mut fixed = vec![false; keys.len()];
+        for c in &sketch.constraints {
+            if let Constraint::Fixed(r) = c {
+                match key_of(r) {
+                    Some(k) => fixed[k] = true,
+                    None if r.point.is_none() => {
+                        for (i, ((id, _), _)) in keys.iter().enumerate() {
+                            if *id == r.entity {
+                                fixed[i] = true;
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        let mut parent: Vec<usize> = (0..keys.len()).collect();
+        for c in &sketch.constraints {
+            let Constraint::Coincident(a, b) = c else {
+                continue;
+            };
+            let (Some(a), Some(b)) = (key_of(a), key_of(b)) else {
+                continue;
+            };
+            let (ra, rb) = (Self::find(&mut parent, a), Self::find(&mut parent, b));
+            if ra == rb {
+                continue;
+            }
+            let members = |parent: &mut [usize], root: usize| -> Vec<usize> {
+                (0..parent.len())
+                    .filter(|&i| Self::find(parent, i) == root)
+                    .collect()
+            };
+            let (ma, mb) = (members(&mut parent, ra), members(&mut parent, rb));
+            let any_fixed = |m: &[usize]| m.iter().any(|&i| fixed[i]);
+            let same_entity = ma
+                .iter()
+                .any(|&i| mb.iter().any(|&j| keys[i].0.0 == keys[j].0.0));
+            if (any_fixed(&ma) && any_fixed(&mb)) || same_entity {
+                continue;
+            }
+            parent[rb] = ra;
+        }
+        let mut shared = Shared {
+            class: HashMap::new(),
+            start: HashMap::new(),
+        };
+        let roots: Vec<usize> = (0..keys.len())
+            .map(|i| Self::find(&mut parent, i))
+            .collect();
+        for (i, (key, at)) in keys.iter().enumerate() {
+            if roots.iter().filter(|&&r| r == roots[i]).count() > 1 {
+                shared.class.insert(key.clone(), roots[i]);
+                if fixed[i] {
+                    shared.start.insert(roots[i], *at);
+                }
+            }
+        }
+        shared
+    }
+}
+
 impl Model {
     fn build(sketch: &Sketch) -> Result<Self, Error> {
         let mut model = Model {
@@ -255,25 +387,47 @@ impl Model {
             slots: HashMap::new(),
         };
         let geometry = |e: solidcraft_sketch::SketchError| Error::Geometry(e.to_string());
+        let shared = Shared::new(sketch);
+        // The solver point of each merged class, once its first member is created.
+        let mut assigned: HashMap<usize, usize> = HashMap::new();
         for (id, entity) in &sketch.entities {
+            let class = |role: Option<Role>| shared.class.get(&(id.clone(), role)).copied();
+            let existing = |assigned: &HashMap<usize, usize>, role| {
+                class(role).and_then(|c| assigned.get(&c).copied())
+            };
+            // Authored position, or the fixed member's for a merged class.
+            let at = |role, p: Point| {
+                class(role)
+                    .and_then(|c| shared.start.get(&c).copied())
+                    .unwrap_or(p)
+            };
             if model.slots.contains_key(id) {
                 return Err(Error::DuplicateId(id.clone()));
             }
             let created = |m: &Model, curve: usize| m.sk.curves.get(curve).map(|c| c.kind.clone());
             let slot = match entity {
-                Entity::Point { at } => Slot::Point(
-                    model
-                        .sk
-                        .add_point(point(*at, id)?, None)
-                        .map_err(geometry)?,
-                ),
+                Entity::Point { at: p } => match existing(&assigned, None) {
+                    Some(i) => Slot::Point(i),
+                    None => Slot::Point(
+                        model
+                            .sk
+                            .add_point(point(at(None, *p), id)?, None)
+                            .map_err(geometry)?,
+                    ),
+                },
                 Entity::Line { start, end } => {
                     if (start[0] - end[0]).hypot(start[1] - end[1]) <= MIN_LENGTH {
                         return Err(invalid(Some(id), format!("{id} has zero length")));
                     }
                     let curve = model
                         .sk
-                        .add_line(point(*start, id)?, point(*end, id)?, None, None, None)
+                        .add_line(
+                            point(at(Some(Role::Start), *start), id)?,
+                            point(at(Some(Role::End), *end), id)?,
+                            existing(&assigned, Some(Role::Start)),
+                            existing(&assigned, Some(Role::End)),
+                            None,
+                        )
                         .map_err(geometry)?;
                     match created(&model, curve) {
                         Some(CurveKind::Line { a, b }) => Slot::Line {
@@ -288,7 +442,12 @@ impl Model {
                     let r = positive(*radius, Some(id), || format!("{id} radius"))?;
                     let curve = model
                         .sk
-                        .add_circle(point(*center, id)?, r, None, None)
+                        .add_circle(
+                            point(at(Some(Role::Center), *center), id)?,
+                            r,
+                            existing(&assigned, Some(Role::Center)),
+                            None,
+                        )
                         .map_err(geometry)?;
                     match created(&model, curve) {
                         Some(CurveKind::Circle { c, .. }) => Slot::Circle { curve, center: c },
@@ -310,18 +469,26 @@ impl Model {
                             format!("{id} sweep angle (0 < |sweep| < 2π)"),
                         ));
                     }
-                    let c = point(*center, id)?;
-                    let at = |a: f64| Vec2::new(c.x + r * a.cos(), c.y + r * a.sin());
+                    let c = point(at(Some(Role::Center), *center), id)?;
+                    let on = |a: f64| Vec2::new(c.x + r * a.cos(), c.y + r * a.sin());
                     let reversed = w < 0.0;
-                    let (from, to) = if reversed {
-                        (at(s + w), at(s))
+                    // The solver stores arcs counter-clockwise: a clockwise arc runs end to start.
+                    let (from_role, to_role) = if reversed {
+                        (Role::End, Role::Start)
                     } else {
-                        (at(s), at(s + w))
+                        (Role::Start, Role::End)
                     };
-                    let curve = model
-                        .sk
-                        .add_arc(c, from, to, [None, None, None], None)
-                        .map_err(geometry)?;
+                    let (from, to) = if reversed {
+                        (on(s + w), on(s))
+                    } else {
+                        (on(s), on(s + w))
+                    };
+                    let pts = [
+                        existing(&assigned, Some(Role::Center)),
+                        existing(&assigned, Some(from_role)),
+                        existing(&assigned, Some(to_role)),
+                    ];
+                    let curve = model.sk.add_arc(c, from, to, pts, None).map_err(geometry)?;
                     match created(&model, curve) {
                         Some(CurveKind::Arc { c: center, a, b }) => {
                             let (start, end) = if reversed { (b, a) } else { (a, b) };
@@ -337,6 +504,26 @@ impl Model {
                     }
                 }
             };
+            let mut record = |role, p| {
+                if let Some(c) = class(role) {
+                    assigned.entry(c).or_insert(p);
+                }
+            };
+            match slot {
+                Slot::Point(p) => record(None, p),
+                Slot::Line { start, end, .. } => {
+                    record(Some(Role::Start), start);
+                    record(Some(Role::End), end);
+                }
+                Slot::Circle { center, .. } => record(Some(Role::Center), center),
+                Slot::Arc {
+                    center, start, end, ..
+                } => {
+                    record(Some(Role::Center), center);
+                    record(Some(Role::Start), start);
+                    record(Some(Role::End), end);
+                }
+            }
             model.slots.insert(id.clone(), slot);
         }
         Ok(model)
@@ -413,10 +600,15 @@ impl Model {
         let value = |v: f64| finite(v, None, || format!("constraint {i} value"));
         Ok(match c {
             Constraint::Coincident(a, b) => match (self.is_point(a), self.is_point(b)) {
-                (true, true) => vec![ConstraintKind::Coincident {
-                    p: self.point_of(i, a)?,
-                    q: self.point_of(i, b)?,
-                }],
+                (true, true) => {
+                    let (p, q) = (self.point_of(i, a)?, self.point_of(i, b)?);
+                    // A merged coincidence holds by construction (see `Shared`).
+                    if p == q {
+                        vec![]
+                    } else {
+                        vec![ConstraintKind::Coincident { p, q }]
+                    }
+                }
                 (true, false) => vec![ConstraintKind::PointOnCurve {
                     p: self.point_of(i, a)?,
                     c: self.curve_of(i, b)?,
@@ -655,10 +847,18 @@ pub fn solve(sketch: &Sketch) -> Result<Solution, Error> {
             ..
         } => point_known(center) && point_known(start) && point_known(end) && curve_known(curve),
     };
+    // A failed solve leaves the entities as authored. Merged points (see `Shared`) start at
+    // one member's position, so reading them back would move the others.
+    let failed = matches!(report.status, SolveStatus::Failed);
     let mut entities: Vec<(String, Entity)> = sketch
         .entities
         .iter()
-        .map(|(id, e)| (id.clone(), model.read(id, e)))
+        .map(|(id, e)| {
+            (
+                id.clone(),
+                if failed { e.clone() } else { model.read(id, e) },
+            )
+        })
         .collect();
     // Constraints can be met by collapsing a curve (a line's ends made coincident). That is
     // geometry `Model::build` would refuse, so it is a failure with the authored entities.
