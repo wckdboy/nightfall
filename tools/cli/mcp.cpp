@@ -21,7 +21,8 @@ constexpr std::string_view kVersions[] = {"2025-06-18", "2025-03-26", "2024-11-0
 constexpr std::string_view kInstructions =
     "Nightfall part documents are JSON feature programs (RFC 0005): named parameters with units, "
     "an ordered feature list and selectors instead of indices. Read the schema with get_schema, "
-    "the current part with inspect_part, change it with set_parameters, patch_part (RFC 6902) "
+    "the current part with inspect_part (or its raw text with get_part), change it with "
+    "set_parameters, patch_part (RFC 6902) "
     "or replace_part, then "
     "verify measured volume, area, centroid and bounds with measure. Mutating tools rebuild and "
     "report the bodies whose geometry changed; a failed feature rolls the change back unless "
@@ -100,6 +101,8 @@ Array tools() {
            schema({}), true),
       tool("get_schema", "The JSON Schema of a part document and the feature types it defines.",
            schema({}), true),
+      tool("get_part", "The current document text (JSON) and its SHA-256, valid or not.",
+           schema({}), true),
       tool("measure",
            "Volume (mm^3), area (mm^2), centroid, bounds and topology counts of one live body, "
            "or of every live body with totals.",
@@ -147,16 +150,6 @@ Array tools() {
                   {"path"}),
            false, true),
   };
-}
-
-Array error_entries(const ir::Errors& errors) {
-  Array entries;
-  for (const auto& e : errors) {
-    Object entry{{"code", e.code}, {"message", e.message}, {"pointer", e.pointer}};
-    if (e.offset) entry.push_back({"offset", static_cast<double>(*e.offset)});
-    entries.push_back(std::move(entry));
-  }
-  return entries;
 }
 
 /// Files reachable by tools: the --in folder, the private scratch folder and --allow-path
@@ -228,6 +221,10 @@ struct Server {
       auto parsed = ir::json::parse(ir::part_schema());
       return tool_result(Object{{"schema", std::move(*parsed)}}, false);
     }
+    if (name == "get_part")
+      return tool_result(
+          Object{{"document", session.source()}, {"sha256", ir::sha256(session.source()).hex()}},
+          false);
     if (name == "measure") return outcome_object(session.measure(string_arg(args, "body", false)));
     if (name == "set_parameters") {
       std::map<std::string, std::string> values;
@@ -401,9 +398,15 @@ int run_mcp(int argc, char** argv) {
     if (options->input) {
       server.document = fs::weakly_canonical(fs::absolute(*options->input));
       server.roots.add(server.document->parent_path());
-      auto loaded = session.replace(load(*server.document), false);
-      if (!loaded) throw loaded.error();
-      session.clear_history();
+      auto text = load(*server.document);
+      auto loaded = session.replace(text, false);
+      if (loaded) {
+        session.clear_history();
+      } else {
+        // A broken part is still a session: inspect_part reports the errors to repair.
+        std::cerr << "nf mcp: document does not validate; see inspect_part errors\n";
+        session.adopt_invalid(std::move(text), loaded.error());
+      }
     }
     server.roots.add(scratch);
     for (const auto& dir : options->allow) server.roots.add(fs::absolute(dir));
