@@ -212,6 +212,39 @@ TEST_CASE("Kernel serve fillets and chamfers the client's edges", "[kernel-serve
         }) == 1);
 }
 
+TEST_CASE("Kernel serve takes a body in several pieces as one operand", "[kernel-serve]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  using math::make_line;
+  using math::Vec2;
+  const auto cube = prism(*kernel,
+                          {make_line(Vec2{}, {10, 0}), make_line(Vec2{10, 0}, {10, 10}),
+                           make_line(Vec2{10, 10}, {0, 10}), make_line(Vec2{0, 10}, {})},
+                          {}, {0, 0, 10});
+  const auto apart = kernel->transform(cube, {{30, 0, 0}, {}, {0, 0, 1}, 0}).value().shape;
+  const Object pieces{{"step", kernel->export_step({cube, apart}).value()},
+                      {"faces", points({{5, 5, 10}, {35, 5, 10}})}};
+  const auto slab = prism(*kernel,
+                          {make_line(Vec2{-5, -5}, {50, -5}), make_line(Vec2{50, -5}, {50, 15}),
+                           make_line(Vec2{50, 15}, {-5, 15}), make_line(Vec2{-5, 15}, {-5, -5})},
+                          {{0, 0, 4}}, {0, 0, 2});
+  const Object tool{{"step", kernel->export_step({slab}).value()}, {"faces", Array{}}};
+  const auto replies = serve({Object{
+      {"id", 10.}, {"op", "boolean"}, {"kind", "subtract"}, {"operands", Array{pieces, tool}}}});
+  REQUIRE(replies.size() == 1);
+  const auto solids = kernel->import_step(*ok(replies[0]).find("step")->if_string()).value();
+  CHECK(solids.size() == 4);
+  double volume = 0;
+  for (const auto& s : solids) volume += s->measures().volume;
+  CHECK_THAT(volume, WithinRel(2 * 1000 * 0.8, 1e-9));
+  // Both tops survive, each from its own client face; the bottoms, which the client gave no
+  // samples for, survive with no client origin.
+  std::vector<std::string> kept;
+  for (const auto& e : *replies[0].find("faces")->if_array())
+    if (*e.find("change")->if_string() == "kept") kept.push_back(from(e));
+  std::ranges::sort(kept);
+  CHECK(kept == std::vector<std::string>{"kept:", "kept:", "kept: 0f0", "kept: 0f1"});
+}
+
 TEST_CASE("Kernel serve rejects bad requests and keeps serving", "[kernel-serve]") {
   auto kernel = kernel::make_occt_kernel().value();
   auto corner = block(*kernel);
