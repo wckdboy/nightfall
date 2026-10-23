@@ -1,0 +1,13 @@
+{
+  "kind": "static_structural",
+  "material": {"youngs_modulus": "69 GPa", "poisson_ratio": 0.33},
+  "boundaries": [
+    {"id": "root", "type": "fixed", "faces": {"points": [[0, 5, 5]]}},
+    {"id": "tip", "type": "force", "faces": {"points": [[200, 5, 5]]}, "value": ["0 N", "0 N", "-10 N"]}
+  ],
+  "mesh": {"size": "3.3 mm"},
+  "criteria": [
+    {"quantity": "max_displacement", "below": "0.5 mm"},
+    {"quantity": "max_von_mises", "below": "40 MPa"}
+  ]
+}

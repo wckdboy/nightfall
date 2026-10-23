@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // `nf study run <document> <study> [--size L] [--refine a,b,c]`: runs one study and prints its
-// result as JSON. Exit 0 when it ran and every criterion passed, 3 when a criterion failed, 1 on
-// an error (printed as {"errors": [...]}), 2 on usage.
+// result as JSON. `nf study solve <part.step> <spec.json> [...]` runs a study object on a STEP
+// part, its faces picked by points (#317). Exit 0 when it ran and every criterion passed, 3 when a
+// criterion failed, 1 on an error (printed as {"errors": [...]}), 2 on usage.
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -16,6 +18,11 @@
 
 namespace nf::study {
 namespace {
+std::optional<std::string> slurp(const char* path) {
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) return std::nullopt;
+  return std::string{std::istreambuf_iterator<char>{stream}, {}};
+}
 std::optional<double> number(std::string_view s) {
   const std::string copy(s);
   char* end = nullptr;
@@ -27,6 +34,7 @@ std::optional<double> number(std::string_view s) {
 int usage(const char* message) {
   std::fprintf(stderr,
                "nf study: %s\nusage: nf study run <document> <study> [--size mm] "
+               "[--refine mm,mm,mm]\n       nf study solve <part.step> <spec.json> [--size mm] "
                "[--refine mm,mm,mm]\n",
                message);
   return 2;
@@ -44,8 +52,9 @@ int failure(const char* code, const std::string& message) {
 }  // namespace
 
 int run_study_command(int argc, char** argv) {
-  if (argc < 5 || std::string_view(argv[2]) != "run")
-    return usage("expected run <document> <study>");
+  const bool solve = argc >= 3 && std::string_view(argv[2]) == "solve";
+  if (argc < 5 || (!solve && std::string_view(argv[2]) != "run"))
+    return usage("expected run <document> <study> or solve <part.step> <spec.json>");
   RunOptions options;
   for (int i = 5; i < argc; i += 2) {
     const std::string_view option(argv[i]);
@@ -66,13 +75,22 @@ int run_study_command(int argc, char** argv) {
       return usage("unknown option");
     }
   }
-  std::ifstream stream(argv[3], std::ios::binary);
-  if (!stream) return failure("io", std::string("cannot read the document ") + argv[3]);
-  const std::string source{std::istreambuf_iterator<char>{stream}, {}};
+  const auto source = slurp(argv[3]);
+  if (!source)
+    return failure(
+        "io",
+        std::string(solve ? "cannot read the STEP part " : "cannot read the document ") + argv[3]);
   auto kernel = kernel::make_occt_kernel();
   if (!kernel) return failure("kernel", "the kernel is unavailable: " + kernel.error().message);
   kernel_service::Evaluator evaluator(**kernel, {64, 64 * 1024 * 1024});
-  const auto result = run_study(evaluator, **kernel, source, argv[4], options);
+  std::expected<ir::json::Object, ir::Errors> result;
+  if (solve) {
+    const auto spec = slurp(argv[4]);
+    if (!spec) return failure("io", std::string("cannot read the study ") + argv[4]);
+    result = run_step_study(**kernel, *source, *spec, options);
+  } else {
+    result = run_study(evaluator, **kernel, *source, argv[4], options);
+  }
   if (!result) {
     ir::json::Array errors;
     for (const auto& e : result.error())

@@ -25,6 +25,13 @@ std::expected<ir::json::Object, ir::Errors> run_study(kernel_service::Evaluator&
                                                       const std::string& source,
                                                       const std::string& id,
                                                       const RunOptions& options = {});
+/// RFC 0014's study object run on the one solid of `step` (STEP text), its boundaries' faces
+/// picked by `{"points": [[x, y, z], ...]}` on the part (#317). Mesh sizes and displacement
+/// limits are "<number> <length unit>" strings. Errors carry JSON Pointers into `spec`.
+std::expected<ir::json::Object, ir::Errors> run_step_study(kernel::IKernel& kernel,
+                                                           const std::string& step,
+                                                           const std::string& spec,
+                                                           const RunOptions& options = {});
 /// The `nf study` command: `nf study run <document> <study> [--size L] [--refine a,b,c]`.
 int run_study_command(int argc, char** argv);
 }  // namespace nf::study

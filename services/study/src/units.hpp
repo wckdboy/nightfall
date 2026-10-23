@@ -11,7 +11,15 @@
 #include <string_view>
 
 namespace nf::study {
-enum class Dimension { kForce, kStress, kTemperature, kHeatFlux, kFilmCoefficient, kConductivity };
-/// The value in N, MPa, K, W/m², W/(m² K) or W/(m K), by dimension.
+enum class Dimension {
+  kForce,
+  kStress,
+  kTemperature,
+  kHeatFlux,
+  kFilmCoefficient,
+  kConductivity,
+  kLength
+};
+/// The value in N, MPa, K, W/m², W/(m² K), W/(m K) or mm, by dimension.
 std::expected<double, std::string> parse_value(std::string_view text, Dimension dimension);
 }  // namespace nf::study
