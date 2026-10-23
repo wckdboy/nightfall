@@ -6,6 +6,8 @@
 #include "nf/math/constructors.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <iterator>
 #include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
@@ -109,4 +111,23 @@ TEST_CASE("Shell rejects bad thicknesses and faces it does not own", "[shell]") 
   CHECK_FALSE(kernel->shell(nullptr, {}, 2));
   // A sealed void needs no opening, but OCCT's thick solid needs one; refused until built.
   CHECK_FALSE(kernel->shell(source, {}, 2));
+}
+
+TEST_CASE("Shell retries a wall OCCT reports built but leaves unchanged", "[shell]") {
+  // A SolidCraft body (block, tab, boss, cross hole) on which OCCT's thick solid with arc joins
+  // returns its input as done; with offset self-intersections handled it builds the wall.
+  auto kernel = make_occt_kernel().value();
+  std::ifstream file(NF_KERNEL_TEST_DATA "/shell_retry.step");
+  REQUIRE(file.is_open());
+  const std::string text{std::istreambuf_iterator<char>{file}, {}};
+  const auto source = kernel->import_step(text).value().front();
+  std::vector<EntityPtr> open;
+  for (const auto& f : kernel->faces(source).value())
+    if (kernel->face_distance(f.entity, {33.965630820756, 31.465630820756, 0}).value() < 1e-6)
+      open.push_back(f.entity);
+  REQUIRE(open.size() == 1);
+  const auto result = kernel->shell(source, open, 1);
+  REQUIRE(result);
+  // The kept faces' area is 9442.86 mm^2: a 1 mm wall a little under that, at its corners.
+  CHECK_THAT(result->shape->measures().volume, WithinRel(9040.4366, 1e-6));
 }
