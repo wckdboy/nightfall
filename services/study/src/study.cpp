@@ -157,7 +157,9 @@ std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mes
     out.push_back({"reaction_force", vec(r->reaction)});
     out.push_back({"solver", Object{{"unknowns", static_cast<double>(r->solver.unknowns)},
                                     {"iterations", static_cast<double>(r->solver.iterations)},
-                                    {"relative_residual", r->solver.relative_residual}}});
+                                    {"relative_residual", r->solver.relative_residual},
+                                    {"backward_error", r->solver.backward_error},
+                                    {"method", r->solver.method}}});
   } else {
     auto r = solve_thermal(mesh, p.thermal);
     if (!r) fail("", r.error(), "solver");
@@ -167,7 +169,9 @@ std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mes
     out.push_back({"heat_in", std::move(heat)});
     out.push_back({"solver", Object{{"unknowns", static_cast<double>(r->solver.unknowns)},
                                     {"iterations", static_cast<double>(r->solver.iterations)},
-                                    {"relative_residual", r->solver.relative_residual}}});
+                                    {"relative_residual", r->solver.relative_residual},
+                                    {"backward_error", r->solver.backward_error},
+                                    {"method", r->solver.method}}});
   }
   return q;
 }
