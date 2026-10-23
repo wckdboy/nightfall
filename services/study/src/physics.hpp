@@ -17,8 +17,10 @@
 namespace nf::study {
 struct SolverStats {
   std::size_t unknowns = 0;
-  int iterations = 0;
-  double relative_residual = 0;
+  int iterations = 0;            // CG iterations; 0 for a direct solve
+  double relative_residual = 0;  // the true |b - A x| / |b| (not CG's recurrence)
+  double backward_error = 0;     // |b - A x| / (|A| |x| + |b|), maximum norms
+  std::string method;            // "cholesky" (the system's sparse direct solver) or "cg"
 };
 
 /// A total force (N) spread uniformly by area over faces.
@@ -38,6 +40,7 @@ struct StructuralInput {
   std::vector<FaceForce> forces;
   std::vector<FacePressure> pressures;
   int order = 2;
+  bool direct = true;  // factor with the system's sparse Cholesky where there is one, else CG
 };
 struct StructuralResult {
   double max_displacement = 0;       // mm, largest nodal displacement magnitude
@@ -70,6 +73,7 @@ struct ThermalInput {
   std::vector<FaceFlux> fluxes;
   std::vector<FaceConvection> convection;
   int order = 2;
+  bool direct = true;  // as StructuralInput::direct
 };
 struct ThermalResult {
   double max_temperature = 0, min_temperature = 0;  // K, over nodes

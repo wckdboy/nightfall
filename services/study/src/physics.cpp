@@ -3,6 +3,7 @@
 //
 // MFEM half of RFC 0014: no OCCT or Netgen headers here (OCCT's Handle macro breaks MFEM's).
 #include "physics.hpp"
+#include "sparse_cholesky.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -59,9 +60,40 @@ double area(mfem::Mesh& mesh, const mfem::Array<int>& selected) {
   return total;
 }
 std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vector& B,
-                                              mfem::Vector& X, std::size_t unknowns) {
+                                              mfem::Vector& X, std::size_t unknowns, bool direct) {
+  // Accuracy of an answer, measured on the system itself: the true residual relative to the load,
+  // and the normwise backward error |r| / (|A| |x| + |b|) (maximum norms), which rounding alone
+  // keeps near 1e-16 and no solver can push the residual's relative size much below.
+  const auto measured = [&](const mfem::Vector& x, int iterations, const char* method) {
+    mfem::Vector r(B.Size());
+    A.Mult(x, r);
+    r -= B;
+    double a = 0;
+    for (int i = 0; i < A.Height(); ++i) {
+      double row = 0;
+      for (int k = A.GetI()[i]; k < A.GetI()[i + 1]; ++k) row += std::abs(A.GetData()[k]);
+      a = std::max(a, row);
+    }
+    const double scale = a * x.Normlinf() + B.Normlinf();
+    const double norm = B.Norml2();
+    return SolverStats{unknowns, iterations, norm > 0 ? r.Norml2() / norm : 0,
+                       scale > 0 ? r.Normlinf() / scale : 0, method};
+  };
+  bool warm = false;  // CG starts from the direct answer when that is not accurate enough
+  if (direct) {
+    A.SortColumnIndices();
+    const auto n = static_cast<std::size_t>(A.Height());
+    const auto nnz = static_cast<std::size_t>(A.NumNonZeroElems());
+    if (cholesky_solve(A.Height(), {A.GetI(), n + 1}, {A.GetJ(), nnz}, {A.GetData(), nnz},
+                       {B.GetData(), n}, {X.GetData(), n})) {
+      auto stats = measured(X, 0, "cholesky");
+      if (stats.backward_error <= kTolerance) return stats;
+      warm = std::isfinite(stats.relative_residual);
+    }
+  }
   mfem::GSSmoother preconditioner(A);
   mfem::CGSolver cg;
+  cg.iterative_mode = warm;
   cg.SetOperator(A);
   cg.SetPreconditioner(preconditioner);
   cg.SetRelTol(kTolerance);
@@ -72,8 +104,7 @@ std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vecto
   if (!cg.GetConverged())
     return std::unexpected("the solver did not converge after " +
                            std::to_string(cg.GetNumIterations()) + " iterations");
-  const double norm = B.Norml2();
-  return SolverStats{unknowns, cg.GetNumIterations(), norm > 0 ? cg.GetFinalNorm() / norm : 0};
+  return measured(X, cg.GetNumIterations(), "cg");
 }
 }  // namespace
 
@@ -132,7 +163,7 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
   mfem::SparseMatrix A;
   mfem::Vector B, X;
   a.FormLinearSystem(fixed_dofs, u, f, A, X, B);
-  auto stats = solve(A, B, X, static_cast<std::size_t>(space.GetTrueVSize()));
+  auto stats = solve(A, B, X, static_cast<std::size_t>(space.GetTrueVSize()), input.direct);
   if (!stats) return std::unexpected(stats.error());
   a.RecoverFEMSolution(X, f, u);
   StructuralResult result;
@@ -251,7 +282,7 @@ std::expected<ThermalResult, std::string> solve_thermal(const PlainMesh& plain,
   mfem::SparseMatrix A;
   mfem::Vector B, X;
   a.FormLinearSystem(fixed_dofs, T, f, A, X, B);
-  auto stats = solve(A, B, X, static_cast<std::size_t>(space.GetTrueVSize()));
+  auto stats = solve(A, B, X, static_cast<std::size_t>(space.GetTrueVSize()), input.direct);
   if (!stats) return std::unexpected(stats.error());
   a.RecoverFEMSolution(X, f, T);
   ThermalResult result;

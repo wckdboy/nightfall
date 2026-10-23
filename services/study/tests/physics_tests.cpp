@@ -67,7 +67,7 @@ TEST_CASE("a cantilever's tip deflection converges to beam theory", "[study][str
     // Peak stress is at least the beam's root bending stress 6PL/bh^2 (the clamped corners
     // concentrate it further).
     CHECK(result.max_von_mises > 0.9 * 6 * P * L / (b * h * h));
-    CHECK(result.solver.relative_residual <= 1e-12);
+    CHECK(result.solver.backward_error <= 1e-12);
   }
 }
 
@@ -135,4 +135,26 @@ TEST_CASE("convection and a fixed temperature act in series", "[study][thermal]"
   CHECK_THAT(result.heat_in[0], WithinRel(-flux * 0.01, 1e-9));  // out through the base
   // The solve stops at a 1e-12 relative residual: about 1e-8 K on a 300 K field.
   CHECK_THAT(result.max_temperature, WithinAbs(300 + flux * 0.01 / 1.0, 1e-8));
+}
+
+TEST_CASE("the direct solve agrees with the iterative one", "[study][structural][solver]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  const auto beam = box(*kernel, {200, 10, 10});
+  StructuralInput input{69000, 0.33, {face(*kernel, beam, {-1, 0, 0})}, {}, {}, 2};
+  input.forces.push_back({{face(*kernel, beam, {1, 0, 0})}, {0, 0, -10}});
+  const auto plain = mesh(beam, 3.3);
+  input.direct = false;
+  const auto iterative = solve_structural(plain, input).value();
+  CHECK(iterative.solver.method == "cg");
+  input.direct = true;
+  const auto direct = solve_structural(plain, input).value();
+#if defined(__APPLE__)
+  CHECK(direct.solver.method == "cholesky");
+#endif
+  CHECK(direct.solver.backward_error <= 1e-12);
+  // Both solve the same system to 1e-12: their answers agree far inside that.
+  CHECK_THAT(direct.max_displacement, WithinRel(iterative.max_displacement, 1e-9));
+  CHECK_THAT(direct.max_von_mises, WithinRel(iterative.max_von_mises, 1e-9));
+  for (std::size_t c = 0; c < 3; ++c)
+    CHECK_THAT(direct.reaction[c], WithinAbs(iterative.reaction[c], 1e-9));
 }

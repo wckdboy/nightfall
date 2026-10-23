@@ -70,7 +70,7 @@ TEST_CASE("the cantilever study converges to beam theory with balanced reactions
     CHECK_THAT(*applied[2].if_number(), WithinAbs(-P, 1e-9 * P));
     for (std::size_t c = 0; c < 3; ++c)
       CHECK_THAT(*applied[c].if_number() + *reaction[c].if_number(), WithinAbs(0, 1e-9 * P));
-    CHECK(number(*run.find("solver"), "relative_residual") <= 1e-12);
+    CHECK(number(*run.find("solver"), "backward_error") <= 1e-12);
     const auto mesh = *run.find("mesh_sha256")->if_string();
     CHECK(mesh != previous);
     previous = mesh;
