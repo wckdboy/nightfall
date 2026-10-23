@@ -129,5 +129,7 @@ TEST_CASE("Shell retries a wall OCCT reports built but leaves unchanged", "[shel
   const auto result = kernel->shell(source, open, 1);
   REQUIRE(result);
   // The kept faces' area is 9442.86 mm^2: a 1 mm wall a little under that, at its corners.
-  CHECK_THAT(result->shape->measures().volume, WithinRel(9040.4366, 1e-6));
+  // 9040.4529 by Nightfall's 1e-9 mass integrator; OCCT's default GProp gives 9040.4366
+  // (1.8e-6 apart). The input it must not return is 69137.79.
+  CHECK_THAT(result->shape->measures().volume, WithinRel(9040.4529, 1e-5));
 }
