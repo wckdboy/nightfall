@@ -28,6 +28,10 @@ constexpr std::array kUnits{
     Unit{Dimension::kHeatFlux, "kW/m^2", 1e3, 0},
     Unit{Dimension::kFilmCoefficient, "W/m^2/K", 1, 0},
     Unit{Dimension::kConductivity, "W/m/K", 1, 0},
+    Unit{Dimension::kLength, "mm", 1, 0},
+    Unit{Dimension::kLength, "cm", 10, 0},
+    Unit{Dimension::kLength, "m", 1e3, 0},
+    Unit{Dimension::kLength, "in", 25.4, 0},
 };
 constexpr std::string_view name(Dimension d) {
   switch (d) {
@@ -43,6 +47,8 @@ constexpr std::string_view name(Dimension d) {
       return "a film coefficient (W/m^2/K)";
     case Dimension::kConductivity:
       return "a conductivity (W/m/K)";
+    case Dimension::kLength:
+      return "a length (mm, cm, m, in)";
   }
   return "a value";
 }

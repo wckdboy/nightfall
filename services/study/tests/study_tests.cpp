@@ -132,3 +132,89 @@ TEST_CASE("study errors carry pointers", "[study][run]") {
   CHECK(e.code == "unknown_id");
   CHECK(e.pointer == "/studies/0/body");
 }
+
+namespace {
+/// The cantilever example's beam as STEP text, and its study with faces picked by points.
+struct StepCase {
+  std::string step;
+  std::string spec(const std::string& root = "[0, 5, 5]") const {
+    return R"({"kind": "static_structural",
+      "material": {"youngs_modulus": "69 GPa", "poisson_ratio": 0.33},
+      "boundaries": [
+        {"type": "fixed", "faces": {"points": [)" +
+           root + R"(]}},
+        {"type": "force", "faces": {"points": [[200, 5, 5]]}, "value": ["0 N", "0 N", "-10 N"]}],
+      "mesh": {"size": "3.3 mm"},
+      "criteria": [{"quantity": "max_displacement", "below": "0.5 mm"}]})";
+  }
+};
+StepCase beam(Runner& runner) {
+  auto evaluated = runner.evaluator.evaluate(example("cantilever.nightfall"));
+  REQUIRE(evaluated);
+  const auto& body = evaluated->bodies.at("beam");
+  return {runner.kernel->export_step({body.shape}).value()};
+}
+}  // namespace
+
+TEST_CASE("a STEP part's study picks faces by points and matches beam theory", "[study][step]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  auto result = study::run_step_study(*runner.kernel, beam_case.step, beam_case.spec(), {});
+  if (!result)
+    for (const auto& e : result.error()) UNSCOPED_INFO(e.pointer << ": " << e.message);
+  REQUIRE(result);
+  const Value r(*result);
+  const double P = 10, L = 200, E = 69000, I = 10.0 * 1000 / 12;
+  CHECK_THAT(number(*r.find("quantities"), "max_displacement"),
+             WithinRel(P * L * L * L / (3 * E * I), 0.02));
+  const auto& run = (*r.find("runs")->if_array())[0];
+  const auto& applied = *run.find("applied_force")->if_array();
+  const auto& reaction = *run.find("reaction_force")->if_array();
+  for (std::size_t c = 0; c < 3; ++c)
+    CHECK_THAT(*applied[c].if_number() + *reaction[c].if_number(), WithinAbs(0, 1e-9 * P));
+  CHECK(*r.find("passed")->if_bool());
+  CHECK(r.find("provenance")->find("step_sha256"));
+}
+
+TEST_CASE("a STEP study refuses points on no face or on several", "[study][step]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  for (const auto& [point, words] : {std::pair{std::string("[0, 50, 5]"), "no face"},
+                                     std::pair{std::string("[0, 0, 5]"), "several faces"}}) {
+    auto result = study::run_step_study(*runner.kernel, beam_case.step, beam_case.spec(point), {});
+    REQUIRE_FALSE(result);
+    CAPTURE(result.error().front().message);
+    CHECK(result.error().front().pointer == "/boundaries/0/faces/points/0");
+    CHECK(result.error().front().message.find(words) != std::string::npos);
+  }
+  auto broken = study::run_step_study(*runner.kernel, "not step", beam_case.spec(), {});
+  REQUIRE_FALSE(broken);
+  CHECK(broken.error().front().pointer.empty());
+}
+
+TEST_CASE("a malformed STEP study is refused with a pointer, never crashes", "[study][step]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  const std::string material =
+      R"("kind": "static_structural", "material": {"youngs_modulus": "69 GPa", "poisson_ratio": 0.3})";
+  const std::string fixed = R"({"type": "fixed", "faces": {"points": [[0, 5, 5]]}})";
+  for (const auto& [spec, pointer] :
+       {std::pair{"{" + material + R"(, "boundaries": [{}], "mesh": {"size": "5 mm"}})",
+                  std::string("/boundaries/0")},
+        std::pair{"{" + material + R"(, "boundaries": [)" + fixed +
+                      R"(], "mesh": {"size": "5 mm"}, "criteria": {}})",
+                  std::string("/criteria")},
+        std::pair{"{" + material + R"(, "boundaries": [)" + fixed +
+                      R"(], "mesh": {"size": "5 mm"}, "criteria": [{}]})",
+                  std::string("/criteria/0")},
+        std::pair{"{" + material + R"(, "boundaries": [)" + fixed + R"(], "mesh": {}})",
+                  std::string("/mesh")},
+        std::pair{
+            "{" + material + R"(, "boundaries": [)" + fixed + R"(], "mesh": {"size": "0 mm"}})",
+            std::string("/mesh/size")}}) {
+    auto result = study::run_step_study(*runner.kernel, beam_case.step, spec, {});
+    REQUIRE_FALSE(result);
+    CAPTURE(spec, result.error().front().message);
+    CHECK(result.error().front().pointer == pointer);
+  }
+}
