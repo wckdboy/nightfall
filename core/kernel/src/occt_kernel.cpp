@@ -20,6 +20,7 @@
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -530,6 +531,76 @@ class OcctKernel final : public IKernel {
       for (int i = 1; i <= all.Extent(); ++i)
         result.push_back({detail::entity(source, all(i)), planar_frame(TopoDS::Face(all(i))),
                           cylinder_frame(TopoDS::Face(all(i)))});
+      return result;
+    });
+  }
+  std::expected<OperationResult, KernelError> shell(const ShapePtr& input,
+                                                    const std::vector<EntityPtr>& open,
+                                                    double thickness) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || source->geometry.IsNull() || open.empty() || !std::isfinite(thickness) ||
+          thickness <= tolerance_.linear)
+        fail("shell requires a solid, an open face and a thickness above linear tolerance");
+      BRepBuilderAPI_Copy copy(source->geometry, true, false);
+      if (!copy.IsDone()) fail("shell input copy failed");
+      TopTools_IndexedMapOfShape originals;
+      TopExp::MapShapes(source->geometry, TopAbs_FACE, originals);
+      TopTools_ListOfShape removed;
+      TopTools_MapOfShape selected;
+      for (const auto& face : open) {
+        const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(face);
+        if (!entity || entity->owner() != input || entity->kind() != EntityKind::kFace ||
+            !originals.Contains(entity->geometry))
+          fail("shell face is absent from its target snapshot");
+        const auto f = copy.ModifiedShape(entity->geometry);
+        if (selected.Add(f)) removed.Append(f);
+      }
+      BRepOffsetAPI_MakeThickSolid operation;
+      operation.MakeThickSolidByJoin(copy.Shape(), removed, -thickness, tolerance_.linear,
+                                     BRepOffset_Skin, false, false, GeomAbs_Arc);
+      operation.Build();
+      if (!operation.IsDone()) fail("solid shell failed");
+      auto shape = checked(operation.Shape());
+      if (!(shape->measures().volume < source->measures().volume))
+        fail("shell did not hollow the solid");
+      OperationResult result{shape, {}, {}, source->estimated_bytes() + shape->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      auto member = [&](const TopoDS_Shape& geometry) {
+        return detail::entity(shape, members(members.FindIndex(geometry)));
+      };
+      TopTools_MapOfShape generated, inherited;
+      for (const auto& before : detail::entities(source)) {
+        const auto geometry =
+            copy.ModifiedShape(static_cast<const detail::Subshape&>(*before).geometry);
+        History h{before, {}, {}, false};
+        for (const auto& after : operation.Modified(geometry))
+          if (members.Contains(after)) h.modified.push_back(member(after));
+        if (h.modified.empty() && members.Contains(geometry))
+          h.modified.push_back(member(geometry));
+        h.deleted = h.modified.empty();
+        for (const auto& after : h.modified)
+          inherited.Add(static_cast<const detail::Subshape&>(*after).geometry);
+        for (const auto& after : operation.Generated(geometry)) {
+          if ((after.ShapeType() != TopAbs_FACE && after.ShapeType() != TopAbs_EDGE) ||
+              !members.Contains(after))
+            continue;
+          h.generated.push_back(member(after));
+          if (after.ShapeType() == TopAbs_FACE && generated.Add(after))
+            result.generated.push_back({"inner", member(after), {}});
+        }
+        result.estimated_bytes +=
+            sizeof(History) + sizeof(detail::Subshape) + 64 +
+            (h.modified.size() + h.generated.size()) * (sizeof(detail::Subshape) + 64);
+        result.history.push_back(std::move(h));
+      }
+      for (int i = 1; i <= members.Extent(); ++i)
+        if (members(i).ShapeType() == TopAbs_FACE && !inherited.Contains(members(i)) &&
+            !generated.Contains(members(i)))
+          fail("shell output face has no provenance");
+      result.estimated_bytes +=
+          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
       return result;
     });
   }

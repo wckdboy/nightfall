@@ -206,6 +206,15 @@ class IKernel {
   /// Fail on unsupported geometry/history; preserve all input snapshots even on failure.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> fillet(
       const ShapePtr& target, const std::vector<EntityPtr>& edges, double radius) = 0;
+  /// RFC 0015: hollow inward to a wall `thickness` mm thick, with arc joins, removing the
+  /// target-owned `open` faces (at least one; a sealed void is not supported yet). Each open face
+  /// becomes the rim left around its opening; every input face's history lists its inner wall as
+  /// generated, and new faces carry the role "inner". Fail on a thickness that does not fit;
+  /// preserve the input. Backends without the operation report it as unsupported.
+  [[nodiscard]] virtual std::expected<OperationResult, KernelError> shell(
+      const ShapePtr& /*target*/, const std::vector<EntityPtr>& /*open*/, double /*thickness*/) {
+    return std::unexpected(KernelError{"kernel", "shells are not supported by this backend"});
+  }
   /// Query an analytic planar face's located parameter frame with outward normal. Keep its U axis;
   /// y = normal cross x restores a right-handed frame on reversed/reflected faces.
   /// Reject nonplanar, non-face, foreign or invalid handles. The query does not mutate inputs.
