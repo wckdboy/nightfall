@@ -68,7 +68,7 @@ math::Vec3 point(const Value& v) {
 std::size_t index(const Value& v, std::size_t size, const char* what) {
   const auto i = v.if_integer();
   if (!i || *i < 0 || static_cast<std::uint64_t>(*i) >= size)
-    fail("bad_request", std::string(what) + " must index the operand's edges");
+    fail("bad_request", std::string(what) + " must index the operand's samples");
   return static_cast<std::size_t>(*i);
 }
 
@@ -92,9 +92,9 @@ class Server {
     if (*op == "hello")
       return {{"protocol", static_cast<double>(kProtocol)},
               {"kernel", std::string(kernel_.identity())},
-              {"ops", Array{"boolean", "fillet", "chamfer"}}};
+              {"ops", Array{"boolean", "fillet", "chamfer", "shell"}}};
     // The operation is known before any operand is parsed or imported.
-    if (*op != "boolean" && *op != "fillet" && *op != "chamfer")
+    if (*op != "boolean" && *op != "fillet" && *op != "chamfer" && *op != "shell")
       fail("unsupported", "unknown op: " + *op);
     tolerance_ = kDefaultSampleTolerance;
     if (const auto* t = request.find("sample_tolerance")) {
@@ -120,6 +120,19 @@ class Server {
       std::vector<kernel::ShapePtr> tools;
       for (std::size_t i = 1; i < operands.size(); ++i) tools.push_back(operands[i].shape);
       result = value_or_fail(kernel_.boolean_operation(operands[0].shape, tools, *boolean),
+                             "operation_failed");
+    } else if (*op == "shell") {
+      if (operands.size() != 1) fail("bad_request", "shell takes one operand");
+      std::vector<kernel::EntityPtr> open;
+      for (const auto& v : array(member(request, "faces"), "faces")) {
+        const auto i = index(v, std::numeric_limits<std::size_t>::max(), "faces");
+        const auto& owners = operands[0].face_owners;
+        const auto f = std::ranges::find_if(
+            owners, [&](const auto& o) { return std::ranges::find(o, i) != o.end(); });
+        if (f == owners.end()) fail("bad_request", "faces must index the operand's sampled faces");
+        open.push_back(operands[0].faces[static_cast<std::size_t>(f - owners.begin())]);
+      }
+      result = value_or_fail(kernel_.shell(operands[0].shape, open, number(request, "thickness")),
                              "operation_failed");
     } else if (*op == "fillet" || *op == "chamfer") {
       if (operands.size() != 1) fail("bad_request", *op + " takes one operand");
@@ -266,7 +279,7 @@ class Server {
     Array faces;
     for (const auto& info : value_or_fail(kernel_.faces(result.shape), "operation_failed")) {
       const auto& face = info.entity;
-      Array from;
+      Array from, offset;
       std::size_t inputs = 0;        // kernel input faces this face was made from
       std::size_t client_faces = 0;  // the client's faces among them
       const kernel::History* only = nullptr;
@@ -288,6 +301,13 @@ class Server {
                 from.push_back(
                     Object{{"operand", static_cast<double>(*s)}, {"face", static_cast<double>(i)}});
               }
+        } else if (h.before->kind() == kernel::EntityKind::kFace && has(h.generated)) {
+          // A shell's inner wall: an offset of the face it lines.
+          for (std::size_t f = 0; f < operand.faces.size(); ++f)
+            if (operand.faces[f]->same_as(*h.before))
+              for (auto i : operand.face_owners[f])
+                offset.push_back(
+                    Object{{"operand", static_cast<double>(*s)}, {"face", static_cast<double>(i)}});
         } else if (h.before->kind() == kernel::EntityKind::kEdge && has(h.generated)) {
           for (auto i : edge_owners(operand, h.before))
             from.push_back(
@@ -306,6 +326,7 @@ class Server {
         change = std::abs(here - before) <= 1e-9 * std::max(1.0, before) ? "kept" : "modified";
       }
       Object entry{{"change", change}, {"from", std::move(from)}, {"area", here}};
+      if (!offset.empty()) entry.push_back({"offset", std::move(offset)});
       for (const auto& g : result.generated)
         if (g.entity->same_as(*face)) entry.push_back({"role", g.role});
       faces.push_back(std::move(entry));
