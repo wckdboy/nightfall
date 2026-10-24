@@ -147,11 +147,37 @@ Prepared prepare(const Value& study, const FaceResolver& resolve, const std::str
 }
 
 /// Quantities of one run, by name.
-std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mesh, Object& out) {
+/// The surface of `mesh` with nodal values for display (#321): surface nodes renumbered from 0,
+/// the boundary triangles, and per node the von Mises stress and the displacement.
+Object surface_field(const PlainMesh& mesh, const StructuralResult& r) {
+  std::map<int, double> number;
+  Array points, triangles, stress, displacement;
+  for (const int node : mesh.triangles) {
+    auto [at, fresh] = number.try_emplace(node, static_cast<double>(number.size()));
+    if (fresh) {
+      const auto n = static_cast<std::size_t>(node);
+      for (std::size_t c = 0; c < 3; ++c) {
+        points.push_back(mesh.points[3 * n + c]);
+        displacement.push_back(r.nodal_displacement.at(3 * n + c));
+      }
+      stress.push_back(r.nodal_von_mises.at(n));
+    }
+    triangles.push_back(at->second);
+  }
+  return {{"kind", "static_structural"},
+          {"units", Object{{"length", "mm"}, {"stress", "MPa"}, {"displacement", "mm"}}},
+          {"points", std::move(points)},
+          {"triangles", std::move(triangles)},
+          {"von_mises", std::move(stress)},
+          {"displacement", std::move(displacement)}};
+}
+std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mesh, Object& out,
+                                         Object* field) {
   std::map<std::string, double> q;
   if (p.kind == "static_structural") {
     auto r = solve_structural(mesh, p.structural);
     if (!r) fail("", r.error(), "solver");
+    if (field) *field = surface_field(mesh, *r);
     q = {{"max_displacement", r->max_displacement}, {"max_von_mises", r->max_von_mises}};
     out.push_back({"applied_force", vec(r->applied)});
     out.push_back({"reaction_force", vec(r->reaction)});
@@ -182,15 +208,17 @@ const std::map<std::string, std::pair<const char*, Dimension>> kQuantities{
 /// Meshes `shape` at each size, solves the prepared study, checks its criteria and reports
 /// quantities, runs and the observed convergence order.
 Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePtr& shape,
-             const std::vector<double>& sizes, const LengthReader& length,
-             const std::string& base) {
+             const std::vector<double>& sizes, const LengthReader& length, const std::string& base,
+             const std::string& field_path = {}) {
   const auto path =
       std::filesystem::temp_directory_path() / ("nf-study-" + std::to_string(getpid()) + ".brep");
   if (auto written = write_brep(shape, path.string()); !written)
     fail(base + "/body", written.error().message);
   Array runs;
   std::vector<std::map<std::string, double>> values;
-  for (const double h : sizes) {
+  Object field;
+  for (std::size_t i = 0; i < sizes.size(); ++i) {
+    const double h = sizes[i];
     PlainMesh mesh;
     try {
       mesh = mesh_brep(path.string(), h);
@@ -205,7 +233,8 @@ Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePt
                 ir::sha256(std::string_view(reinterpret_cast<const char*>(mesh.points.data()),
                                             mesh.points.size() * sizeof(double)))
                     .hex()}};
-    const auto q = quantities(prepared, mesh, run);
+    const bool last = i + 1 == sizes.size();
+    const auto q = quantities(prepared, mesh, run, last && !field_path.empty() ? &field : nullptr);
     Object listed;
     for (const auto& [name, v] : q) listed.push_back({name, v});
     run.insert(run.begin() + 1, {"quantities", std::move(listed)});
@@ -213,6 +242,12 @@ Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePt
     runs.push_back(std::move(run));
   }
   std::filesystem::remove(path);
+  if (!field_path.empty()) {
+    if (field.empty()) fail(base + "/kind", "only a static_structural study has a field to write");
+    std::ofstream out(field_path, std::ios::binary);
+    out << ir::json::write(Value(std::move(field)));
+    if (!out) fail("", "cannot write the field to " + field_path, "io");
+  }
   const auto& final = values.back();
   Array criteria;
   bool passed = true;
@@ -313,8 +348,8 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
       return *mm;
     };
     const double size = length(*study.find("mesh")->find("size"), base + "/mesh/size");
-    auto result =
-        solve(study, prepared, body.shape, sizes(options, size, base + "/mesh/size"), length, base);
+    auto result = solve(study, prepared, body.shape, sizes(options, size, base + "/mesh/size"),
+                        length, base, options.field);
     result.insert(result.begin(), {"body", body_id});
     result.insert(result.begin(), {"study", id});
     result.push_back(
@@ -385,8 +420,9 @@ std::expected<Object, ir::Errors> run_step_study(kernel::IKernel& kernel, const 
       return value(v, Dimension::kLength, p);
     };
     const auto& mesh = required(*study.find("mesh"), "size", "/mesh");
-    auto result = solve(study, prepared, shape,
-                        sizes(options, length(mesh, "/mesh/size"), "/mesh/size"), length, "");
+    auto result =
+        solve(study, prepared, shape, sizes(options, length(mesh, "/mesh/size"), "/mesh/size"),
+              length, "", options.field);
     result.push_back({"provenance", Object{{"step_sha256", ir::sha256(step).hex()},
                                            {"mesher", mesher_identity()},
                                            {"solver", solver_identity()}}});
