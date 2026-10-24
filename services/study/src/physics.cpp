@@ -197,9 +197,15 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
     result.reaction[static_cast<std::size_t>(
         space.GetOrdering() == mfem::Ordering::byNODES ? vdof / ndofs : vdof % 3)] += r(vdof);
   }
-  // Von Mises stress at each element's quadrature points and vertices.
+  // Von Mises stress at each element's quadrature points and vertices; at the vertices it is
+  // also averaged over the elements that meet there, for the displayed field (#321).
+  const int nv = mesh->GetNV();
+  result.nodal_von_mises.assign(static_cast<std::size_t>(nv), 0.0);
+  std::vector<int> meeting(static_cast<std::size_t>(nv), 0);
+  mfem::Array<int> element_vertices;
   mfem::DenseMatrix grad(3);
   for (int e = 0; e < mesh->GetNE(); ++e) {
+    mesh->GetElementVertices(e, element_vertices);
     auto* T = space.GetElementTransformation(e);
     const auto& rule = mfem::IntRules.Get(mesh->GetElementGeometry(e), 2 * input.order);
     std::vector<mfem::IntegrationPoint> points(static_cast<std::size_t>(rule.GetNPoints()));
@@ -207,7 +213,8 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
       points[static_cast<std::size_t>(q)] = rule.IntPoint(q);
     const auto* vertices = mfem::Geometries.GetVertices(mesh->GetElementGeometry(e));
     for (int v = 0; v < vertices->GetNPoints(); ++v) points.push_back(vertices->IntPoint(v));
-    for (const auto& ip : points) {
+    for (std::size_t q = 0; q < points.size(); ++q) {
+      const auto& ip = points[q];
       T->SetIntPoint(&ip);
       u.GetVectorGradient(*T, grad);
       const double trace = grad(0, 0) + grad(1, 1) + grad(2, 2);
@@ -221,7 +228,23 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
                            std::pow(s[2][2] - s[0][0], 2)) +
                     3 * (s[0][1] * s[0][1] + s[1][2] * s[1][2] + s[0][2] * s[0][2]));
       result.max_von_mises = std::max(result.max_von_mises, vm);
+      const auto corner = static_cast<int>(q) - rule.GetNPoints();
+      if (corner >= 0 && corner < element_vertices.Size()) {
+        const auto node = static_cast<std::size_t>(element_vertices[corner]);
+        result.nodal_von_mises[node] += vm;
+        ++meeting[node];
+      }
     }
+  }
+  for (std::size_t n = 0; n < meeting.size(); ++n)
+    if (meeting[n] > 0) result.nodal_von_mises[n] /= meeting[n];
+  result.nodal_displacement.assign(3 * static_cast<std::size_t>(nv), 0.0);
+  for (int c = 0; c < 3; ++c) {
+    mfem::Vector values;
+    u.GetNodalValues(values, c + 1);
+    for (int n = 0; n < nv && n < values.Size(); ++n)
+      result.nodal_displacement[3 * static_cast<std::size_t>(n) + static_cast<std::size_t>(c)] =
+          values(n);
   }
   return result;
 }
