@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// `nf study run <document> <study> [--size L] [--refine a,b,c]`: runs one study and prints its
-// result as JSON. `nf study solve <part.step> <spec.json> [...]` runs a study object on a STEP
-// part, its faces picked by points (#317). Exit 0 when it ran and every criterion passed, 3 when a
+// `nf study run <document> <study> [--size L] [--refine a,b,c] [--field FILE]`: runs one study
+// and prints its result as JSON. `nf study solve <part.step> <spec.json> [...]` runs a study
+// object on a STEP part, its faces picked by points (#317). --field writes the final run's
+// surface field for display (#321). Exit 0 when it ran and every criterion passed, 3 when a
 // criterion failed, 1 on an error (printed as {"errors": [...]}), 2 on usage.
 #include <cmath>
 #include <cstdio>
@@ -34,8 +35,8 @@ std::optional<double> number(std::string_view s) {
 int usage(const char* message) {
   std::fprintf(stderr,
                "nf study: %s\nusage: nf study run <document> <study> [--size mm] "
-               "[--refine mm,mm,mm]\n       nf study solve <part.step> <spec.json> [--size mm] "
-               "[--refine mm,mm,mm]\n",
+               "[--refine mm,mm,mm] [--field FILE]\n       nf study solve <part.step> <spec.json> "
+               "[--size mm] [--refine mm,mm,mm] [--field FILE]\n",
                message);
   return 2;
 }
@@ -61,6 +62,9 @@ int run_study_command(int argc, char** argv) {
         options.refine.push_back(*v);
         start = comma + 1;
       }
+    } else if (option == "--field") {
+      if (text.empty()) return usage("--field needs a file");
+      options.field = std::string(text);
     } else {
       return usage("unknown option");
     }
