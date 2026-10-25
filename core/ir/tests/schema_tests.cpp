@@ -9,13 +9,14 @@
 #include <string>
 
 #include "nf/ir/document.hpp"
+#include "nf/ir/migration.hpp"
 #include "schema.hpp"
 
 using namespace nf::ir;
 
 TEST_CASE("IR schema: work exhaustion fails closed through alternatives and negation",
           "[ir][schema]") {
-  const auto doc = json::parse(R"({"format":"nightfall.part","version":1,
+  const auto doc = json::parse(R"({"format":"nightfall.part","version":2,
     "units":{"length":"mm","angle":"deg"},"meta":{},"params":[],"references":[],
     "features":[{"id":"f","type":"hole","inputs":{"face":{"created_by":"base"},
       "positions":[{"sketch":"s","entity":"p"}],"diameter":5,"depth":10,
@@ -40,7 +41,9 @@ TEST_CASE("IR schema: native rules agree with the published schema corpus", "[ir
   REQUIRE(corpus->if_array());
   for (const auto& test : *corpus->if_array()) {
     INFO(*test.find("name")->if_string());
-    const auto result = detail::check_schema(*test.find("document"));
+    // The v1 corpus is checked as the current version reads it: migrated first (RFC 0013).
+    const auto document = migrate(*test.find("document"));
+    const auto result = detail::check_schema(document);
     const bool valid = *test.find("schema_valid")->if_bool();
     CHECK(result.errors.empty() == valid);
     if (!valid && test.find("error")) {
@@ -61,13 +64,13 @@ TEST_CASE("IR schema: native rules agree with the published schema corpus", "[ir
     if (loaded) {
       const auto written = write_document(*loaded);
       REQUIRE(written.has_value());
-      CHECK(json::canonical(*json::parse(*written)) == json::canonical(*test.find("document")));
+      CHECK(json::canonical(*json::parse(*written)) == json::canonical(document));
     }
   }
 }
 
 TEST_CASE("IR schema: links are retained only from matching alternatives", "[ir][schema]") {
-  const auto doc = json::parse(R"({"format":"nightfall.part","version":1,
+  const auto doc = json::parse(R"({"format":"nightfall.part","version":2,
     "units":{"length":"mm","angle":"deg"},"meta":{},"params":[],"references":[],
     "features":[{"id":"f","type":"fillet","inputs":{"edges":{
       "any":[{"created_by":"base"},{"faces_of":"plate"}],
