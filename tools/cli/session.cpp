@@ -380,6 +380,14 @@ std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
     auto mesh = kernel_.tessellate(shape, options);
     if (!mesh)
       return std::unexpected(ir::Errors{{mesh.error().code, mesh.error().message, "", {}}});
+    // The kernel bounds each body's mesh; the export bounds their sum before holding it.
+    constexpr std::size_t kMaxTriangles = 4'000'000;
+    if (result.triangles + mesh->indices.size() / 3 > kMaxTriangles)
+      return std::unexpected(ir::Errors{
+          {"too_large",
+           "the export exceeds 4 million triangles; name fewer bodies or coarsen the deflection",
+           "",
+           {}}});
     result.obj += "o " + id + "\n";
     for (const auto& v : mesh->vertices)
       result.obj += "v " + ir::json::format_number(v.position.x) + ' ' +
