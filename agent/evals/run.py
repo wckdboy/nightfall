@@ -14,6 +14,7 @@ and the MCP contract without a model); `claude` runs Claude Code headless with t
 its only tool. A report JSON and a summary are written to --out.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -233,6 +234,10 @@ def run_claude(nf, task, start_path, save_path, allow, model, max_turns, timeout
         "result": str(payload.get("result", ""))[:400]}
 
 
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--nf", required=True, help="path to the nf CLI (occt build)")
@@ -254,11 +259,25 @@ def main():
     kinds = [k for k in args.tasks.split(",") if k]
     only = {n for n in args.only.split(",") if n}
     parts = sorted(p for p in Path(args.parts).glob("*.nightfall") if not only or p.stem in only)
+    # An empty selection must not report a vacuous pass.
+    if not kinds or set(kinds) - set(TASKS):
+        parser.error(f"--tasks must name some of {', '.join(TASKS)}")
+    if not parts or only - {p.stem for p in parts}:
+        parser.error(f"--parts/--only select no part named {sorted(only) or '(any)'}")
+    inputs = {"runner": args.runner, "model": args.model or None, "nf_sha256": digest(nf),
+              "rel_tolerance": REL_TOLERANCE}
+    part_digests = {p.stem: digest(p) for p in parts}
     results = []
     kept = {}
     if args.resume and (out / "report.json").exists():
-        for record in json.loads((out / "report.json").read_text())["tasks"]:
-            if record.get("passed") is not None:
+        previous = json.loads((out / "report.json").read_text())
+        if previous.get("inputs") != inputs:
+            parser.error("--resume needs the same runner, model, nf binary and tolerance as "
+                         f"the report in {out}: {previous.get('inputs')} != {inputs}")
+        for record in previous["tasks"]:
+            # A record is reused only for the same reference part it was scored against.
+            if (record.get("passed") is not None and
+                    record.get("part_sha256") == part_digests.get(record["part"])):
                 kept[(record["part"], record["task"])] = record
     with tempfile.TemporaryDirectory(prefix="nightfall-evals-") as golden_work:
         for part_path in parts:
@@ -277,7 +296,8 @@ def main():
                 start_path.write_text(json.dumps(task["start"], indent=2) + "\n")
                 save_path = work / "result.nightfall"
                 started = time.monotonic()
-                record = {"part": task["part"], "task": task["task"], "prompt": task["prompt"]}
+                record = {"part": task["part"], "task": task["task"],
+                          "part_sha256": part_digests[task["part"]], "prompt": task["prompt"]}
                 try:
                     if args.runner == "reference":
                         record["run"] = run_reference(nf, task, start_path, save_path, work,
@@ -316,10 +336,12 @@ def main():
                       "total": sum(1 for r in results if r["task"] == kind)} for kind in kinds}
     report = {"generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "runner": args.runner, "model": args.model or None, "nf": str(nf),
-              "rel_tolerance": REL_TOLERANCE, "summary": summary, "tasks": results}
+              "rel_tolerance": REL_TOLERANCE, "inputs": inputs, "summary": summary,
+              "tasks": results}
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(summary))
-    return 0 if all(s["passed"] == s["total"] for s in summary.values()) else 1
+    ran = results and all(s["total"] > 0 for s in summary.values())
+    return 0 if ran and all(s["passed"] == s["total"] for s in summary.values()) else 1
 
 
 if __name__ == "__main__":
