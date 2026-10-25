@@ -3,6 +3,7 @@
 #include "session.hpp"
 
 #include <unistd.h>
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -228,18 +229,19 @@ std::expected<Session::Build, ir::Errors> Session::set_parameters(
 
 std::expected<Session::Build, ir::Errors> Session::undo() {
   if (undo_.empty()) return std::unexpected(ir::Errors{{"history", "nothing to undo", "", {}}});
-  auto source = std::move(undo_.back());
-  undo_.pop_back();
+  // The entry leaves the history only when the restored state builds.
   std::vector<std::string> none;
-  return commit(std::move(source), false, none, redo_);
+  auto result = commit(undo_.back(), false, none, redo_);
+  if (result) undo_.pop_back();
+  return result;
 }
 
 std::expected<Session::Build, ir::Errors> Session::redo() {
   if (redo_.empty()) return std::unexpected(ir::Errors{{"history", "nothing to redo", "", {}}});
-  auto source = std::move(redo_.back());
-  redo_.pop_back();
   std::vector<std::string> none;
-  return commit(std::move(source), false, none, undo_);
+  auto result = commit(redo_.back(), false, none, undo_);
+  if (result) redo_.pop_back();
+  return result;
 }
 
 Object Session::inspect() const {
@@ -312,7 +314,10 @@ std::expected<Session::StepExport, ir::Errors> Session::export_step(
     for (const auto& [id, body] : state_.evaluation.bodies)
       if (live(body)) shapes.push_back(body.shape);
   } else {
+    std::vector<std::string> seen;
     for (const auto& id : bodies) {
+      if (std::ranges::find(seen, id) != seen.end()) continue;  // each body once
+      seen.push_back(id);
       const auto found = state_.evaluation.bodies.find(id);
       if (found == state_.evaluation.bodies.end() || !live(found->second))
         return std::unexpected(ir::Errors{{"unknown_id", "no live body: " + id, "", {}}});

@@ -282,7 +282,7 @@ TEST_CASE("mcp replaces documents, opens and exports within allowed folders only
        call(7, "open_part", R"({"path":".hidden.nightfall"})"),
        call(8, "open_part", R"({"path":"../plate.nightfall"})"),
        call(9, "replace_part", R"({"document":"{not json"})"),
-       call(10, "export_step", R"({"path":"plate.step","bodies":["plate"]})"),
+       call(10, "export_step", R"({"path":"plate.step","bodies":["plate","plate"]})"),
        call(11, "export_step", R"({"path":"plate.step","bodies":["ghost"]})"),
        call(12, "replace_part", "{\"document\":" + escaped(source(bevelled)) + "}"),
        call(13, "export_step", R"({"path":"bevel.step"})"),

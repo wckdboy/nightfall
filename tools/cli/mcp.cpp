@@ -282,6 +282,10 @@ struct Server {
         return tool_result(Object{{"errors", error_entries(errors)}}, true);
       } catch (const fs::filesystem_error& error) {
         return tool_result(Object{{"errors", error_entries({{"io", error.what(), "", {}}})}}, true);
+      } catch (const std::exception& error) {
+        // Any other failure ends this call, never the session and its unsaved document.
+        return tool_result(Object{{"errors", error_entries({{"internal", error.what(), "", {}}})}},
+                           true);
       }
     }
     if (method.starts_with("notifications/")) return std::nullopt;
@@ -365,6 +369,14 @@ int run_mcp(int argc, char** argv) {
       std::cerr << "cannot create the scratch folder\n";
       return 1;
     }
+    // Removed on every exit, including a startup document that fails to load.
+    struct Remove {
+      std::string path;
+      ~Remove() {
+        std::error_code ignored;
+        fs::remove_all(path, ignored);
+      }
+    } const remove{scratch};
     if (options->input) {
       server.document = fs::weakly_canonical(fs::absolute(*options->input));
       server.roots.add(server.document->parent_path());
@@ -398,8 +410,6 @@ int run_mcp(int argc, char** argv) {
       }
       if (response) std::cout << ir::json::canonical(*response) << '\n' << std::flush;
     }
-    std::error_code ignored;
-    fs::remove_all(scratch, ignored);
     return 0;
   } catch (const ir::Errors& errors) {
     std::cerr << ir::json::canonical(Object{{"errors", error_entries(errors)}}) << '\n';
