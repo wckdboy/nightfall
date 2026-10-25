@@ -218,12 +218,12 @@ def main():
                           text=True, check=True).stdout.strip()
     if head != PIN:
         sys.exit(f"upstream is at {head}, expected {PIN}")
-    # Files are read from the worktree, so it must be exactly PIN: no tracked edits.
+    # Files are read from the worktree, so it must be exactly PIN: no edits, no extra files.
     dirty = subprocess.run(["git", "-C", str(upstream), "status", "--porcelain",
-                            "--untracked-files=no"], capture_output=True, text=True,
-                           check=True).stdout.strip()
+                            "--untracked-files=all", "--ignored=no"], capture_output=True,
+                           text=True, check=True).stdout.strip()
     if dirty:
-        sys.exit(f"upstream has local changes; vendor from a clean checkout of {PIN}")
+        sys.exit(f"upstream has local changes or files; vendor from a clean checkout of {PIN}")
     files = generate(upstream)
     if "--check" in sys.argv:
         bad = [p for p, t in files.items() if not (HERE / p).exists() or (HERE / p).read_text() != t]
