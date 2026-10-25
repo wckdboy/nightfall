@@ -5,7 +5,7 @@
 if(NF_WITH_OCCT)
   add_library(nf_evaluator STATIC src/model_inputs.cpp src/evaluator.cpp)
   target_include_directories(nf_evaluator PUBLIC src)
-  target_link_libraries(nf_evaluator PUBLIC nf::ir nf::kernel PRIVATE nf::sketch nf::warnings)
+  target_link_libraries(nf_evaluator PUBLIC nf::ir nf::kernel PRIVATE nf::ffi nf::warnings)
   add_library(nf_kernel_bridge STATIC bridge/kernel_bridge.cpp)
   target_include_directories(nf_kernel_bridge PUBLIC bridge)
   target_link_libraries(nf_kernel_bridge PRIVATE nf_evaluator nf::warnings)
