@@ -263,6 +263,14 @@ TEST_CASE("IR document: in-memory nesting is checked before serialization", "[ir
   const auto written = write_document(doc);
   REQUIRE_FALSE(written.has_value());
   CHECK(written.error()[0].pointer == "/features/0/inputs");
+  // A study is opaque too: its extension nesting is bounded before it reaches the writer.
+  auto studied = read_ok();
+  json::Value deep;
+  for (int i = 0; i < json::kMaxDepth; ++i) deep = json::Array{std::move(deep)};
+  studied.studies.push_back(json::Object{{"id", "s"}, {"x-deep", std::move(deep)}});
+  const auto study_written = write_document(studied);
+  REQUIRE_FALSE(study_written.has_value());
+  CHECK(study_written.error()[0].pointer == "/studies/0");
 }
 
 TEST_CASE("IR document: every envelope field and collection item is checked", "[ir][document]") {

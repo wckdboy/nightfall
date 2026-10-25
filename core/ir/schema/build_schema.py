@@ -192,7 +192,9 @@ v2["study_boundary"] = obj({"id": ref("id"),
                             "film": ref("study_value"), "ambient": ref("study_value")},
                            ["id", "type", "faces"])
 v2["study_material"] = obj({"youngs_modulus": ref("study_value"),
-                            "poisson_ratio": {"type": "number", "minimum": -1, "maximum": 0.5},
+                            # -1 < nu < 0.5 (the native checker has no exclusive bounds)
+                            "poisson_ratio": {"type": "number", "minimum": -1, "maximum": 0.5,
+                                              "not": {"enum": [-1, 0.5]}},
                             "conductivity": ref("study_value")}, [])
 v2["study_criterion"] = obj({"quantity": {"enum": ["max_displacement", "max_von_mises", "max_temperature",
                                                    "min_temperature"]},

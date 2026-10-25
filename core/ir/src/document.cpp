@@ -527,6 +527,9 @@ std::expected<std::string, Errors> write_document(const Document& document) {
     if (j.value) check(*j.value, at(p, "value"), 3);
     if (j.limits) check(*j.limits, at(p, "limits"), 3);
   }
+  // Studies are kept as opaque values: root(0), studies(1), study(2).
+  for (std::size_t k = 0; k < document.studies.size(); ++k)
+    check(document.studies[k], at("/studies", std::to_string(k)), 2);
   for (const auto& m : document.ui) check(m.value, at("/ui", m.key), 2);
   if (!r.errors.empty()) return std::unexpected(std::move(r.errors));
   auto text = json::write(encode(document));

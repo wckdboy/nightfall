@@ -2807,7 +2807,13 @@
         "poisson_ratio": {
           "type": "number",
           "minimum": -1,
-          "maximum": 0.5
+          "maximum": 0.5,
+          "not": {
+            "enum": [
+              -1,
+              0.5
+            ]
+          }
         },
         "conductivity": {
           "$ref": "#/$defs/study_value"
