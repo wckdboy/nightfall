@@ -273,12 +273,8 @@ Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePt
     values.push_back(q);
     runs.push_back(std::move(run));
   }
-  if (!field_path.empty()) {
-    if (field.empty()) fail(base + "/kind", "only a static_structural study has a field to write");
-    std::ofstream out(field_path, std::ios::binary);
-    out << ir::json::write(Value(std::move(field)));
-    if (!out) fail("", "cannot write the field to " + field_path, "io");
-  }
+  if (!field_path.empty() && field.empty())
+    fail(base + "/kind", "only a static_structural study has a field to write");
   const auto& final = values.back();
   Array criteria;
   bool passed = true;
@@ -313,6 +309,13 @@ Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePt
       passed = passed && ok;
       criteria.push_back(std::move(entry));
     }
+  }
+  // The field is written last, once the whole study is valid: a failed one leaves no field and
+  // never replaces an existing file.
+  if (!field_path.empty()) {
+    std::ofstream out(field_path, std::ios::binary);
+    out << ir::json::write(Value(std::move(field)));
+    if (!out) fail("", "cannot write the field to " + field_path, "io");
   }
   Object result{{"kind", prepared.kind},
                 {"units", Object{{"length", "mm"},

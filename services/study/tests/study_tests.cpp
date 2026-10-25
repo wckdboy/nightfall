@@ -185,6 +185,25 @@ TEST_CASE("a STEP part's study picks faces by points and matches beam theory", "
   CHECK(r.find("provenance")->find("step_sha256"));
 }
 
+TEST_CASE("a STEP study with a bad criterion leaves an existing field alone",
+          "[study][step][field]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  const auto path = std::filesystem::temp_directory_path() /
+                    ("nf-field-kept-" + std::to_string(getpid()) + ".json");
+  std::ofstream(path) << "previous";
+  study::RunOptions options;
+  options.field = path.string();
+  auto spec = beam_case.spec();
+  spec.replace(spec.find(R"("criteria": [)"), 13, R"("criteria": {"x": )");
+  spec.replace(spec.rfind("]}"), 2, "}}");
+  REQUIRE_FALSE(study::run_step_study(*runner.kernel, beam_case.step, spec, options));
+  std::ifstream in(path);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::filesystem::remove(path);
+  CHECK(text == "previous");
+}
+
 TEST_CASE("a STEP study writes its surface field for display", "[study][step][field]") {
   Runner runner;
   const auto beam_case = beam(runner);
