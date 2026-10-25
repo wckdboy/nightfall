@@ -3,7 +3,7 @@
 - **Status:** Active since 2026-10-22, when the maintainer accepted
   [RFC 0011](../rfcs/0011-ai-design-loop.md) and waived the review period. Phase 2's open
   gate items and failures stay recorded in [phase-2.md](phase-2.md) and are not transferred.
-- **Milestone:** `Phase 3` on GitHub (to be created on acceptance)
+- **Milestone:** [`Phase 3`](https://github.com/wckdboy/nightfall/milestone/4) on GitHub
 
 ## Gate
 
