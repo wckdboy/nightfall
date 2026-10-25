@@ -360,6 +360,8 @@ std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
       if (live(body)) shapes.emplace_back(id, body.shape);
   } else {
     for (const auto& id : bodies) {
+      if (std::ranges::any_of(shapes, [&](const auto& s) { return s.first == id; }))
+        continue;  // each body once
       const auto found = state_.evaluation.bodies.find(id);
       if (found == state_.evaluation.bodies.end() || !live(found->second))
         return std::unexpected(ir::Errors{{"unknown_id", "no live body: " + id, "", {}}});
@@ -371,6 +373,7 @@ std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
   if (!state_.build.ok)
     return std::unexpected(ir::Errors{{"failed", "a feature failed; export refused", "", {}}});
   MeshExport result;
+  result.bodies = shapes.size();
   result.obj = "# Nightfall derived mesh (mm); geometry is the part document, not this file\n";
   std::size_t offset = 1;  // OBJ indices are global and 1-based
   for (const auto& [id, shape] : shapes) {

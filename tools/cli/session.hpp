@@ -76,7 +76,7 @@ class Session {
   /// data for viewing and downstream tools, never persisted geometry (RFC 0005).
   struct MeshExport {
     std::string obj;
-    std::size_t vertices = 0, triangles = 0;
+    std::size_t bodies = 0, vertices = 0, triangles = 0;
   };
   [[nodiscard]] std::expected<MeshExport, ir::Errors> export_obj(
       const std::vector<std::string>& bodies, kernel::MeshingOptions options) const;

@@ -304,7 +304,7 @@ struct Server {
       auto mesh = session.export_obj(bodies, options);
       if (!mesh) return tool_result(Object{{"errors", error_entries(mesh.error())}}, true);
       return write_file(*string_arg(args, "path", true), mesh->obj,
-                        {{"bodies", static_cast<double>(bodies.size())},
+                        {{"bodies", static_cast<double>(mesh->bodies)},
                          {"vertices", static_cast<double>(mesh->vertices)},
                          {"triangles", static_cast<double>(mesh->triangles)}});
     }

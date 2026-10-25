@@ -502,6 +502,7 @@ TEST_CASE("mcp export_mesh writes a closed outward OBJ whose volume matches the 
   REQUIRE(process.replies.size() == 6);
   const auto& exported = content(process.replies[1]);
   CHECK(*exported.find("path")->if_string() == temp.path("plate.obj").string());
+  CHECK(number(exported, "bodies") == 1);  // every live body when none are named
   // Parse the OBJ: positions, then triangles; signed volume by the divergence theorem.
   std::vector<math::Vec3> positions;
   std::size_t triangles = 0;
