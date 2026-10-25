@@ -504,6 +504,11 @@ std::optional<Value> solve_constraints(const Value& inputs) {
     if (const auto* value = constraint.find("value")) c.value = number(*value);
     flat_constraints.push_back(c);
   }
+  // The solver's matrices are dense and its retries share no budget: past this size a sketch
+  // keeps verification only, as before the solver (RFC 0012), and stays interactive.
+  constexpr std::size_t kMaxSolvedEntities = 400, kMaxSolvedConstraints = 800;
+  if (flat.size() > kMaxSolvedEntities || flat_constraints.size() > kMaxSolvedConstraints)
+    return {};
   std::vector<nf_sketch_entity> solved(flat.size());
   std::vector<std::uint8_t> under(flat.size()), failing(flat_constraints.size()),
       redundant(flat_constraints.size());

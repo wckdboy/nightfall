@@ -54,6 +54,8 @@ struct BodyPattern {
 /// authored violation's pointer and residual and names the cause. Sketches whose constraints
 /// reference other entity kinds are checked only. Unsupported operands fail explicitly.
 /// Work limits: 4096 sketch curves/points combined, spline poles, constraints and profile spans.
+/// The constraint solver runs on up to 400 solvable entities and 800 constraints; larger
+/// sketches are verified only.
 /// Revolve/rotation/pattern axes resolve named lines from the supplied evaluated axis sketch; map
 /// start and start-to-end direction through its plane. The evaluator may supply an already
 /// resolved, directed cylinder axis for selector forms; no geometry queries occur here.

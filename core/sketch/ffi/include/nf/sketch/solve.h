@@ -44,9 +44,12 @@ enum {
   NF_SKETCH_RADIUS
 };
 
-/* Results of nf_sketch_solve. Input errors set *error_index: the entity for INVALID_VALUE
- * and GEOMETRY (SIZE_MAX for a constraint value), the constraint for UNKNOWN_ENTITY,
- * UNSUPPORTED and INVALID_VALUE of a constraint value. */
+/* Results of nf_sketch_solve. Input errors set *error_index:
+ * - INVALID_ARGUMENT: the entity of an unknown entity kind; the constraint of an unknown
+ *   constraint kind, role or ref_count; SIZE_MAX for a null array or a size mismatch.
+ * - INVALID_VALUE: the entity (SIZE_MAX for a constraint value).
+ * - UNKNOWN_ENTITY and UNSUPPORTED: the constraint.
+ * - GEOMETRY: SIZE_MAX (the solver names no entity). */
 enum {
   NF_SKETCH_OK = 0,
   NF_SKETCH_INVALID_ARGUMENT = 1, /* null array with a nonzero count, unknown kind or role */
