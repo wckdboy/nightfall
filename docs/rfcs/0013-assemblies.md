@@ -44,6 +44,7 @@ same frames later carry loads and supports into studies.
   "format": "nightfall.part",
   "version": 2,
   "params": [ { "name": "link_len", "value": "120 mm" }, { "name": "elbow", "value": "35 deg" } ],
+  "references": [ { "id": "motor", "kind": "part", "path": "motor.nightfall", "sha256": "…" } ],
   "features": [ … the root component's features, exactly as in v1 … ],
   "components": [
     { "id": "link", "features": [ … ] },
@@ -170,8 +171,10 @@ Pointers into `/joints/…`, and like feature failures they do not stop independ
   mass and inertia from mass properties, and joints mapped to `revolute`, `prismatic`,
   `fixed`; `cylindrical`, `pin_slot`, `planar` and `ball` become short chains of massless
   links. URDF is a tree: a closed loop exports its spanning tree, and the loop-closing
-  joints it cuts are named in the reply. Units are converted to metres and kilograms. Effort and velocity limits are
-  required by URDF; they come from optional joint fields, or a default with a warning.
+  joints it cuts are named in the reply. Units are converted to metres and kilograms. URDF
+  requires effort and velocity limits; v2 has no joint fields for them, so the export
+  writes defaults (10 N m and π rad/s rotary, 100 N and 0.1 m/s linear) with a warning per
+  joint.
 
 ### Agent tools
 
@@ -204,7 +207,8 @@ Version 1 → 2 is a pure migration that changes `version` only: every v1 docume
 v2 document with no components, occurrences or joints, and evaluates identically, with the
 same feature and body hashes. v1 readers refuse v2 files as RFC 0005 requires. The fixture
 migration test keeps every v1 corpus document and asserts equal hashes and geometry after
-migration. Studies are not part of v2; they come with their own RFC and version.
+migration. Studies come with their own RFC (RFC 0014), which adds them to v2 before its
+first release.
 
 ## Testing and measurement
 
