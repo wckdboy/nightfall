@@ -5,6 +5,7 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
 #include <BRepAlgoAPI_Check.hxx>
+#include <BRepAlgoAPI_Common.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -535,6 +536,43 @@ class OcctKernel final : public IKernel {
       if (!finite(centroid) || !std::isfinite(properties.Mass()))
         fail("face mass properties are not finite");
       return FaceMass{properties.Mass(), centroid};
+    });
+  }
+  std::expected<Proximity, KernelError> proximity(const ShapePtr& a, const ShapePtr& b) override {
+    return guarded([&] {
+      const auto first = std::dynamic_pointer_cast<const detail::Snapshot>(a);
+      const auto second = std::dynamic_pointer_cast<const detail::Snapshot>(b);
+      if (!first || !second) fail("proximity shape belongs to an incompatible backend");
+      // The Boolean may adjust tolerances of its arguments, so it works on copies.
+      BRepBuilderAPI_Copy copy_a(first->geometry, true, false);
+      BRepBuilderAPI_Copy copy_b(second->geometry, true, false);
+      if (!copy_a.IsDone() || !copy_b.IsDone()) fail("proximity input copy failed");
+      BRepAlgoAPI_Common common(copy_a.Shape(), copy_b.Shape());
+      if (!common.IsDone()) fail("common volume failed");
+      GProp_GProps volume;
+      BRepGProp::VolumeProperties(common.Shape(), volume);
+      // Touching solids leave an empty or flat common part: no volume, never a negative one.
+      const double overlap = std::max(0.0, volume.Mass());
+      BRepExtrema_DistShapeShape distance(first->geometry, second->geometry,
+                                          Precision::Confusion());
+      if (!distance.IsDone() || distance.NbSolution() < 1) fail("distance query failed");
+      const auto p = distance.PointOnShape1(1), q = distance.PointOnShape2(1);
+      Proximity result{distance.Value(), {p.X(), p.Y(), p.Z()}, {q.X(), q.Y(), q.Z()}, overlap};
+      // Nested solids have boundaries apart but still overlap: their distance is zero.
+      if (overlap > 0 || distance.InnerSolution()) result.distance = 0;
+      // With an overlap both points are one vertex of the common solid, which lies in both.
+      if (overlap > 0) {
+        TopTools_IndexedMapOfShape vertices;
+        TopExp::MapShapes(common.Shape(), TopAbs_VERTEX, vertices);
+        if (vertices.Extent() > 0) {
+          const auto v = BRep_Tool::Pnt(TopoDS::Vertex(vertices(1)));
+          result.on_a = result.on_b = {v.X(), v.Y(), v.Z()};
+        }
+      }
+      if (!std::isfinite(result.distance) || !std::isfinite(overlap) || !finite(result.on_a) ||
+          !finite(result.on_b))
+        fail("proximity is not finite");
+      return result;
     });
   }
   std::expected<OperationResult, KernelError> extrude(const Extrusion& input) override {

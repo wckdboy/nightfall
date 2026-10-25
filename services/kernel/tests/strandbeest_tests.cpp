@@ -5,6 +5,7 @@
 // four legs on a two-throw crankshaft. Driven around a full turn, every toe must land where
 // Jansen's linkage puts it, computed here independently by circle intersections.
 #include "assembly.hpp"
+#include "assembly_queries.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -126,4 +127,29 @@ TEST_CASE("the Strandbeest's solved link outlines have their closed-form volumes
   const double rocker = (triangle + 6 * (b + e + d) + kPi * 36 - 3 * kPi * 9) * 4;
   CHECK_THAT(occurrence(*result, "rocker_fl").bodies.front().second->measures().volume,
              WithinAbs(rocker, 1e-9 * rocker));
+}
+
+TEST_CASE("the Strandbeest's links clear each other and the pins over a full turn",
+          "[assembly][showcase]") {
+  // Parts on the hip pins sit nearest the frame and the crank links outermost, so no pin
+  // passes through a link it does not carry. The motion study found the earlier stacking
+  // drove each lower crank link through a hip pin for about 40 degrees of every turn.
+  auto kernel = kernel::make_occt_kernel().value();
+  Evaluator evaluator(*kernel, {256, 256 * 1024 * 1024});
+  for (double crank = 0; crank < 360; crank += 45) {
+    CAPTURE(crank);
+    const auto result = evaluate_assembly(evaluator, *kernel, strandbeest(crank));
+    REQUIRE(result);
+    std::vector<PlacedBody> bodies;
+    for (const auto& o : result->occurrences)
+      for (const auto& [id, shape] : o.bodies) bodies.emplace_back(o.id + "/" + id, shape);
+    REQUIRE(bodies.size() == 32);
+    std::size_t checked = 0;
+    const auto found = check_interference(*kernel, bodies, {}, &checked);
+    REQUIRE(found);
+    for (const auto& clash : *found)
+      UNSCOPED_INFO(clash.a << " / " << clash.b << ": " << clash.volume << " mm^3");
+    CHECK(found->empty());
+    CHECK(checked > 0);  // the broad phase passed real candidates to the exact check
+  }
 }
