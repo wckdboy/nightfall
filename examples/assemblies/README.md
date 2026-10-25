@@ -1,0 +1,36 @@
+# Assemblies
+
+RFC 0013 assembly documents: components, occurrences and joints in one `.nightfall` file. The
+headless engine and `nf mcp` evaluate them; the macOS app does not open assemblies yet.
+
+## Strandbeest
+
+[strandbeest.nightfall](strandbeest.nightfall) is Theo Jansen's walking linkage: four legs on a
+two-throw crankshaft, the front pair half a turn ahead of the back pair.
+
+| | |
+| --- | --- |
+| Components | 5: frame, crankshaft, link, rocker, foot |
+| Occurrences | 26, one grounded |
+| Joints | 37 revolute, 12 closed loops, 0 degrees of freedom |
+| Parameters | Jansen's holy numbers `a` to `m`, the crank angle `crank`, and part sizes |
+
+Every link outline is drawn roughly and solved from its constraints: the two-hole links are
+two arcs and two tangent lines around the pin holes, and the rocker and foot are rounded
+triangles whose sides are distance constraints driven by `b`, `d`, `e` and `g`, `h`, `i`.
+Mirrored legs reuse the same components with `hand` set to -1. Joint frames are the pin
+holes' axes, stacked 5 mm apart by joint offsets. The parts also use `sqrt` expressions,
+booleans, a circular body pattern and fillets.
+
+`crank` drives the walk. Over a full turn every toe lands on Jansen's closed-form path within
+1e-9 mm (`services/kernel/tests/strandbeest_tests.cpp`). Change a holy number and the outlines,
+frames and solve all follow.
+
+Drive it with an agent:
+
+```sh
+claude mcp add strandbeest -- build/occt/tools/cli/nf mcp --in examples/assemblies/strandbeest.nightfall
+```
+
+Then ask, for example, to set `crank` to 120 deg and measure `foot_fl/plate`, or to export
+the assembly with `export_mesh`.
