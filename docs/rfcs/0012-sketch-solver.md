@@ -167,6 +167,15 @@ Deviations from the protocol, stated so the result can be weighed:
   The decision holds without the metric, as shown above.
 - Robustness used 400 randomized variants per solver instead of 10 minutes of fuzzing.
 - Continuity is one dimension-edit pair; drags and arc flips are not yet in the corpus.
+- The corpus is the 13 committed synthetic cases. The constrained sketches of the 20
+  reference parts and the four-bar and slot sequences were not in it.
+- Correctness compared solved coordinates to the expectations at 1e-6 mm; it did not check
+  each constraint's residual against 1e-9.
+- Diagnostics compared the counts of failing and redundant constraints, not their ids.
+
+The last two matter for the decision only if SolidCraft would have lost points on them.
+`nightfall-sketch` closes them in its own tests: every residual within 1e-9 mm or rad, and
+redundant and conflicting constraints reported by id (G2).
 
 Conditions for adoption, carried into the dependency entry:
 
