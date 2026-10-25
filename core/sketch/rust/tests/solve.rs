@@ -162,6 +162,27 @@ fn a_solution_that_collapses_a_line_fails_with_the_authored_geometry() {
 }
 
 #[test]
+fn an_arc_closed_into_a_full_turn_is_not_solved() {
+    // A clockwise quarter arc whose ends are made coincident collapses to no length (or a
+    // full turn): either is geometry the solver would refuse as input.
+    let sketch = Sketch {
+        entities: vec![(
+            "a".to_string(),
+            Entity::Arc {
+                center: [0.0, 0.0],
+                radius: 5.0,
+                start_angle: 0.0,
+                sweep_angle: -FRAC_PI_2,
+            },
+        )],
+        constraints: vec![C::Coincident(start("a"), end("a"))],
+    };
+    let solved = solve(&sketch).expect("valid input");
+    assert_eq!(solved.report.status, Status::Failed);
+    assert_eq!(solved.entities, sketch.entities);
+}
+
+#[test]
 fn perpendicular_and_parallel_lines() {
     let sketch = Sketch {
         entities: vec![

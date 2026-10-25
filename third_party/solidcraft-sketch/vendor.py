@@ -198,6 +198,8 @@ def generate(upstream):
             f"# Vendored from SolidCraft {PIN}; see ../README.md.\n"
             f"[package]\nname = \"solidcraft-{crate}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n"
             f"license = \"MIT OR Apache-2.0\"\npublish = false\n{deps}"
+            "\n[lib]\n# Upstream's tests are not vendored (some need serde); nightfall-sketch tests "
+            "the solver.\ntest = false\ndoctest = false\n"
             "\n[lints.rust]\nunsafe_code = \"forbid\"\n"
             "# Helpers that only serde attributes called, and the upstream profiling feature, stay\n"
             "# in the vendored source untouched.\n"
@@ -216,6 +218,12 @@ def main():
                           text=True, check=True).stdout.strip()
     if head != PIN:
         sys.exit(f"upstream is at {head}, expected {PIN}")
+    # Files are read from the worktree, so it must be exactly PIN: no tracked edits.
+    dirty = subprocess.run(["git", "-C", str(upstream), "status", "--porcelain",
+                            "--untracked-files=no"], capture_output=True, text=True,
+                           check=True).stdout.strip()
+    if dirty:
+        sys.exit(f"upstream has local changes; vendor from a clean checkout of {PIN}")
     files = generate(upstream)
     if "--check" in sys.argv:
         bad = [p for p, t in files.items() if not (HERE / p).exists() or (HERE / p).read_text() != t]

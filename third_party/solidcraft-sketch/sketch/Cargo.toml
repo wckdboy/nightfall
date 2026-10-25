@@ -9,6 +9,11 @@ publish = false
 [dependencies]
 solidcraft-geom = { path = "../geom" }
 
+[lib]
+# Upstream's tests are not vendored (some need serde); nightfall-sketch tests the solver.
+test = false
+doctest = false
+
 [lints.rust]
 unsafe_code = "forbid"
 # Helpers that only serde attributes called, and the upstream profiling feature, stay

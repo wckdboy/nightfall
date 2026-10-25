@@ -583,7 +583,7 @@ impl Model {
 }
 
 /// Whether a solved entity is geometry the solver accepts as input: finite, lines longer than
-/// [`MIN_LENGTH`], radii above it.
+/// [`MIN_LENGTH`], radii and arc lengths above it, arcs short of a full turn.
 fn valid_geometry(e: &Entity) -> bool {
     let finite = |p: &Point| p.iter().all(|v| v.is_finite());
     match e {
@@ -604,7 +604,8 @@ fn valid_geometry(e: &Entity) -> bool {
                 && *radius > MIN_LENGTH
                 && start_angle.is_finite()
                 && sweep_angle.is_finite()
-                && sweep_angle.abs() > 0.0
+                && radius * sweep_angle.abs() > MIN_LENGTH
+                && sweep_angle.abs() < TAU
         }
     }
 }
