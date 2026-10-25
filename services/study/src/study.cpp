@@ -368,6 +368,10 @@ std::expected<Object, ir::Errors> run_step_study(kernel::IKernel& kernel, const 
     for (const char* key : {"kind", "material", "boundaries", "mesh"})
       if (!study.find(key)) fail("", std::string("the study needs ") + key);
     if (!study.find("boundaries")->if_array()) fail("/boundaries", "expected an array");
+    // Unlike a document's study, this spec has no schema check: the kind is validated here.
+    if (const auto* kind = study.find("kind")->if_string();
+        !kind || (*kind != "static_structural" && *kind != "steady_thermal"))
+      fail("/kind", "kind must be static_structural or steady_thermal", "unsupported");
     auto solids = kernel.import_step(step);
     if (!solids) fail("", solids.error().message, "step_read");
     if (solids->size() != 1) fail("", "a STEP study is of exactly one solid", "step_read");

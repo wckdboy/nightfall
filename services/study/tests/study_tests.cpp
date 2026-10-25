@@ -218,7 +218,12 @@ TEST_CASE("a malformed STEP study is refused with a pointer, never crashes", "[s
                   std::string("/mesh")},
         std::pair{
             "{" + material + R"(, "boundaries": [)" + fixed + R"(], "mesh": {"size": "0 mm"}})",
-            std::string("/mesh/size")}}) {
+            std::string("/mesh/size")},
+        // A misspelt kind is refused, never run as another analysis.
+        std::pair{R"json({"kind": "steady_thermall", "material": {"conductivity": "167 W/(m K)"},
+                    "boundaries": [)json" +
+                      fixed + R"(], "mesh": {"size": "5 mm"}})",
+                  std::string("/kind")}}) {
     auto result = study::run_step_study(*runner.kernel, beam_case.step, spec, {});
     REQUIRE_FALSE(result);
     CAPTURE(spec, result.error().front().message);
