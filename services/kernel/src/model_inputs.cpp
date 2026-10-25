@@ -524,9 +524,11 @@ std::optional<Value> solve_constraints(const Value& inputs) {
         if (first.empty()) first = pointer;
         named += (named.empty() ? "" : ", ") + pointer;
       }
+    // Without a named constraint the solver refused its own answer (a collapsed curve) or
+    // did not converge.
     fail(first.empty() ? "/constraints" : first,
-         "sketch constraints conflict: " +
-             (named.empty() ? std::string("no single constraint") : named));
+         named.empty() ? std::string("solving it would leave invalid geometry or not converge")
+                       : "sketch constraints conflict: " + named);
   }
   // Rebuild the inputs with solved coordinates; everything else is copied unchanged.
   const auto pair = [](double x, double y) { return Value(ir::json::Array{x, y}); };
