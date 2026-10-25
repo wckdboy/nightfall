@@ -192,7 +192,7 @@ enter only behind a provider interface, like model providers.
 | G1 Loop | An agent builds all 20 reference parts from text through `nf mcp`; every body within 1e-6 relative of its golden volume and area (the golden is the reference part built by `nf build`, so bodies without a closed-form area, such as the elliptic duct, still have one); the eval suite reports zero silent changes to unrelated features. |
 | G2 Sketch | The v1 constraint corpus solves with reported DOF; conflicting and redundant sets named; no panic under fuzzing. |
 | G3 Assembly | Four-bar and slider-crank close with residuals < 1e-9 mm/rad; a six-joint arm exports URDF that loads and moves in MuJoCo with matching joint values. |
-| G4 Study | A cantilever and a thermal slab within 2% of analytic values on three refinements; Poiseuille pressure drop within 2%; every result carries mesh, solver and source digests. |
+| G4 Study | A cantilever and a thermal slab within 2% of analytic values on three refinements; Poiseuille pressure drop within 2%; every result carries the document, geometry, mesh, mesher and solver digests (cases and criteria: RFC 0014). |
 
 ## Alternatives considered
 

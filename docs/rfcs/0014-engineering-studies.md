@@ -62,7 +62,8 @@ against the document's built geometry: its bodies, or the placed bodies of an as
 }
 ```
 
-- **Kinds.** The first slice ships three:
+- **Kinds.** Three are specified; the first slice ships the first two, and `laminar_flow`
+  ships with its cavity construction, after which G4's Poiseuille case applies:
   - `static_structural`: small-strain linear elasticity.
   - `steady_thermal`: conduction with fixed temperature, heat flux and convection boundaries.
   - `laminar_flow`: steady Stokes flow with velocity or flow-rate inlets, pressure outlets
@@ -127,8 +128,9 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   The digest of all of these keys a result cache next to the document's scratch folder. An
   unchanged study returns its cached result; any input change re-runs it.
 - **Convergence.** A `refine: [h1, h2, h3]` option runs the study at three mesh sizes and
-  reports each quantity per size with its observed order of convergence. This is how gate
-  G4 is measured.
+  reports each quantity per size with its observed order of convergence. Each size's entry
+  carries its own mesh digest and element count, and the canonical `refine` list is part of
+  the cache key. This is how gate G4 is measured.
 
 ### The physics: MFEM
 
@@ -148,8 +150,9 @@ boundary triangles tagged with their B-rep face numbers.
   - Fixed supports and prescribed temperatures or velocities are imposed strongly.
   - Forces, pressures, fluxes and convection are boundary integrals over the selected faces'
     triangles.
-  - A flow rate becomes a parabolic profile scaled to the requested flux on a circular
-    inlet.
+  - A flow rate becomes a parabolic profile scaled to the requested flux on a planar
+    circular inlet; any other inlet shape is refused with its JSON Pointer until a profile
+    for it is defined.
 - **Derived quantities.** Reactions come from the assembled residual on constrained DOFs,
   and their balance against the applied loads is reported. Stress and flux come from the
   solution gradient. Pressure drop is the difference of area-averaged boundary pressures.
@@ -245,7 +248,8 @@ order reported:
   - Setup: an aluminium beam, 200 × 10 × 10 mm, fixed at one end with a 10 N tip load.
   - Pass: tip deflection within 2% of PL³/3EI. At this slenderness, shear deformation adds
     under 0.3%.
-  - Also: root stress within 2% of 6PL/bh² away from the support's singular corners.
+  - Also: bending stress within 2% of 6P(L − x)/bh² at mid-span (x = 100 mm), sampled on
+    the top and bottom faces' centre line, well clear of the support's singular corners.
   - Also: reactions balance the load within 1e-9 relative.
 - **Thermal slab.**
   - Setup: 100 × 100 × 10 mm, 400 K and 300 K on the large faces.
@@ -253,7 +257,8 @@ order reported:
     so the test also checks to 1e-9.
   - Also: the energy balance between the two faces within 1e-9 relative.
 - **Poiseuille.**
-  - Setup: water in a 10 mm bore, 100 mm long, at a given flow rate.
+  - Setup: water at 20 °C (μ = 1.002 mPa·s) in a 10 mm bore, 100 mm long; a 1 mL/s
+    parabolic inlet, a 0 Pa outlet, no-slip walls.
   - Pass: pressure drop within 2% of 8μLQ/πR⁴.
   - Also: the flow rate out equals the flow rate in within 1e-9 relative.
 - **Provenance.** Every result carries the document, geometry, mesh, mesher and solver

@@ -18,8 +18,8 @@ All of these, with evidence linked:
 - [ ] **G3 Assembly:** four-bar and slider-crank close with residuals < 1e-9 mm/rad; a
       six-joint arm exports URDF that loads and moves in MuJoCo with matching joint values
 - [ ] **G4 Study:** cantilever and thermal slab within 2% of analytic values on three mesh
-      refinements; Poiseuille pressure drop within 2%; every result carries mesh, solver and
-      source digests
+      refinements; Poiseuille pressure drop within 2%; every result carries the document,
+      geometry, mesh, mesher and solver digests (cases and criteria: RFC 0014)
 
 ## Work items (build order)
 
@@ -30,7 +30,7 @@ All of these, with evidence linked:
 4. Sketch solver: [RFC 0012](../rfcs/0012-sketch-solver.md) (decision rule and spike protocol), the spike, `core/sketch/rust`
 5. IR v2: [RFC 0013](../rfcs/0013-assemblies.md) (components, occurrences, frame joints, queries, URDF); studies get their own RFC
 6. SE(3) joint solver crate; interference and clearance queries; URDF export
-7. Study runner and job lifecycle; first adapters (fTetWild, FEBio) under their RFCs
+7. Study runner and job lifecycle; Netgen meshing and MFEM physics under [RFC 0014](../rfcs/0014-engineering-studies.md)
 8. OCCT 8.0.1 upgrade RFC
 
 ## Evidence (unmerged branches)
