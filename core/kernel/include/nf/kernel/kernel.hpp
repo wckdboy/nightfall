@@ -219,8 +219,9 @@ class IKernel {
         KernelError{"kernel", "face mass properties are not supported by this backend"});
   }
   /// RFC 0013 interference and clearance between two solids, at their current placements:
-  /// the minimum distance (0 when they touch or overlap) with a closest point on each, and the
-  /// exact volume of their common part (0 when they are apart or only touch). Inputs are
+  /// the minimum distance (0 when they touch or overlap) with a closest point on each (when
+  /// they overlap, one point of their common part for both), and the exact volume of their
+  /// common part (0 when they are apart or only touch). Inputs are
   /// preserved. Backends without the query report it as unsupported.
   struct Proximity {
     double distance = 0;

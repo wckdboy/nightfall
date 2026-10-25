@@ -560,6 +560,15 @@ class OcctKernel final : public IKernel {
       Proximity result{distance.Value(), {p.X(), p.Y(), p.Z()}, {q.X(), q.Y(), q.Z()}, overlap};
       // Nested solids have boundaries apart but still overlap: their distance is zero.
       if (overlap > 0 || distance.InnerSolution()) result.distance = 0;
+      // With an overlap both points are one vertex of the common solid, which lies in both.
+      if (overlap > 0) {
+        TopTools_IndexedMapOfShape vertices;
+        TopExp::MapShapes(common.Shape(), TopAbs_VERTEX, vertices);
+        if (vertices.Extent() > 0) {
+          const auto v = BRep_Tool::Pnt(TopoDS::Vertex(vertices(1)));
+          result.on_a = result.on_b = {v.X(), v.Y(), v.Z()};
+        }
+      }
       if (!std::isfinite(result.distance) || !std::isfinite(overlap) || !finite(result.on_a) ||
           !finite(result.on_b))
         fail("proximity is not finite");

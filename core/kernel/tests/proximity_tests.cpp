@@ -49,6 +49,16 @@ TEST_CASE("overlapping solids report their exact common volume", "[kernel][proxi
   const auto nested = kernel->proximity(a, inner).value();
   CHECK_THAT(nested.common_volume, WithinAbs(6, 6 * 1e-6));
   CHECK(nested.distance == 0);
+  // Both points are the same point of the common part, inside the inner box (1e-9 mm).
+  CHECK(nested.on_a.x == nested.on_b.x);
+  CHECK(nested.on_a.y == nested.on_b.y);
+  CHECK(nested.on_a.z == nested.on_b.z);
+  CHECK(nested.on_a.x >= 2 - 1e-9);
+  CHECK(nested.on_a.x <= 3 + 1e-9);
+  CHECK(nested.on_a.y >= 3 - 1e-9);
+  CHECK(nested.on_a.y <= 5 + 1e-9);
+  CHECK(nested.on_a.z >= 4 - 1e-9);
+  CHECK(nested.on_a.z <= 7 + 1e-9);
 }
 
 TEST_CASE("touching solids report contact with no common volume", "[kernel][proximity]") {
