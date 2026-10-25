@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 The Nightfall Authors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "ezpz-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ezpz = { path = "../ezpz" }
