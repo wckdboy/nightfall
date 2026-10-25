@@ -169,7 +169,10 @@ nf_frame derive_frame(kernel::IKernel& kernel, const Evaluation& evaluation,
     origin = add(base, scale(z, dot(sub(centroid, base), z)));
     // Toward the centroid when it lies off the axis; a full cylinder's centroid is on it, so
     // the world x (else y) direction perpendicular to the axis is used instead.
-    auto radial = unit(sub(centroid, origin));
+    // The centroid of a full wall is on the axis up to integration noise: offsets below 1e-6
+    // of the radius count as on it.
+    const auto off = sub(centroid, origin);
+    auto radial = math::length(off) > 1e-6 * info->cylinder->radius ? unit(off) : std::nullopt;
     if (!radial) radial = unit(sub(Vec3{1, 0, 0}, scale(z, z.x)));
     if (!radial) radial = unit(sub(Vec3{0, 1, 0}, scale(z, z.y)));
     x = *radial;
@@ -196,9 +199,11 @@ nf_frame derive_frame(kernel::IKernel& kernel, const Evaluation& evaluation,
 /// Axis-angle form of a proper rotation (for the kernel's rigid transform).
 std::pair<Vec3, double> axis_angle(const std::array<double, 9>& r) {
   const double trace = r[0] + r[4] + r[8];
-  const double angle = std::acos(std::clamp((trace - 1) / 2, -1.0, 1.0));
-  if (angle < 1e-15) return {{0, 0, 1}, 0};
+  // The skew part is 2 sin(angle) times the axis: atan2 keeps small angles exact, where
+  // acos of the trace loses about sqrt(eps).
   Vec3 axis{r[7] - r[5], r[2] - r[6], r[3] - r[1]};
+  const double angle = std::atan2(0.5 * math::length(axis), 0.5 * (trace - 1));
+  if (angle < 1e-15) return {{0, 0, 1}, 0};
   if (auto u = unit(axis); u && std::numbers::pi - angle > 1e-6) return {*u, angle};
   // Near a half turn: the axis is the column of R + I with the largest norm, signed by the
   // skew-symmetric part (2 sin(angle) times the axis) while that still carries a sign.
@@ -326,6 +331,8 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
             dimensions.size() == 1 && list.size() == 2 && !list[0].if_array() && !list[0].is_null();
         const auto limit = [&](std::size_t d, const Value& range) {
           if (range.is_null()) return;
+          if (!range.if_array() || range.if_array()->size() != 2)
+            fail(pointer + "/limits", "a limit is [lower, upper]");
           const auto& pair = *range.if_array();
           c.limited[d] = 1;
           c.lower[d] =

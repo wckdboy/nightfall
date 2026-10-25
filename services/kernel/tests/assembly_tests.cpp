@@ -185,6 +185,13 @@ TEST_CASE("over-driven or unsupported assemblies fail with pointers", "[assembly
   const auto expect_many = evaluate_assembly(evaluator, *kernel, parse(many));
   REQUIRE_FALSE(expect_many);
   CHECK(expect_many.error().front().pointer == "/joints/0/a/frame/expect");
+  // A limit that is not [lower, upper] (possible in memory; the reader refuses it) is an
+  // error with its pointer, never a crash.
+  auto bad_limit = parse(four_bar());
+  bad_limit.joints[0].limits = ir::json::Value(ir::json::Array{5.0});
+  const auto shaped = evaluate_assembly(evaluator, *kernel, bad_limit);
+  REQUIRE_FALSE(shaped);
+  CHECK(shaped.error().front().pointer == "/joints/0/limits");
   // A part without occurrences is not an assembly.
   auto plain = ir::Document{};
   const auto empty = evaluate_assembly(evaluator, *kernel, plain);
