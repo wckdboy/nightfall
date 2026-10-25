@@ -147,8 +147,11 @@ Object Session::Build::json() const {
 namespace {
 /// RFC 0012 write-back: for every sketch the evaluator solved, the authored entities take the
 /// solved coordinates wherever they were plain numbers, converted from millimetres and radians
-/// to the document's units. Expressions stay as written; their entities are listed. Returns the
-/// rewritten document text, or nothing when no sketch was solved or nothing could change.
+/// to the document's units. A sketch with a coordinate authored as an expression is not
+/// rewritten at all: writing its numbers alone would change the start the next solve begins
+/// from, so the source would drift on every rebuild. Its expression entities are listed.
+/// Returns the rewritten document text, or nothing when no sketch was solved or nothing could
+/// change.
 std::optional<std::string> solved_source(ir::Document document,
                                          const kernel_service::Evaluation& evaluation,
                                          Array& written) {
@@ -203,9 +206,15 @@ std::optional<std::string> solved_source(ir::Document document,
       entities[k] = std::move(entity);
     }
     if (updated.empty() && expressions.empty()) continue;
+    if (!expressions.empty()) {
+      written.push_back(Object{{"feature", document.features[i].id},
+                               {"entities", Array{}},
+                               {"expressions", std::move(expressions)}});
+      continue;
+    }
     written.push_back(Object{{"feature", document.features[i].id},
                              {"entities", std::move(updated)},
-                             {"expressions", std::move(expressions)}});
+                             {"expressions", Array{}}});
     ir::json::Object inputs = *document.features[i].inputs.if_object();
     for (auto& member : inputs)
       if (member.key == "entities") member.value = std::move(entities);
@@ -238,8 +247,8 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
   const double evaluation_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - start).count();
   if (!evaluated) return std::unexpected(evaluated.error());
+  Array written;  // also lists sketches left as authored because of expression coordinates
   if (write_back) {
-    Array written;
     if (auto rewritten = solved_source(*document, *evaluated, written)) {
       auto state = evaluate(std::move(*rewritten), false);
       if (state) state->build.written_back = std::move(written);
@@ -308,6 +317,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
     if (live(body) && (next == state.evaluation.bodies.end() || !live(next->second)))
       build.removed.push_back(id);
   }
+  build.written_back = std::move(written);
   return state;
 }
 

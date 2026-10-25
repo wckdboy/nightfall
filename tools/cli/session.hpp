@@ -39,8 +39,9 @@ class Session {
     ir::json::Object evidence;
     ir::json::Array features, bodies, changed, added, removed;
     /// Sketches whose solved coordinates replaced authored numbers (RFC 0012 write-back):
-    /// `{feature, entities, expressions}`, where `expressions` lists entities with coordinates
-    /// authored as expressions, which stay as written and are solved again on every rebuild.
+    /// `{feature, entities, expressions}`. A sketch with coordinates authored as expressions
+    /// lists them in `expressions` and is not rewritten (`entities` is empty): it is solved
+    /// again from the same authored start on every rebuild.
     ir::json::Array written_back;
     bool ok = false;
     [[nodiscard]] ir::json::Object json() const;

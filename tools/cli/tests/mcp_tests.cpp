@@ -713,8 +713,17 @@ TEST_CASE("mcp write-back keeps expressions and reports free sketches", "[cli-mc
   REQUIRE(written.size() == 1);
   CHECK(*written[0].find("feature")->if_string() == "outline");
   CHECK(ids(written[0], "expressions") == Array{"a"});
+  // Writing only the numbers would move the next solve's start: the sketch stays as authored.
+  CHECK(ids(written[0], "entities").empty());
   const auto text = *content(process.replies[2]).find("document")->if_string();
   CHECK(text.find("width - 9.7 mm") != std::string::npos);
+  const auto sketch_entities = [](const std::string& source) {
+    const auto doc = ir::json::parse(source).value();
+    for (const auto& f : *doc.find("features")->if_array())
+      if (*f.find("id")->if_string() == "outline") return *f.find("inputs")->find("entities");
+    return Value();
+  };
+  CHECK(sketch_entities(text) == sketch_entities(read(input)));
   // A horizontal line and a free point: 3 + 2 degrees of freedom, both named.
   const auto& free = content(process.replies[4]);
   const auto& report = *feature(free, "s")->find("sketch");
