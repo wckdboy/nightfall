@@ -66,15 +66,19 @@ same frames later carry loads and supports into studies.
 
 - **components:** each has an id and either inline `features` (same schema as the root
   list) or a `reference` id from `references` naming another `.nightfall` file by SHA-256
-  (RFC 0005). Component parameters are its document's `params`; an occurrence may override
-  them with values or expressions in the assembly's parameters. The root component is the
+  (RFC 0005). A referenced component's parameters are its document's `params`; an inline
+  component declares its own in `params` (name to value or expression), as the root does.
+  An occurrence may override them with values or expressions in the assembly's parameters. The root component is the
   document's own `features` and has the reserved id `root`.
 - **occurrences:** an id, a component, optional parameter overrides, `grounded`, and an
   optional authored `placement` (translation, rotation) that is the solver's starting point.
   An occurrence of a referenced document that is itself an assembly nests: its occurrences
   are addressed by path, `arm/upper`. Paths are the identities used by queries and exports.
 - **joints:** an id, a kind, two frame ends, optional `value` (one per DOF, expressions) and
-  `limits`. A joint with a value drives that DOF; without one, the DOF is free.
+  `limits`. A joint with a value drives that DOF; without one, the DOF is free. A one-DOF
+  joint takes a single value and a `[min, max]` limit. A multi-DOF joint takes arrays in its
+  kind's order, `null` for a free DOF or an absent limit: `cylindrical` angle, slide along
+  z; `pin_slot` angle, slide along x; `planar` x, y, angle. `ball` takes no value.
 
 Unknown keys keep failing validation; `x-` keys stay allowed. Every new reference is checked
 for order and existence like v1's: a joint may name only declared occurrences, an occurrence
@@ -91,7 +95,7 @@ coordinates, derived from exactly one entity resolved by an RFC 0005 selector
 | planar face | `plane_centroid` | area centroid of the trimmed face | outward normal | the face's located parameter U (as `face_plane`) |
 | cylindrical face | `cylinder_axis` | axis point closest to the face's centroid | cylinder axis, oriented by the face | perpendicular, from the axis toward the face's U origin |
 | circular edge | `circle_center` | circle centre | circle normal | toward the edge start |
-| linear edge | `edge_midpoint` | midpoint | edge direction | perpendicular in the plane of its first adjacent face |
+| linear edge | `edge_midpoint` | midpoint | edge direction | perpendicular in the plane of an adjacent face named by a second selector (reserved: not evaluated until that selector exists) |
 | vertex or sketch point | `point` | the point | the owning sketch normal or world z | world x projected |
 
 An optional `offset` (translation and rotation, expressions) adjusts the derived frame, and
@@ -125,7 +129,8 @@ with a trust region iterates from the previous placements (authored placement on
 solve), which keeps the solution on its branch through value edits and drags.
 
 The report, per assembly: `status`, `dof` (6 × free occurrences minus the rank of the
-Jacobian at the solution, computed by a rank-revealing QR with an explicit tolerance),
+Jacobian at the solution, computed by a rank-revealing QR with an explicit tolerance; drive
+rows count, so a mechanism with its one DOF driven reports 0),
 `residuals` per joint in mm and rad, `redundant` joints (rows that do not raise the rank and
 are satisfied), `conflicting` joints (unsatisfied rows on failure), `loops` (independent
 cycles in the joint graph) and `iterations`. Limits are inequality constraints active only
@@ -164,7 +169,8 @@ Pointers into `/joints/…`, and like feature failures they do not stop independ
 - **URDF:** a link per occurrence (or per rigid group), with its mesh from `export_mesh`,
   mass and inertia from mass properties, and joints mapped to `revolute`, `prismatic`,
   `fixed`; `cylindrical`, `pin_slot`, `planar` and `ball` become short chains of massless
-  links. Units are converted to metres and kilograms. Effort and velocity limits are
+  links. URDF is a tree: a closed loop exports its spanning tree, and the loop-closing
+  joints it cuts are named in the reply. Units are converted to metres and kilograms. Effort and velocity limits are
   required by URDF; they come from optional joint fields, or a default with a warning.
 
 ### Agent tools
@@ -206,7 +212,7 @@ Gate G3 from RFC 0011, with explicit tolerances:
 
 - **Closure:** a four-bar (Grashof crank-rocker, analytic coupler positions) and a
   slider-crank close with every joint residual ≤ 1e-9 mm and ≤ 1e-9 rad across a full crank
-  sweep of 72 steps; reported DOF is 1 for both.
+  sweep of 72 steps; reported DOF is 1 for both with the crank undriven.
 - **Diagnostics:** a redundant parallel joint is named redundant; an over-constrained loop
   that cannot close is named as conflicting with the previous placements kept; a
   chain with one free joint reports DOF 1; a ball joint reports 3.
