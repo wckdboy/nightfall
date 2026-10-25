@@ -935,6 +935,31 @@ std::string stacked_blocks(const char* gap) {
 }
 }  // namespace
 
+TEST_CASE("mcp sweeps a cylindrical joint's angle and keeps its authored slide",
+          "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("turned.nightfall");
+  auto text = stacked_blocks("-2 mm");
+  const std::string slider = R"("kind":"slider","value":"-2 mm")";
+  text.replace(text.find(slider), slider.size(),
+               R"("kind":"cylindrical","value":["0 deg","-2 mm"])");
+  write(input, text);
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "sweep_joint", R"({"joint":"lift","from":0,"to":90,"steps":2})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 2);
+  const auto steps = ids(content(process.replies[1]), "steps");
+  REQUIRE(steps.size() == 3);
+  for (const auto& step : steps) {
+    CAPTURE(number(step, "value"));
+    REQUIRE(*step.find("solved")->if_bool());
+    const auto& placement = *step.find("placements")->find("top")->if_array();
+    CHECK_THAT(*placement[11].if_number(), WithinAbs(8, 1e-9));
+  }
+}
+
 TEST_CASE("mcp reports interference, clearance and a motion sweep", "[cli-mcp][assembly]") {
   Temp temp;
   const auto input = temp.path("blocks.nightfall");

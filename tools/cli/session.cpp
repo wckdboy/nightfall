@@ -733,14 +733,23 @@ std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, doubl
     return std::unexpected(ir::Errors{
         {"unsupported", "sweeps drive revolute, cylindrical and slider joints", "/joints", {}}});
   const auto unit = rotary ? state_.document.units.angle : state_.document.units.length;
-  const auto pointer = "/joints/" + std::to_string(found - joints.begin()) + "/value";
+  const auto index = static_cast<std::size_t>(found - joints.begin());
   auto document = ir::json::parse(state_.source).value();
+  // A cylindrical joint may drive [angle, length]: the sweep replaces the angle and keeps the
+  // authored length.
+  auto pointer = "/joints/" + std::to_string(index) + "/value";
+  std::string op = "add";
+  if (const auto* authored = (*document.find("joints")->if_array())[index].find("value");
+      authored && authored->if_array() && !authored->if_array()->empty()) {
+    pointer += "/0";
+    op = "replace";
+  }
   Array results;
   std::size_t solved = 0, clashing = 0;
   for (std::size_t k = 0; k <= steps; ++k) {
     const double value = from + (to - from) * static_cast<double>(k) / static_cast<double>(steps);
     auto patched = ir::apply_patch(
-        document, Array{Object{{"op", "add"},
+        document, Array{Object{{"op", op},
                                {"path", pointer},
                                {"value", ir::json::format_number(value) + " " + unit}}});
     if (!patched) return std::unexpected(patched.error());
