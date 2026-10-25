@@ -79,7 +79,8 @@ void accumulate(MassReport& sum, double& weight, double part_weight, const math:
     sum.inertia = inertia;
     return;
   }
-  const double total = weight + part_weight, reduced = weight * part_weight / total;
+  // Divide before multiplying: two huge finite weights must not overflow.
+  const double total = weight + part_weight, reduced = weight * (part_weight / total);
   const std::array<double, 3> d{centroid.x - sum.centroid.x, centroid.y - sum.centroid.y,
                                 centroid.z - sum.centroid.z};
   const double d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
