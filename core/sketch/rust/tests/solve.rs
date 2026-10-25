@@ -524,3 +524,162 @@ fn two_hundred_constraints_solve_well_inside_a_frame() {
         assert!(elapsed.as_secs_f64() < 0.05, "{elapsed:?}");
     }
 }
+
+/// A link outline as an agent would draw it: two pin holes, two end arcs and two lines, all
+/// rough, with each line end coincident with an arc end and tangent to both arcs.
+#[test]
+fn a_fixed_line_keeps_its_end_shared_with_an_arc_listed_first() {
+    // The arc comes first, so the shared point is created from it; the fixed line still holds.
+    let sketch = Sketch {
+        entities: vec![
+            (
+                "a".into(),
+                Entity::Arc {
+                    center: [0.0, 0.0],
+                    radius: 5.0,
+                    start_angle: 0.0,
+                    sweep_angle: FRAC_PI_2,
+                },
+            ),
+            line("l", [5.1, 0.0], [10.0, 0.0]),
+        ],
+        constraints: vec![C::Coincident(start("a"), start("l")), C::Fixed(e("l"))],
+    };
+    let solved = solve(&sketch).expect("valid input");
+    assert_eq!(solved.report.status, Status::Solved);
+    let (s, t) = line_ends(&solved.entities, "l");
+    assert!(near(s, [5.1, 0.0]) && near(t, [10.0, 0.0]), "{s:?} {t:?}");
+}
+
+fn rough_stadium(length: f64) -> Sketch {
+    let r = 6.0;
+    Sketch {
+        entities: vec![
+            (
+                "h0".into(),
+                Entity::Circle {
+                    center: [0.0, 0.0],
+                    radius: 3.0,
+                },
+            ),
+            (
+                "h1".into(),
+                Entity::Circle {
+                    center: [48.5, 0.4],
+                    radius: 3.0,
+                },
+            ),
+            (
+                "a0".into(),
+                Entity::Arc {
+                    center: [0.2, -0.1],
+                    radius: r,
+                    start_angle: FRAC_PI_2,
+                    sweep_angle: PI,
+                },
+            ),
+            line("bottom", [0.0, -r], [50.0, -r + 0.3]),
+            (
+                "a1".into(),
+                Entity::Arc {
+                    center: [50.0, 0.0],
+                    radius: 6.6,
+                    start_angle: -FRAC_PI_2,
+                    sweep_angle: PI,
+                },
+            ),
+            line("top", [50.0, r], [0.3, r]),
+        ],
+        constraints: vec![
+            C::Fixed(e("h0")),
+            C::Radius(e("h1"), 3.0),
+            C::Distance(
+                Ref::point("h0", Role::Center),
+                Ref::point("h1", Role::Center),
+                length,
+            ),
+            C::Horizontal(e("bottom")),
+            C::Coincident(
+                Ref::point("a0", Role::Center),
+                Ref::point("h0", Role::Center),
+            ),
+            C::Coincident(
+                Ref::point("a1", Role::Center),
+                Ref::point("h1", Role::Center),
+            ),
+            C::Radius(e("a0"), r),
+            C::Equal(e("a0"), e("a1")),
+            C::Coincident(end("a0"), start("bottom")),
+            C::Coincident(end("bottom"), start("a1")),
+            C::Coincident(end("a1"), start("top")),
+            C::Coincident(end("top"), start("a0")),
+            C::Tangent(e("bottom"), e("a0")),
+            C::Tangent(e("bottom"), e("a1")),
+            C::Tangent(e("top"), e("a1")),
+            C::Tangent(e("top"), e("a0")),
+        ],
+    }
+}
+
+#[test]
+fn tangency_at_shared_end_points_is_exact() {
+    // Coincident end points share one solver point, so tangency is measured at the touch point
+    // itself: the line ends land on the arcs' tangent points, not 5e-5 mm along them.
+    for length in [50.0, 61.9, 36.7] {
+        let solved = solve(&rough_stadium(length)).expect("valid input");
+        assert_eq!(solved.report.status, Status::Solved, "{length}");
+        assert_eq!(solved.report.dof, 0, "{length}");
+        let (b0, b1) = line_ends(&solved.entities, "bottom");
+        let (t0, t1) = line_ends(&solved.entities, "top");
+        assert!(
+            near(b0, [0.0, -6.0]) && near(b1, [length, -6.0]),
+            "{length}: {b0:?} {b1:?}"
+        );
+        assert!(
+            near(t0, [length, 6.0]) && near(t1, [0.0, 6.0]),
+            "{length}: {t0:?} {t1:?}"
+        );
+        match get(&solved.entities, "a0") {
+            Entity::Arc {
+                center,
+                radius,
+                start_angle,
+                sweep_angle,
+            } => {
+                assert!(near(*center, [0.0, 0.0]) && (radius - 6.0).abs() <= TOL);
+                assert!((start_angle - FRAC_PI_2).abs() <= TOL && (sweep_angle - PI).abs() <= TOL);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+#[test]
+fn coincident_fixed_points_still_conflict() {
+    // Two fixed points told to coincide are not merged: the conflict is reported, not hidden.
+    let solved = solve(&Sketch {
+        entities: vec![point("p", 0.0, 0.0), point("q", 5.0, 0.0)],
+        constraints: vec![
+            C::Fixed(e("p")),
+            C::Fixed(e("q")),
+            C::Coincident(e("p"), e("q")),
+        ],
+    })
+    .expect("valid input");
+    assert_eq!(solved.report.status, Status::Failed);
+    assert!(solved.report.failing.contains(&2), "{:?}", solved.report);
+    // A failed solve with merged points still returns every entity exactly as authored.
+    let authored = vec![point("o", 0.0, 0.0), line("a", [0.2, -0.1], [9.0, 0.6])];
+    let failed = solve(&Sketch {
+        entities: authored.clone(),
+        constraints: vec![
+            C::Fixed(e("o")),
+            C::Coincident(start("a"), e("o")),
+            C::Distance(start("a"), end("a"), 5.0),
+            C::Distance(start("a"), end("a"), 7.0),
+        ],
+    })
+    .expect("valid input");
+    assert_eq!(failed.report.status, Status::Failed);
+    assert_eq!(failed.entities, authored);
+}
