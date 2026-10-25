@@ -5,6 +5,7 @@
 // replies read back from stdout. Geometry is checked by measured values, never by status alone.
 #include "../../../services/kernel/tests/part_fixture.hpp"
 #include "evaluator.hpp"
+#include "nf/ir/patch.hpp"
 #include "snapshot.hpp"
 
 #include <IFSelect_ReturnStatus.hxx>
@@ -181,9 +182,9 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
     CHECK(*tool.find("inputSchema")->find("type")->if_string() == "object");
     CHECK(tool.find("annotations")->find("readOnlyHint")->if_bool());
   }
-  CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "measure", "set_parameters",
-                                          "replace_part", "patch_part", "undo", "redo", "open_part",
-                                          "save_part", "export_step"});
+  CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "measure",
+                                          "set_parameters", "replace_part", "patch_part", "undo",
+                                          "redo", "open_part", "save_part", "export_step"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
   CHECK(*inspected.find("ok")->if_bool());
@@ -420,4 +421,60 @@ TEST_CASE("mcp patch_part applies RFC 6902 operations atomically and rebuilds", 
   CHECK(*ids(inspected, "params")[3].find("name")->if_string() == "bevel");
   CHECK(ids(inspected, "features").size() == 3);
   CHECK(read(input) == text);
+}
+
+TEST_CASE("mcp adopts an invalid startup document so an agent can repair it", "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("broken.nightfall");
+  // depth lost its unit while its bound keeps one: the document itself no longer validates.
+  const auto text = ir::json::write(
+      ir::apply_patch(ir::json::parse(source(part())).value(),
+                      ir::json::parse(R"([{"op":"replace","path":"/params/0/value","value":30},
+                                        {"op":"add","path":"/params/0/min","value":"1 mm"}])")
+                          .value())
+          .value());
+  write(input, text);
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "inspect_part"), call(2, "measure"),
+             call(3, "patch_part",
+                  R"({"patch":[{"op":"replace","path":"/params/0/value","value":"30 mm"}]})"),
+             call(4, "measure", R"({"body":"plate"})"), call(5, "undo")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 6);
+  const auto& inspected = content(process.replies[1]);
+  CHECK_FALSE(*inspected.find("ok")->if_bool());
+  const auto& errors = ids(inspected, "errors");
+  REQUIRE_FALSE(errors.empty());
+  CHECK(*errors.front().find("pointer")->if_string() == "/params/0/min");
+  CHECK(ids(inspected, "bodies").empty());
+  CHECK(ids(inspected, "features").empty());  // nothing parsed: the raw text is the source
+  CHECK(ids(content(process.replies[2]), "bodies").empty());
+  const auto& repaired = content(process.replies[3]);
+  CHECK(*repaired.find("ok")->if_bool());
+  CHECK(ids(repaired, "added_bodies") == Array{"plate"});
+  CHECK_THAT(number(content(process.replies[4]), "volume"), WithinAbs(6000, 1e-6));
+  // The invalid state is not undo history: nothing to undo after the repair.
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "history");
+  CHECK(read(input) == text);
+}
+
+TEST_CASE("mcp patch_part on a startup document that is not JSON reports a parse error",
+          "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("garbled.nightfall");
+  write(input, "{not json");
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "patch_part", R"({"patch":[{"op":"add","path":"/meta","value":{}}]})"),
+       call(2, "replace_part",
+            "{\"document\":" + ir::json::canonical(Value(source(part()))) + "}")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 3);
+  CHECK(*ids(content(process.replies[1], true), "errors").front().find("code")->if_string() ==
+        "parse");
+  CHECK(*content(process.replies[2]).find("ok")->if_bool());
 }

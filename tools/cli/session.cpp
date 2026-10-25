@@ -115,6 +115,22 @@ Object body_metrics(const std::string& id, const kernel_service::BodyState& body
           {"name_records", numeric(body.names.size())}};
 }
 
+ir::json::Array error_entries(const ir::Errors& errors) {
+  Array entries;
+  for (const auto& e : errors) {
+    Object entry{{"code", e.code}, {"message", e.message}, {"pointer", e.pointer}};
+    if (e.offset) entry.push_back({"offset", numeric(*e.offset)});
+    entries.push_back(std::move(entry));
+  }
+  return entries;
+}
+
+void Session::adopt_invalid(std::string source, ir::Errors errors) {
+  state_ = State{std::move(source), {}, {}, {}, std::move(errors)};
+  undo_.clear();
+  redo_.clear();
+}
+
 Object Session::Build::json() const {
   return {{"ok", ok},
           {"evidence", evidence},
@@ -144,7 +160,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source) 
   const double evaluation_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - start).count();
   if (!evaluated) return std::unexpected(evaluated.error());
-  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}};
+  State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}};
   auto& build = state.build;
   build.ok = state.evaluation.ok();
   for (const auto& f : state.evaluation.features) {
@@ -210,7 +226,8 @@ std::expected<Session::Build, ir::Errors> Session::commit(std::string source, bo
       errors.insert(errors.end(), f.errors.begin(), f.errors.end());
     return std::unexpected(std::move(errors));
   }
-  to.push_back(std::move(state_.source));
+  // An adopted invalid document is not history: nothing can restore it.
+  if (state_.errors.empty()) to.push_back(std::move(state_.source));
   if (&from != &to) from.clear();
   state_ = std::move(*state);
   return state_.build;
@@ -274,6 +291,7 @@ Object Session::inspect() const {
           {"features", std::move(features)},
           {"bodies", state_.build.bodies},
           {"ok", state_.build.ok},
+          {"errors", error_entries(state_.errors)},
           {"kernel", std::string(kernel_.identity())},
           {"feature_status_counts", feature_counts(state_.evaluation)},
           {"can_undo", can_undo()},
