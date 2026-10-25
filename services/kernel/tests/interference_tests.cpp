@@ -138,4 +138,10 @@ TEST_CASE("assembly mass properties combine bodies and occurrences by parallel a
   const auto weight = mass_properties(*kernel, bodies, {{"weight", 2700.0}}, {"weight"}).value();
   REQUIRE(weight.occurrences.size() == 1);
   CHECK_THAT(weight.total.mass, WithinRel(m_weight, 1e-9));
+  // A finite but absurd density converts units first, so nothing overflows to an infinity
+  // (an overflow that remains is an invalid_value error, never a non-number).
+  const auto absurd = mass_properties(*kernel, bodies, {{"weight", 1e308}}, {"weight"});
+  REQUIRE(absurd);
+  CHECK(std::isfinite(absurd->total.mass));
+  for (const double v : absurd->total.inertia) CHECK(std::isfinite(v));
 }

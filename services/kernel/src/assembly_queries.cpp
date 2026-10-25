@@ -3,6 +3,7 @@
 #include "assembly_queries.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace nf::kernel_service {
@@ -127,8 +128,10 @@ std::expected<AssemblyMass, ir::Errors> mass_properties(
       continue;
     }
     const double rho = *report.density;
-    report.mass = rho * report.volume * kMassPerDensityVolume;
-    for (auto& entry : report.inertia) entry *= rho * kMassPerDensityVolume * kInertiaPerMassArea;
+    // Units first: a huge density must not overflow before the 1e-9 conversion.
+    report.mass = rho * (report.volume * kMassPerDensityVolume);
+    for (auto& entry : report.inertia)
+      entry = rho * (entry * kMassPerDensityVolume * kInertiaPerMassArea);
     result.total.volume += report.volume;
     result.total.mass += report.mass;
     accumulate(result.total, total_weight, report.mass, report.centroid, report.inertia,
@@ -136,6 +139,15 @@ std::expected<AssemblyMass, ir::Errors> mass_properties(
   }
   if (result.total.mass > 0)
     result.total.density = result.total.mass / (result.total.volume * kMassPerDensityVolume);
+  // A density that is finite but absurd can still overflow; report it, never a non-number.
+  const auto finite = [](const MassReport& r) {
+    return std::isfinite(r.mass) && std::isfinite(r.volume) && std::isfinite(r.centroid.x) &&
+           std::isfinite(r.centroid.y) && std::isfinite(r.centroid.z) &&
+           std::ranges::all_of(r.inertia, [](double v) { return std::isfinite(v); });
+  };
+  if (!finite(result.total) || !std::ranges::all_of(result.occurrences, finite))
+    return std::unexpected(
+        ir::Errors{{"invalid_value", "mass properties overflow; check the densities", "", {}}});
   return result;
 }
 }  // namespace nf::kernel_service
