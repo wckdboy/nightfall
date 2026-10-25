@@ -70,8 +70,11 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   Each kind lists the support, load and output types it accepts. Anything else fails
   validation with a JSON Pointer.
 - **Domain.** `bodies` (live body ids), `occurrences` (assembly occurrence ids), or for flow,
-  the fluid region `cavity_of` a body. A cavity is the closed void the body encloses, built
-  by a Boolean, so a pipe's bore becomes the fluid domain.
+  the fluid region `cavity_of` a body. A cavity is the void the body encloses, closed by a
+  planar cap over each open boundary loop and built by a Boolean, so a pipe's bore becomes
+  the fluid domain. Each cap is a face group selected by the opening's rim (`caps: [{id,
+  faces}]`), so inlets and outlets have faces to carry their conditions. Flow is not in the
+  first implementation; this construction is fixed with it.
 - **Selectors.** Faces are chosen with the existing selector grammar (RFC 0005 and the
   evaluator). In assemblies an entry adds `occurrence`. Each support or load must match
   at least one face. Selectors resolve against the geometry the study is run on, so a study
@@ -80,7 +83,8 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   field's dimension: force, pressure or stress, temperature (K or °C), heat flux, film
   coefficient, velocity, volumetric flow rate, dynamic viscosity and density. Lengths keep
   the document's units. The expression system gains these dimensions. Bare numbers are
-  refused, so "10" never silently means newtons.
+  refused, so "10" never silently means newtons. A `force` load is the total resultant on
+  its faces, spread as a uniform traction over their combined area.
 - **Materials.** Each entry is either a `material` id from `core/materials/`, or explicit
   values such as `"E": "69 GPa"` and `"nu": 0.33`. `core/materials/materials.json` is
   curated CC0 data. Each value carries its source: density, E, ν, yield strength, thermal
@@ -92,9 +96,11 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   - thermal: `max_temperature`, `min_temperature`, `heat_rate` per boundary;
   - flow: `pressure_drop`, `flow_rate` per boundary, `max_velocity`.
 
-  Criteria compare a quantity `below` or `above` a value. A study passes when every
-  criterion holds, and the pass/fail result is part of the study's result, never stored in
-  the document.
+  A per-boundary quantity names its boundary (`{"quantity": "heat_rate", "boundary":
+  "inlet"}`), and `pressure_drop` names two (`"from"`, `"to"`); a bare name is refused when
+  the study has more than one candidate. Criteria take the same qualified form and compare
+  the quantity `below` or `above` a value. A study passes when every criterion holds, and
+  the pass/fail result is part of the study's result, never stored in the document.
 
 ### Running studies
 
@@ -116,8 +122,9 @@ against the document's built geometry: its bodies, or the placed bodies of an as
   nothing.
 - **Provenance.** A result records the SHA-256 of the canonical document, of each domain
   body's geometry hash and of the mesh. It also records the mesher and solver identities
-  with their versions and options, the element count and the solver's final residual. The
-  digest of all of these keys a result cache next to the document's scratch folder. An
+  with their versions and options, the resolved material values (so an edit to
+  `materials.json` re-runs the study), the element count and the solver's final residual.
+  The digest of all of these keys a result cache next to the document's scratch folder. An
   unchanged study returns its cached result; any input change re-runs it.
 - **Convergence.** A `refine: [h1, h2, h3]` option runs the study at three mesh sizes and
   reports each quantity per size with its observed order of convergence. This is how gate
