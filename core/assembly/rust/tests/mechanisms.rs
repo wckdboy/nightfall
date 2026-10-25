@@ -384,6 +384,28 @@ fn limits_hold_an_undriven_joint_at_its_bound() {
 }
 
 #[test]
+fn limits_across_the_half_turn_keep_an_angle_inside_them() {
+    // Limits of 3.0..3.5 rad cross pi; an arm at 3.3 rad is inside them and stays there.
+    let mut hinge = revolute("hinge", "ground", [0.0; 3], "arm", [0.0; 3]);
+    hinge.limits = vec![Some((3.0, 3.5))];
+    let asm = Assembly {
+        occurrences: vec![
+            occ("ground", true, Placement::IDENTITY),
+            occ("arm", false, planar([0.0, 0.0], 3.3)),
+        ],
+        joints: vec![hinge],
+    };
+    let s = solve(&asm, &SolveOptions::default()).unwrap();
+    assert_solved(&s);
+    let angle = joint_coordinates(&asm, &s.placements).unwrap()[0][0];
+    let turns = (angle - 3.3) / (2.0 * PI);
+    assert!(
+        (turns - turns.round()).abs() * 2.0 * PI <= CLOSE_RAD,
+        "{angle}"
+    );
+}
+
+#[test]
 fn hostile_input_is_an_error_and_never_panics() {
     let good = || Assembly {
         occurrences: vec![

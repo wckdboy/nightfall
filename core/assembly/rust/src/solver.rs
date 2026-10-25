@@ -434,6 +434,16 @@ fn solve_linear(mut m: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
     x.iter().all(|v| v.is_finite()).then_some(x)
 }
 
+/// An angle measured in (-pi, pi] moved by whole turns to lie nearest the middle of its
+/// limits, so limits that cross the half turn compare correctly; lengths pass through.
+fn limited(value: f64, measure: Measure, lo: f64, hi: f64) -> f64 {
+    if measure != Angle {
+        return value;
+    }
+    let tau = std::f64::consts::TAU;
+    value + tau * ((0.5 * (lo + hi) - value) / tau).round()
+}
+
 /// Rank by Householder QR with column pivoting, relative to the largest diagonal.
 fn qr_rank(mut a: Vec<Vec<f64>>, cols: usize) -> usize {
     let rows = a.len();
@@ -651,7 +661,7 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
                 {
                     continue;
                 }
-                let value = m.measure(joint, measure, &x);
+                let value = limited(m.measure(joint, measure, &x), measure, lo, hi);
                 if value < lo || value > hi {
                     rows.push(Row {
                         joint,
@@ -669,10 +679,29 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
         (x, iterations) = (next, iterations + more);
     }
     let residuals: Vec<f64> = rows.iter().map(|row| m.residual(row, &x)).collect();
+    // The last limit round can push another undriven coordinate past its bound.
+    let mut out_of_limits = vec![false; asm.joints.len()];
+    for (joint, j) in asm.joints.iter().enumerate() {
+        for (k, &measure) in j.kind.free().iter().enumerate() {
+            let Some((lo, hi)) = j.limits.get(k).copied().flatten() else {
+                continue;
+            };
+            let tolerance = if matches!(measure, Offset(_)) {
+                opt.length_tolerance
+            } else {
+                opt.angle_tolerance
+            };
+            let value = limited(m.measure(joint, measure, &x), measure, lo, hi);
+            if j.values[k].is_none() && (value < lo - tolerance || value > hi + tolerance) {
+                out_of_limits[joint] = true;
+            }
+        }
+    }
     let solved = rows
         .iter()
         .zip(&residuals)
-        .all(|(row, r)| m.satisfied(row, *r, opt));
+        .all(|(row, r)| m.satisfied(row, *r, opt))
+        && !out_of_limits.contains(&true);
     let mut report_rows = Vec::with_capacity(asm.joints.len());
     let mut conflicting = Vec::new();
     for (joint, j) in asm.joints.iter().enumerate() {
@@ -689,7 +718,7 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
             }
             ok &= m.satisfied(row, *r, opt);
         }
-        if !ok {
+        if !ok || out_of_limits[joint] {
             conflicting.push(j.id.clone());
         }
         report_rows.push(JointResidual {
