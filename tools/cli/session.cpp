@@ -305,7 +305,7 @@ std::expected<Object, ir::Errors> Session::measure(const std::optional<std::stri
                                   {"edges", numeric(totals.edges)}}}};
 }
 
-std::expected<std::string, ir::Errors> Session::export_step(
+std::expected<Session::StepExport, ir::Errors> Session::export_step(
     const std::vector<std::string>& bodies) const {
   std::vector<kernel::ShapePtr> shapes;
   if (bodies.empty()) {
@@ -326,7 +326,7 @@ std::expected<std::string, ir::Errors> Session::export_step(
   auto encoded = kernel_.export_step(shapes);
   if (!encoded)
     return std::unexpected(ir::Errors{{encoded.error().code, encoded.error().message, "", {}}});
-  return std::move(*encoded);
+  return StepExport{std::move(*encoded), shapes.size()};
 }
 
 }  // namespace nf::cli

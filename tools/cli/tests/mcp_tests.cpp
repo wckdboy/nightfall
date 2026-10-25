@@ -285,10 +285,11 @@ TEST_CASE("mcp replaces documents, opens and exports within allowed folders only
        call(10, "export_step", R"({"path":"plate.step","bodies":["plate"]})"),
        call(11, "export_step", R"({"path":"plate.step","bodies":["ghost"]})"),
        call(12, "replace_part", "{\"document\":" + escaped(source(bevelled)) + "}"),
-       call(13, "export_step", R"({"path":"bevel.step"})")});
+       call(13, "export_step", R"({"path":"bevel.step"})"),
+       call(14, "export_step", R"({"path":"plate.nightfall"})")});
   INFO(process.error);
   REQUIRE(process.status == 0);
-  REQUIRE(process.replies.size() == 14);
+  REQUIRE(process.replies.size() == 15);
   // An unsupported body type fails the extrude; the default rolls back.
   const auto& failed = ids(content(process.replies[1], true), "errors");
   REQUIRE_FALSE(failed.empty());
@@ -318,7 +319,13 @@ TEST_CASE("mcp replaces documents, opens and exports within allowed folders only
              WithinAbs(6000 - (30 - 4. / 3), 1e-6));
   const auto shape = reload(temp.path("bevel.step"));
   CHECK(shape->measures().faces == 10);
+  // Without `bodies`, the receipt counts the bodies actually exported.
+  CHECK(number(content(process.replies[13]), "bodies") == 1);
   CHECK_FALSE(fs::exists(temp.path("broken.step")));
+  // An export never replaces the session's document.
+  CHECK(*ids(content(process.replies[14], true), "errors").front().find("code")->if_string() ==
+        "io");
+  CHECK(read(input) == source(part()));
 }
 
 TEST_CASE("mcp rejects malformed protocol traffic without stopping", "[cli-mcp]") {

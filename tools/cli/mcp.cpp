@@ -191,9 +191,17 @@ struct Server {
     if (!build) return tool_result(Object{{"errors", error_entries(build.error())}}, true);
     return tool_result(build->json(), false);
   }
-  Object write_file(const std::string& path, std::string_view text, Object extra) {
+  /// Only `save_part` may replace the --in document; an export to its path is refused.
+  Object write_file(const std::string& path, std::string_view text, Object extra,
+                    bool replaces_document = false) {
     const auto resolved = roots.resolve(path);
     if (!resolved) return tool_result(Object{{"errors", error_entries(resolved.error())}}, true);
+    if (!replaces_document && document && fs::exists(*resolved) &&
+        fs::equivalent(*document, *resolved)) {
+      const ir::Errors errors{
+          {"io", "an export must not overwrite the session's document", "", {}}};
+      return tool_result(Object{{"errors", error_entries(errors)}}, true);
+    }
     publish(*resolved, text);
     extra.insert(extra.begin(), {{"path", resolved->string()},
                                  {"bytes", static_cast<double>(text.size())},
@@ -233,14 +241,14 @@ struct Server {
     if (name == "save_part") {
       auto path = string_arg(args, "path", false);
       if (!path && !document) invalid_params("path is required without --in");
-      return write_file(path ? *path : document->string(), session.source(), {});
+      return write_file(path ? *path : document->string(), session.source(), {}, true);
     }
     if (name == "export_step") {
       const auto bodies = strings_arg(args, "bodies");
       auto encoded = session.export_step(bodies);
       if (!encoded) return tool_result(Object{{"errors", error_entries(encoded.error())}}, true);
-      return write_file(*string_arg(args, "path", true), *encoded,
-                        {{"bodies", static_cast<double>(bodies.size())}});
+      return write_file(*string_arg(args, "path", true), encoded->text,
+                        {{"bodies", static_cast<double>(encoded->bodies)}});
     }
     invalid_params("unknown tool: " + name);
   }

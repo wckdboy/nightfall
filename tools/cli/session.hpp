@@ -59,7 +59,12 @@ class Session {
   [[nodiscard]] std::expected<ir::json::Object, ir::Errors> measure(
       const std::optional<std::string>& body) const;
   /// Exact STEP AP242 text of the named live bodies (all of them when empty).
-  [[nodiscard]] std::expected<std::string, ir::Errors> export_step(
+  /// STEP text of the named live bodies (all of them when `bodies` is empty).
+  struct StepExport {
+    std::string text;
+    std::size_t bodies = 0;
+  };
+  [[nodiscard]] std::expected<StepExport, ir::Errors> export_step(
       const std::vector<std::string>& bodies) const;
 
  private:
