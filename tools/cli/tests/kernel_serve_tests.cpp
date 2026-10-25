@@ -180,6 +180,24 @@ TEST_CASE("Kernel serve subtracts with history in the client's face numbers", "[
                                           "merged: 1f1 1f2", "modified: 0f0", "modified: 0f2"});
 }
 
+TEST_CASE("Kernel serve merges an unchanged face the client had split", "[kernel-serve]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  // The client's x = 0 side is two faces (1 and 6) on one kernel face, untouched by the bore.
+  auto split = block(*kernel);
+  for (auto& m : split)
+    if (m.key == "faces")
+      m.value = points(
+          {{20, 15, 10}, {0, 15, 5}, {20, 15, 0}, {40, 15, 5}, {20, 30, 5}, {20, 0, 5}, {0, 5, 5}});
+  const auto replies = serve({Object{{"id", 2.},
+                                     {"op", "boolean"},
+                                     {"kind", "subtract"},
+                                     {"operands", Array{split, bore(*kernel)}}}});
+  REQUIRE(replies.size() == 1);
+  const auto r = result(*kernel, replies[0]);
+  CHECK(std::ranges::count_if(*r.entries,
+                              [](const Value& e) { return from(e) == "merged: 0f1 0f6"; }) == 1);
+}
+
 TEST_CASE("Kernel serve fillets and chamfers the client's edges", "[kernel-serve]") {
   auto kernel = kernel::make_occt_kernel().value();
   const auto replies = serve({Object{{"id", 3.},
@@ -253,6 +271,10 @@ TEST_CASE("Kernel serve rejects bad requests and keeps serving", "[kernel-serve]
   auto stray = block(*kernel);
   for (auto& m : stray)
     if (m.key == "edges") m.value = points({{20, 15, 5}});
+  // An edge sample on a vertex is ambiguous even when that edge is not selected.
+  auto vertex = block(*kernel);
+  for (auto& m : vertex)
+    if (m.key == "edges") m.value = points({{20, 0, 10}, {40, 30, 10}});
   const auto replies =
       serve({Object{{"id", 5.},
                     {"op", "fillet"},
@@ -268,14 +290,21 @@ TEST_CASE("Kernel serve rejects bad requests and keeps serving", "[kernel-serve]
                     {"op", "boolean"},
                     {"kind", "subtract"},
                     {"operands", Array{Object{{"step", "not step"}, {"faces", Array{}}}}}},
-             Object{{"id", 8.}, {"op", "twist"}, {"operands", Array{block(*kernel)}}}},
+             Object{{"id", 8.}, {"op", "twist"}},
+             Object{{"id", 10.},
+                    {"op", "fillet"},
+                    {"operands", Array{vertex}},
+                    {"edges", Array{0.}},
+                    {"radius", 1.}}},
             "{nope\n{\"id\":9,\"op\":\"hello\"}\n");
-  REQUIRE(replies.size() == 6);
+  REQUIRE(replies.size() == 7);
   CHECK(error_code(replies[0]) == "unmatched_face");
   CHECK(error_code(replies[1]) == "unmatched_edge");
   CHECK(error_code(replies[2]) == "step_read");
+  // An unknown op is unsupported before its operands are looked at (it has none).
   CHECK(error_code(replies[3]) == "unsupported");
-  CHECK(error_code(replies[4]) == "bad_request");
-  CHECK(replies[4].find("id")->is_null());
-  CHECK(*ok(replies[5]).find("id")->if_integer() == 9);
+  CHECK(error_code(replies[4]) == "unmatched_edge");
+  CHECK(error_code(replies[5]) == "bad_request");
+  CHECK(replies[5].find("id")->is_null());
+  CHECK(*ok(replies[6]).find("id")->if_integer() == 9);
 }

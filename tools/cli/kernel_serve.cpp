@@ -78,6 +78,7 @@ struct Operand {
   std::vector<std::vector<std::size_t>> face_owners;  // client faces of each kernel face
   std::vector<math::Vec3> edge_points;                // client edge samples
   std::vector<kernel::EntityPtr> edges;               // kernel edges, unique
+  std::vector<kernel::EntityPtr> edge_match;          // the kernel edge of each edge sample
 };
 
 class Server {
@@ -91,6 +92,9 @@ class Server {
       return {{"protocol", static_cast<double>(kProtocol)},
               {"kernel", std::string(kernel_.identity())},
               {"ops", Array{"boolean", "fillet", "chamfer"}}};
+    // The operation is known before any operand is parsed or imported.
+    if (*op != "boolean" && *op != "fillet" && *op != "chamfer")
+      fail("unsupported", "unknown op: " + *op);
     tolerance_ = kDefaultSampleTolerance;
     if (const auto* t = request.find("sample_tolerance")) {
       if (!t->if_number() || !(*t->if_number() >= 0))
@@ -144,7 +148,7 @@ class Server {
                             "step_read")
                   .shape;
     }
-    Operand result{shape, {}, {}, {}, {}};
+    Operand result{shape, {}, {}, {}, {}, {}};
     for (auto& face : value_or_fail(kernel_.faces(result.shape), "step_read"))
       result.faces.push_back(std::move(face.entity));
     result.face_owners.resize(result.faces.size());
@@ -220,25 +224,31 @@ class Server {
             operand.edges.push_back(std::move(e));
     return operand.edges;
   }
-  /// The kernel edge under the client's edge sample `i`; exactly one must lie within tolerance.
-  kernel::EntityPtr edge(Operand& operand, std::size_t i) {
-    std::vector<kernel::EntityPtr> near;
-    for (const auto& e : edges(operand))
-      if (value_or_fail(kernel_.edge_distance(e, operand.edge_points[i]), "unmatched_edge") <=
-          tolerance_)
-        near.push_back(e);
-    if (near.size() != 1)
-      fail("unmatched_edge", "edge sample " + std::to_string(i) + " lies on " +
-                                 std::to_string(near.size()) + " edges");
-    return near.front();
+  /// Maps every edge sample to the one kernel edge within tolerance, once per operand. Any
+  /// sample on no edge or on several (a vertex) is an error: the server never guesses.
+  const std::vector<kernel::EntityPtr>& edge_matches(Operand& operand) {
+    if (operand.edge_match.size() == operand.edge_points.size()) return operand.edge_match;
+    for (std::size_t i = 0; i < operand.edge_points.size(); ++i) {
+      std::vector<kernel::EntityPtr> near;
+      for (const auto& e : edges(operand))
+        if (value_or_fail(kernel_.edge_distance(e, operand.edge_points[i]), "unmatched_edge") <=
+            tolerance_)
+          near.push_back(e);
+      if (near.size() != 1)
+        fail("unmatched_edge", "edge sample " + std::to_string(i) + " lies on " +
+                                   std::to_string(near.size()) + " edges");
+      operand.edge_match.push_back(near.front());
+    }
+    return operand.edge_match;
   }
+  /// The kernel edge under the client's edge sample `i`.
+  kernel::EntityPtr edge(Operand& operand, std::size_t i) { return edge_matches(operand)[i]; }
   /// The client's edges whose samples lie on a kernel edge.
-  std::vector<std::size_t> edge_owners(const Operand& operand, const kernel::EntityPtr& e) {
+  std::vector<std::size_t> edge_owners(Operand& operand, const kernel::EntityPtr& e) {
     std::vector<std::size_t> result;
-    for (std::size_t i = 0; i < operand.edge_points.size(); ++i)
-      if (value_or_fail(kernel_.edge_distance(e, operand.edge_points[i]), "operation_failed") <=
-          tolerance_)
-        result.push_back(i);
+    const auto& matches = edge_matches(operand);
+    for (std::size_t i = 0; i < matches.size(); ++i)
+      if (matches[i]->same_as(*e)) result.push_back(i);
     return result;
   }
   double area(const kernel::EntityPtr& face) {
@@ -256,7 +266,8 @@ class Server {
     for (const auto& info : value_or_fail(kernel_.faces(result.shape), "operation_failed")) {
       const auto& face = info.entity;
       Array from;
-      std::size_t inputs = 0;  // kernel input faces this face was made from
+      std::size_t inputs = 0;        // kernel input faces this face was made from
+      std::size_t client_faces = 0;  // the client's faces among them
       const kernel::History* only = nullptr;
       for (const auto& h : result.history) {
         const auto s = owner(h.before);
@@ -270,9 +281,11 @@ class Server {
           only = &h;
           for (std::size_t f = 0; f < operand.faces.size(); ++f)
             if (operand.faces[f]->same_as(*h.before))
-              for (auto i : operand.face_owners[f])
+              for (auto i : operand.face_owners[f]) {
+                ++client_faces;
                 from.push_back(
                     Object{{"operand", static_cast<double>(*s)}, {"face", static_cast<double>(i)}});
+              }
         } else if (h.before->kind() == kernel::EntityKind::kEdge && has(h.generated)) {
           for (auto i : edge_owners(operand, h.before))
             from.push_back(
@@ -281,7 +294,8 @@ class Server {
       }
       const auto here = area(face);
       std::string change = "generated";
-      if (inputs > 1) {
+      // Several client faces on one kernel face (a seam split on the client) are merged too.
+      if (inputs > 1 || client_faces > 1) {
         change = "merged";
       } else if (inputs == 1 && only->modified.size() > 1) {
         change = "split";
