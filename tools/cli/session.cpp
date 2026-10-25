@@ -352,4 +352,64 @@ std::expected<Session::StepExport, ir::Errors> Session::export_step(
   return StepExport{std::move(*encoded), shapes.size()};
 }
 
+std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
+    const std::vector<std::string>& bodies, kernel::MeshingOptions options) const {
+  std::vector<std::pair<std::string, kernel::ShapePtr>> shapes;
+  if (bodies.empty()) {
+    for (const auto& [id, body] : state_.evaluation.bodies)
+      if (live(body)) shapes.emplace_back(id, body.shape);
+  } else {
+    for (const auto& id : bodies) {
+      if (std::ranges::any_of(shapes, [&](const auto& s) { return s.first == id; }))
+        continue;  // each body once
+      const auto found = state_.evaluation.bodies.find(id);
+      if (found == state_.evaluation.bodies.end() || !live(found->second))
+        return std::unexpected(ir::Errors{{"unknown_id", "no live body: " + id, "", {}}});
+      shapes.emplace_back(id, found->second.shape);
+    }
+  }
+  if (shapes.empty())
+    return std::unexpected(ir::Errors{{"empty", "the document has no live solids", "", {}}});
+  if (!state_.build.ok)
+    return std::unexpected(ir::Errors{{"failed", "a feature failed; export refused", "", {}}});
+  MeshExport result;
+  result.bodies = shapes.size();
+  result.obj = "# Nightfall derived mesh (mm); geometry is the part document, not this file\n";
+  std::size_t offset = 1;  // OBJ indices are global and 1-based
+  for (const auto& [id, shape] : shapes) {
+    auto mesh = kernel_.tessellate(shape, options);
+    if (!mesh)
+      return std::unexpected(ir::Errors{{mesh.error().code, mesh.error().message, "", {}}});
+    // The kernel bounds each body's mesh; the export bounds their sum before holding it.
+    constexpr std::size_t kMaxTriangles = 4'000'000;
+    if (result.triangles + mesh->indices.size() / 3 > kMaxTriangles)
+      return std::unexpected(ir::Errors{
+          {"too_large",
+           "the export exceeds 4 million triangles; name fewer bodies or coarsen the deflection",
+           "",
+           {}}});
+    result.obj += "o " + id + "\n";
+    for (const auto& v : mesh->vertices)
+      result.obj += "v " + ir::json::format_number(v.position.x) + ' ' +
+                    ir::json::format_number(v.position.y) + ' ' +
+                    ir::json::format_number(v.position.z) + "\n";
+    for (const auto& v : mesh->vertices)
+      result.obj += "vn " + ir::json::format_number(v.normal.x) + ' ' +
+                    ir::json::format_number(v.normal.y) + ' ' +
+                    ir::json::format_number(v.normal.z) + "\n";
+    for (std::size_t i = 0; i + 2 < mesh->indices.size(); i += 3) {
+      result.obj += "f";
+      for (std::size_t k = 0; k < 3; ++k) {
+        const auto index = std::to_string(offset + mesh->indices[i + k]);
+        result.obj += ' ' + index + "//" + index;
+      }
+      result.obj += "\n";
+    }
+    result.vertices += mesh->vertices.size();
+    result.triangles += mesh->indices.size() / 3;
+    offset += mesh->vertices.size();
+  }
+  return result;
+}
+
 }  // namespace nf::cli

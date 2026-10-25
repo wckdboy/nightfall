@@ -184,7 +184,8 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
   }
   CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "get_part", "measure",
                                           "set_parameters", "replace_part", "patch_part", "undo",
-                                          "redo", "open_part", "save_part", "export_step"});
+                                          "redo", "open_part", "save_part", "export_step",
+                                          "export_mesh"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
   CHECK(*inspected.find("ok")->if_bool());
@@ -477,4 +478,73 @@ TEST_CASE("mcp patch_part on a startup document that is not JSON reports a parse
   CHECK(*ids(content(process.replies[1], true), "errors").front().find("code")->if_string() ==
         "parse");
   CHECK(*content(process.replies[2]).find("ok")->if_bool());
+}
+
+TEST_CASE("mcp export_mesh writes a closed outward OBJ whose volume matches the solid",
+          "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("plate.nightfall");
+  write(input, source(part()));
+  // A second, independent extrude fails while the plate stays live.
+  auto mixed = part();
+  mixed.features.push_back(feature("ghost_plate", "extrude", R"({"profile":{"sketch":"outline"},
+    "distance":"depth","result":{"new":"ghost","body_type":"mesh"}})"));
+  const auto escaped = ir::json::canonical(Value(source(mixed)));
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "export_mesh", R"({"path":"plate.obj"})"),
+             call(2, "export_mesh", R"({"path":"ghost.obj","bodies":["ghost"]})"),
+             call(3, "export_mesh", R"({"path":"bad.obj","linear_deflection":"fine"})"),
+             call(4, "replace_part", "{\"document\":" + escaped + ",\"rollback\":false}"),
+             call(5, "export_mesh", R"({"path":"partial.obj"})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 6);
+  const auto& exported = content(process.replies[1]);
+  CHECK(*exported.find("path")->if_string() == temp.path("plate.obj").string());
+  CHECK(number(exported, "bodies") == 1);  // every live body when none are named
+  // Parse the OBJ: positions, then triangles; signed volume by the divergence theorem.
+  std::vector<math::Vec3> positions;
+  std::size_t triangles = 0;
+  double volume = 0;
+  std::istringstream obj(read(temp.path("plate.obj")));
+  bool named = false;
+  for (std::string line; std::getline(obj, line);) {
+    std::istringstream fields(line);
+    std::string tag;
+    fields >> tag;
+    if (tag == "o") named = line == "o plate";
+    if (tag == "v") {
+      math::Vec3 p;
+      fields >> p.x >> p.y >> p.z;
+      positions.push_back(p);
+    } else if (tag == "f") {
+      std::array<math::Vec3, 3> corner;
+      for (auto& c : corner) {
+        std::string ref;
+        fields >> ref;
+        c = positions.at(static_cast<std::size_t>(std::stoul(ref.substr(0, ref.find('/')))) - 1);
+      }
+      ++triangles;
+      const auto& [a, b, c] = corner;
+      volume += (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) +
+                 a.z * (b.x * c.y - b.y * c.x)) /
+                6;
+    }
+  }
+  CHECK(named);
+  CHECK(number(exported, "vertices") == static_cast<double>(positions.size()));
+  CHECK(number(exported, "triangles") == static_cast<double>(triangles));
+  CHECK(triangles >= 12);
+  CHECK_THAT(volume, WithinAbs(6000, 1e-6));  // closed and outward: flat faces mesh exactly
+  CHECK(*ids(content(process.replies[2], true), "errors").front().find("code")->if_string() ==
+        "unknown_id");
+  REQUIRE(process.replies[3].find("error"));
+  CHECK(*process.replies[3].find("error")->find("code")->if_number() == -32602);
+  CHECK_FALSE(fs::exists(temp.path("ghost.obj")));
+  // A failed build exports nothing, even when some bodies survived it.
+  CHECK_FALSE(*content(process.replies[4]).find("ok")->if_bool());
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "failed");
+  CHECK_FALSE(fs::exists(temp.path("partial.obj")));
 }
