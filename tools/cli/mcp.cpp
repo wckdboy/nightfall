@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string_view>
 
+#include "nf/ir/patch.hpp"
 #include "session.hpp"
 
 namespace nf::cli {
@@ -20,7 +21,8 @@ constexpr std::string_view kVersions[] = {"2025-06-18", "2025-03-26", "2024-11-0
 constexpr std::string_view kInstructions =
     "Nightfall part documents are JSON feature programs (RFC 0005): named parameters with units, "
     "an ordered feature list and selectors instead of indices. Read the schema with get_schema, "
-    "the current part with inspect_part, change it with set_parameters or replace_part, then "
+    "the current part with inspect_part, change it with set_parameters, patch_part (RFC 6902) "
+    "or replace_part, then "
     "verify measured volume, area, centroid and bounds with measure. Mutating tools rebuild and "
     "report the bodies whose geometry changed; a failed feature rolls the change back unless "
     "rollback is false. Every error carries a JSON Pointer into the document.";
@@ -116,6 +118,17 @@ Array tools() {
                    {"rollback", rollback_property()}},
                   {"document"}),
            false),
+      tool(
+          "patch_part",
+          "Apply an RFC 6902 JSON Patch (add, remove, replace, move, copy, test; RFC 6901 "
+          "pointers such as /params/0/value or /features/-) to the document, validate and "
+          "rebuild. Atomic: a failing operation is reported as /patch/<index> and nothing changes.",
+          schema({{"patch", Object{{"type", "array"},
+                                   {"items", Object{{"type", "object"}}},
+                                   {"description", "RFC 6902 operations, applied in order"}}},
+                  {"rollback", rollback_property()}},
+                 {"patch"}),
+          false),
       tool("undo", "Restore the document before the last change.", schema({}), false),
       tool("redo", "Reapply the last undone change.", schema({}), false),
       tool("open_part", "Load a .nightfall document from an allowed folder as the session.",
@@ -231,6 +244,14 @@ struct Server {
     if (name == "replace_part")
       return outcome(
           session.replace(*string_arg(args, "document", true), bool_arg(args, "rollback", true)));
+    if (name == "patch_part") {
+      const auto* patch = args.find("patch");
+      if (!patch || !patch->if_array()) invalid_params("patch must be an array");
+      const auto current = ir::json::parse(session.source());
+      auto patched = ir::apply_patch(*current, *patch);
+      if (!patched) return tool_result(Object{{"errors", error_entries(patched.error())}}, true);
+      return outcome(session.replace(ir::json::write(*patched), bool_arg(args, "rollback", true)));
+    }
     if (name == "undo") return outcome(session.undo());
     if (name == "redo") return outcome(session.redo());
     if (name == "open_part") {

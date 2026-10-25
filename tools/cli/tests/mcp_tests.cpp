@@ -107,6 +107,8 @@ std::string request(int id, const char* method, const char* params = "{}") {
          "\",\"params\":" + params + "}";
 }
 std::string call(int id, const char* tool, std::string arguments = "{}") {
+  // One message per line: arguments written across lines in a test are flattened.
+  std::erase(arguments, '\n');
   return request(
       id, "tools/call",
       ("{\"name\":\"" + std::string(tool) + "\",\"arguments\":" + arguments + "}").c_str());
@@ -180,8 +182,8 @@ TEST_CASE("mcp server negotiates, lists typed tools and inspects a part", "[cli-
     CHECK(tool.find("annotations")->find("readOnlyHint")->if_bool());
   }
   CHECK(names == std::vector<std::string>{"inspect_part", "get_schema", "measure", "set_parameters",
-                                          "replace_part", "undo", "redo", "open_part", "save_part",
-                                          "export_step"});
+                                          "replace_part", "patch_part", "undo", "redo", "open_part",
+                                          "save_part", "export_step"});
   const auto& inspected = content(process.replies[3]);
   CHECK(*inspected.find("document_sha256")->if_string() == ir::sha256(source(part())).hex());
   CHECK(*inspected.find("ok")->if_bool());
@@ -358,4 +360,64 @@ TEST_CASE("mcp rejects malformed protocol traffic without stopping", "[cli-mcp]"
   const auto usage = serve(temp, {"--in"}, {});
   CHECK(usage.status == 2);
   CHECK(usage.replies.empty());
+}
+
+TEST_CASE("mcp patch_part applies RFC 6902 operations atomically and rebuilds", "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("plate.nightfall");
+  const auto text = source(part(2));
+  write(input, text);
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize,
+       // Change the depth parameter in place: volume 10 x 20 x 50.
+       call(1, "patch_part",
+            R"({"patch":[{"op":"replace","path":"/params/0/value","value":"50 mm"}]})"),
+       // Add a parameter and a chamfer feature that uses it.
+       call(2, "patch_part", R"({"patch":[
+         {"op":"add","path":"/params/-","value":{"name":"bevel","value":"1 mm"}},
+         {"op":"add","path":"/features/-","value":{"id":"bevel_top","type":"chamfer","inputs":{
+           "distance":"bevel","edges":{"edges_of":{"created_by":"base","role":"cap_end","expect":"one"}}}}}]})"),
+       // A failing second operation leaves the first unapplied.
+       call(3, "patch_part", R"({"patch":[{"op":"replace","path":"/params/0/value","value":"7 mm"},
+                                   {"op":"remove","path":"/features/9"}]})"),
+       call(4, "measure", R"({"body":"plate"})"),
+       // A patch that makes a feature fail rolls back by default.
+       call(
+           5, "patch_part",
+           R"({"patch":[{"op":"replace","path":"/features/1/inputs/result/body_type","value":"mesh"}]})"),
+       call(6, "patch_part", R"({"patch":[{"op":"test","path":"/params/3/name","value":"bevel"},
+                                   {"op":"move","from":"/params/3","path":"/params/0"}]})"),
+       call(7, "patch_part", R"({"patch":{"op":"remove","path":"/meta"}})"), call(8, "undo"),
+       call(9, "inspect_part")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 10);
+  const auto& deeper = content(process.replies[1]);
+  CHECK(ids(deeper, "changed_bodies") == Array{"plate"});
+  CHECK_THAT(number(body(deeper, "plate"), "volume"), WithinAbs(10000, 1e-6));
+  const auto& bevelled = content(process.replies[2]);
+  CHECK(*bevelled.find("ok")->if_bool());
+  CHECK_THAT(number(body(bevelled, "plate"), "volume"), WithinAbs(10000 - (30 - 4. / 3), 1e-6));
+  CHECK(number(body(bevelled, "plate"), "faces") == 10);
+  const auto& atomic = ids(content(process.replies[3], true), "errors");
+  REQUIRE(atomic.size() == 1);
+  CHECK(*atomic.front().find("pointer")->if_string() == "/patch/1");
+  CHECK(*atomic.front().find("message")->if_string() ==
+        "remove /features/9: array index out of range");
+  CHECK_THAT(number(content(process.replies[4]), "volume"), WithinAbs(10000 - (30 - 4. / 3), 1e-6));
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "unsupported_body_type");
+  // Parameters reordered, geometry unchanged: no body deltas.
+  const auto& moved = content(process.replies[6]);
+  CHECK(ids(moved, "changed_bodies").empty());
+  // A patch that is not an array violates the tool schema: a protocol error, not a tool result.
+  REQUIRE(process.replies[7].find("error"));
+  CHECK(*process.replies[7].find("error")->find("code")->if_number() == -32602);
+  CHECK(ids(content(process.replies[8]), "changed_bodies").empty());
+  const auto& inspected = content(process.replies[9]);
+  CHECK(*ids(inspected, "params")[0].find("name")->if_string() == "depth");
+  CHECK(*ids(inspected, "params")[3].find("name")->if_string() == "bevel");
+  CHECK(ids(inspected, "features").size() == 3);
+  CHECK(read(input) == text);
 }
