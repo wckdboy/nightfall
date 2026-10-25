@@ -25,6 +25,8 @@ struct AssemblyOccurrence {
   std::string id;
   Placement placement;
   std::vector<std::pair<std::string, kernel::ShapePtr>> bodies;
+  /// The component body's state hash for each entry of `bodies`, in the same order.
+  std::vector<std::optional<ir::Hash>> source_hashes;
 };
 /// RFC 0013 assembly evaluation.
 struct AssemblyResult {
@@ -32,6 +34,9 @@ struct AssemblyResult {
   std::size_t dof = 0, loops = 0, iterations = 0;
   std::vector<AssemblyJoint> joints;
   std::vector<AssemblyOccurrence> occurrences;
+  /// Work of the distinct component evaluations, for build evidence.
+  std::size_t kernel_calls = 0, cache_hits = 0, binding_misses = 0;
+  std::vector<FeatureStatus> component_features;
 };
 
 /// Evaluates the occurrences, joints and components of a v2 document (RFC 0013). Each distinct

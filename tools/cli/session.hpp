@@ -25,7 +25,10 @@ void publish(const std::filesystem::path& output, std::string_view text);
 [[nodiscard]] std::expected<std::string, ir::Errors> apply_overrides(
     std::string source, std::map<std::string, std::string> values);
 /// Feature status totals and per-body metrics in the `nf build` evidence layout.
-[[nodiscard]] ir::json::Object feature_counts(const kernel_service::Evaluation& evaluation);
+/// Feature status counts of `evaluation`, plus `extra` statuses (an assembly's components).
+[[nodiscard]] ir::json::Object feature_counts(
+    const kernel_service::Evaluation& evaluation,
+    const std::vector<kernel_service::FeatureStatus>& extra = {});
 [[nodiscard]] ir::json::Object body_metrics(const std::string& id,
                                             const kernel_service::BodyState& body);
 /// Diagnostics as `{code, message, pointer[, offset]}` entries.

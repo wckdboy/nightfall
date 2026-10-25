@@ -309,7 +309,15 @@ struct Server {
       return tool_result(*session.assembly(), false);
     }
     if (name == "drive_joints") {
-      auto current = ir::json::parse(session.source()).value();
+      auto parsed = ir::json::parse(session.source());
+      if (!parsed) {
+        const ir::Errors errors{{"parse",
+                                 "the document is not JSON (" + parsed.error().message +
+                                     "); replace it with replace_part",
+                                 "", parsed.error().offset}};
+        return tool_result(Object{{"errors", error_entries(errors)}}, true);
+      }
+      auto current = std::move(*parsed);
       const auto* joints = current.find("joints");
       const auto& values = object_arg(args, "values");
       Array patch;

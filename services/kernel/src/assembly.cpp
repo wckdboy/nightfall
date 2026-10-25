@@ -266,6 +266,10 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
             if (!f.errors.empty() && first.empty()) first = f.errors.front().message;
           fail(pointer + "/component", "component does not build: " + first);
         }
+        result.kernel_calls += evaluation->kernel_calls;
+        result.cache_hits += evaluation->cache_hits;
+        result.binding_misses += evaluation->binding_misses;
+        for (const auto& f : evaluation->features) result.component_features.push_back(f.status);
         entry->second = std::move(*evaluation);
       }
       per_occurrence.push_back(&entry->second);
@@ -383,7 +387,7 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
       result.joints.push_back(
           {document.joints[k].id, mm[k], rad[k], redundant[k] != 0, conflicting[k] != 0});
     for (std::size_t i = 0; i < flat.size(); ++i) {
-      AssemblyOccurrence occurrence{document.occurrences[i].id, {}, {}};
+      AssemblyOccurrence occurrence{document.occurrences[i].id, {}, {}, {}};
       std::copy(std::begin(placements[i].rotation), std::end(placements[i].rotation),
                 occurrence.placement.rotation.begin());
       occurrence.placement.translation = {
@@ -395,6 +399,7 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
         auto placed =
             take(kernel.transform(body.shape, transform), "/occurrences/" + std::to_string(i));
         occurrence.bodies.emplace_back(id, placed.shape);
+        occurrence.source_hashes.push_back(body.hash);
       }
       result.occurrences.push_back(std::move(occurrence));
     }

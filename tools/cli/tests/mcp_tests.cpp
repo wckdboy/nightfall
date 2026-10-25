@@ -851,6 +851,13 @@ TEST_CASE("mcp solves, drives and exports a four-bar assembly", "[cli-mcp][assem
   pin = crank_pin(*driven.find("assembly"));
   CHECK_THAT(std::abs(std::atan2(pin[1], pin[0])), WithinAbs(std::numbers::pi / 2, 1e-9));
   const auto changed = ids(driven, "changed_bodies");
+  // The evidence counts the components' evaluations, not just the empty root part.
+  const auto& evidence = *driven.find("evidence");
+  const auto& cache = *evidence.find("cache");
+  CHECK(number(cache, "kernel_calls") + number(cache, "hits") > 0);
+  CHECK(number(*evidence.find("feature_status_counts"), "built") +
+            number(*evidence.find("feature_status_counts"), "cached") >=
+        2);
   CHECK(std::ranges::find(changed, Value("ground/bar")) == changed.end());
   CHECK(std::ranges::find(changed, Value("crank/bar")) != changed.end());
   const auto& conflict = ids(content(process.replies[4], true), "errors");
@@ -875,6 +882,20 @@ TEST_CASE("mcp solves, drives and exports a four-bar assembly", "[cli-mcp][assem
   pin = crank_pin(content(process.replies[10]));
   CHECK_THAT(std::abs(std::atan2(pin[1], pin[0])), WithinAbs(std::numbers::pi / 3, 1e-9));
   CHECK(read(input) == kFourBar);
+}
+
+TEST_CASE("mcp drive_joints on a startup document that is not JSON reports a parse error",
+          "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("garbled.nightfall");
+  write(input, "{not json");
+  const auto process = serve(temp, {"--in", input.string()},
+                             {kInitialize, call(1, "drive_joints", R"({"values":{"a":"1 deg"}})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 2);
+  CHECK(*ids(content(process.replies[1], true), "errors").front().find("code")->if_string() ==
+        "parse");
 }
 
 TEST_CASE("mcp inspect_assembly reports a plain part as not an assembly", "[cli-mcp][assembly]") {

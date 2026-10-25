@@ -95,9 +95,11 @@ std::expected<std::string, ir::Errors> apply_overrides(std::string source,
   return ir::write_document(*document);
 }
 
-Object feature_counts(const kernel_service::Evaluation& evaluation) {
+Object feature_counts(const kernel_service::Evaluation& evaluation,
+                      const std::vector<kernel_service::FeatureStatus>& extra) {
   std::array<std::size_t, 5> counts{};
   for (const auto& f : evaluation.features) ++counts[static_cast<std::size_t>(f.status)];
+  for (const auto status : extra) ++counts[static_cast<std::size_t>(status)];
   Object result;
   for (std::size_t i = 0; i < kStatus.size(); ++i)
     result.push_back({std::string(kStatus[i]), numeric(counts[i])});
@@ -290,6 +292,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
   }
   // RFC 0013: an assembly publishes its occurrences' bodies at their solved placements, as
   // "occurrence/body"; the root part's own bodies are not separate results.
+  std::vector<kernel_service::FeatureStatus> component_features;
   if (!state.document.occurrences.empty() && build.ok) {
     auto assembly = kernel_service::evaluate_assembly(evaluator_, kernel_, state.document);
     state.evaluation.bodies.clear();
@@ -298,6 +301,11 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
       state.assembly_errors = assembly.error();
       build.assembly = Object{{"solved", false}, {"errors", error_entries(assembly.error())}};
     } else {
+      // The components' evaluations are this build's work too.
+      state.evaluation.kernel_calls += assembly->kernel_calls;
+      state.evaluation.cache_hits += assembly->cache_hits;
+      state.evaluation.binding_misses += assembly->binding_misses;
+      component_features = assembly->component_features;
       Array joints, occurrences;
       for (const auto& j : assembly->joints)
         joints.push_back(Object{{"id", j.id},
@@ -309,16 +317,21 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
                                     o.placement.translation.z};
         for (const double r : o.placement.rotation) rotation.push_back(r);
         Array bodies;
-        for (const auto& [id, shape] : o.bodies) {
+        for (std::size_t k = 0; k < o.bodies.size(); ++k) {
+          const auto& [id, shape] = o.bodies[k];
+          const auto& component_hash = o.source_hashes[k];
           kernel_service::BodyState body;
           body.shape = shape;
-          // Identity of a placed body: its occurrence, body and exact placement and size.
-          body.hash = ir::sha256(ir::json::canonical(Object{{"occurrence", o.id},
-                                                            {"body", id},
-                                                            {"rotation", rotation},
-                                                            {"translation", translation},
-                                                            {"volume", shape->measures().volume},
-                                                            {"area", shape->measures().area}}));
+          // Identity of a placed body: its occurrence, the component body's state and the
+          // exact placement, so a component edit that keeps volume and area still changes it.
+          body.hash = ir::sha256(ir::json::canonical(
+              Object{{"occurrence", o.id},
+                     {"body", id},
+                     {"source", component_hash ? Value(component_hash->hex()) : Value()},
+                     {"rotation", rotation},
+                     {"translation", translation},
+                     {"volume", shape->measures().volume},
+                     {"area", shape->measures().area}}));
           state.evaluation.bodies.emplace(o.id + "/" + id, std::move(body));
           bodies.push_back(o.id + "/" + id);
         }
@@ -344,7 +357,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
                     {"units", Object{{"length", "mm"}, {"area", "mm^2"}, {"volume", "mm^3"}}},
                     {"comparison_tolerances",
                      Object{{"linear_mm", tolerance_.linear}, {"angular_rad", tolerance_.angular}}},
-                    {"feature_status_counts", feature_counts(state.evaluation)},
+                    {"feature_status_counts", feature_counts(state.evaluation, component_features)},
                     {"cache", Object{{"hits", numeric(state.evaluation.cache_hits)},
                                      {"kernel_calls", numeric(state.evaluation.kernel_calls)},
                                      {"binding_misses", numeric(state.evaluation.binding_misses)},
