@@ -146,6 +146,19 @@ Array tools() {
                   {"rollback", rollback_property()}},
                  {"patch"}),
           false),
+      tool("inspect_assembly",
+           "The assembly solve (RFC 0013): status, degrees of freedom, loops, each joint's "
+           "residuals in mm and rad, and each occurrence's placement and bodies.",
+           schema({}), true),
+      tool("drive_joints",
+           "Set joint values by joint id (an angle or length, or a list per degree of freedom, "
+           "for example {\"input\": \"75 deg\"}) and re-solve the assembly.",
+           schema({{"values", Object{{"type", "object"},
+                                     {"description", "joint id to value, expression or list"},
+                                     {"additionalProperties", true}}},
+                   {"rollback", rollback_property()}},
+                  {"values"}),
+           false),
       tool("undo", "Restore the document before the last change.", schema({}), false),
       tool("redo", "Reapply the last undone change.", schema({}), false),
       tool("open_part", "Load a .nightfall document from an allowed folder as the session.",
@@ -283,6 +296,48 @@ struct Server {
         return tool_result(Object{{"errors", error_entries(errors)}}, true);
       }
       auto patched = ir::apply_patch(*current, *patch);
+      if (!patched) return tool_result(Object{{"errors", error_entries(patched.error())}}, true);
+      return outcome(session.replace(ir::json::write(*patched), bool_arg(args, "rollback", true)));
+    }
+    if (name == "inspect_assembly") {
+      if (!session.assembly())
+        return tool_result(
+            Object{{"errors", Array{Object{{"code", "not_an_assembly"},
+                                           {"message", "the document has no occurrences"},
+                                           {"pointer", "/occurrences"}}}}},
+            true);
+      return tool_result(*session.assembly(), false);
+    }
+    if (name == "drive_joints") {
+      auto parsed = ir::json::parse(session.source());
+      if (!parsed) {
+        const ir::Errors errors{{"parse",
+                                 "the document is not JSON (" + parsed.error().message +
+                                     "); replace it with replace_part",
+                                 "", parsed.error().offset}};
+        return tool_result(Object{{"errors", error_entries(errors)}}, true);
+      }
+      auto current = std::move(*parsed);
+      const auto* joints = current.find("joints");
+      const auto& values = object_arg(args, "values");
+      Array patch;
+      for (const auto& [joint, value] : values) {
+        std::optional<std::size_t> index;
+        if (joints && joints->if_array())
+          for (std::size_t k = 0; k < joints->if_array()->size(); ++k)
+            if (const auto* id = (*joints->if_array())[k].find("id");
+                id && id->if_string() && *id->if_string() == joint)
+              index = k;
+        if (!index)
+          return tool_result(Object{{"errors", Array{Object{{"code", "unknown_id"},
+                                                            {"message", "no joint " + joint},
+                                                            {"pointer", "/joints"}}}}},
+                             true);
+        patch.push_back(Object{{"op", "add"},
+                               {"path", "/joints/" + std::to_string(*index) + "/value"},
+                               {"value", value}});
+      }
+      auto patched = ir::apply_patch(current, patch);
       if (!patched) return tool_result(Object{{"errors", error_entries(patched.error())}}, true);
       return outcome(session.replace(ir::json::write(*patched), bool_arg(args, "rollback", true)));
     }

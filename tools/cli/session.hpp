@@ -25,7 +25,10 @@ void publish(const std::filesystem::path& output, std::string_view text);
 [[nodiscard]] std::expected<std::string, ir::Errors> apply_overrides(
     std::string source, std::map<std::string, std::string> values);
 /// Feature status totals and per-body metrics in the `nf build` evidence layout.
-[[nodiscard]] ir::json::Object feature_counts(const kernel_service::Evaluation& evaluation);
+/// Feature status counts of `evaluation`, plus `extra` statuses (an assembly's components).
+[[nodiscard]] ir::json::Object feature_counts(
+    const kernel_service::Evaluation& evaluation,
+    const std::vector<kernel_service::FeatureStatus>& extra = {});
 [[nodiscard]] ir::json::Object body_metrics(const std::string& id,
                                             const kernel_service::BodyState& body);
 /// Diagnostics as `{code, message, pointer[, offset]}` entries.
@@ -43,6 +46,9 @@ class Session {
     /// lists them in `expressions` and is not rewritten (`entities` is empty): it is solved
     /// again from the same authored start on every rebuild.
     ir::json::Array written_back;
+    /// RFC 0013: for documents with occurrences, the solve (status, DOF, loops, iterations,
+    /// per-joint residuals, placements) or the errors that stopped it.
+    std::optional<ir::json::Object> assembly;
     bool ok = false;
     [[nodiscard]] ir::json::Object json() const;
   };
@@ -63,6 +69,10 @@ class Session {
   [[nodiscard]] bool can_undo() const noexcept { return !undo_.empty(); }
   [[nodiscard]] bool can_redo() const noexcept { return !redo_.empty(); }
   [[nodiscard]] const std::string& source() const noexcept { return state_.source; }
+  /// The current assembly section (see Build::assembly), or nothing for a plain part.
+  [[nodiscard]] const std::optional<ir::json::Object>& assembly() const noexcept {
+    return state_.build.assembly;
+  }
   /// Units, metadata, parameters, features with status and errors, live bodies and the digest.
   [[nodiscard]] ir::json::Object inspect() const;
   /// Metrics of one live body, or of every live body with totals.
@@ -96,7 +106,8 @@ class Session {
     ir::Document document;
     kernel_service::Evaluation evaluation;
     Build build;
-    ir::Errors errors;  // document-level errors of an adopted invalid source
+    ir::Errors errors;           // document-level errors of an adopted invalid source
+    ir::Errors assembly_errors;  // RFC 0013 evaluation errors, part of a failed build
   };
   /// With `write_back`, a rebuild that solved a sketch rewrites the authored plain numbers to
   /// the solved coordinates and evaluates the rewritten document instead.
