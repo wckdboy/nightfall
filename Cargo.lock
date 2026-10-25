@@ -30,6 +30,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nightfall-sketch-ffi"
+version = "0.0.1"
+dependencies = [
+ "nightfall-sketch",
+]
+
+[[package]]
 name = "solidcraft-geom"
 version = "0.0.0"
 
