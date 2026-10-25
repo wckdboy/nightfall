@@ -207,6 +207,17 @@ class IKernel {
   /// Preserve all inputs; handles remain usable after their producing facade ends.
   [[nodiscard]] virtual std::expected<double, KernelError> face_distance(const EntityPtr&,
                                                                          math::Vec3) = 0;
+  /// Area (mm^2) and area centroid (world mm) of a trimmed face, for RFC 0013 joint frames.
+  /// Reject foreign/invalid/non-face handles; preserve inputs. Backends without the query
+  /// report it as unsupported.
+  struct FaceMass {
+    double area = 0;
+    math::Vec3 centroid;
+  };
+  [[nodiscard]] virtual std::expected<FaceMass, KernelError> face_mass(const EntityPtr&) {
+    return std::unexpected(
+        KernelError{"kernel", "face mass properties are not supported by this backend"});
+  }
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> extrude(const Extrusion&) = 0;
   /// Exact solid revolution with side provenance and, for partial turns, start/end caps.
   [[nodiscard]] virtual std::expected<OperationResult, KernelError> revolve(const Revolution&) = 0;
