@@ -86,6 +86,13 @@ TEST_CASE("test compares values and pointers unescape", "[ir][patch]") {
         R"({"a":[1,{"b":2}]})");
   CHECK(failure(R"({"a":1})", R"([{"op":"test","path":"/a","value":2}])").message ==
         "test /a: value differs");
+  // Object members compare regardless of order, at any depth (RFC 6902 §4.6).
+  CHECK(patched(R"({"a":{"b":1,"c":[{"d":2,"e":3}]}})",
+                R"([{"op":"test","path":"/a","value":{"c":[{"e":3,"d":2}],"b":1}}])") ==
+        R"({"a":{"b":1,"c":[{"d":2,"e":3}]}})");
+  CHECK(
+      failure(R"({"a":{"b":1}})", R"([{"op":"test","path":"/a","value":{"b":1,"c":2}}])").message ==
+      "test /a: value differs");
   CHECK(failure(R"({"a":1})", R"([{"op":"test","path":"/b","value":1}])").message ==
         "test /b: path does not exist");
   CHECK(patched(R"({"a/b":1,"m~n":2})",

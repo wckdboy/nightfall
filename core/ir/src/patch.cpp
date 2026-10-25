@@ -132,6 +132,22 @@ std::expected<Value, std::string> edited(const Value& node, const Tokens& tokens
 bool is_prefix(const Tokens& prefix, const Tokens& path) {
   return prefix.size() <= path.size() && std::equal(prefix.begin(), prefix.end(), path.begin());
 }
+
+/// RFC 6902 §4.6 equality: objects compare by members regardless of their order.
+bool same(const Value& a, const Value& b) {
+  const auto *x = a.if_object(), *y = b.if_object();
+  if (x && y) {
+    if (x->size() != y->size()) return false;
+    for (const auto& m : *x) {
+      const auto* other = b.find(m.key);
+      if (!other || !same(m.value, *other)) return false;
+    }
+    return true;
+  }
+  const auto *p = a.if_array(), *q = b.if_array();
+  if (p && q) return p->size() == q->size() && std::equal(p->begin(), p->end(), q->begin(), same);
+  return a == b;
+}
 }  // namespace
 
 std::expected<Value, Errors> apply_patch(const Value& document, const Value& patch) {
@@ -190,7 +206,7 @@ std::expected<Value, Errors> apply_patch(const Value& document, const Value& pat
       if (!value) return describe("value is required");
       const auto* found = get(current, *tokens);
       if (!found) return describe("path does not exist");
-      if (!(*found == *value)) return describe("value differs");
+      if (!same(*found, *value)) return describe("value differs");
     } else {
       return fail("unknown op '" + name + "'");
     }
