@@ -527,6 +527,30 @@ fn two_hundred_constraints_solve_well_inside_a_frame() {
 
 /// A link outline as an agent would draw it: two pin holes, two end arcs and two lines, all
 /// rough, with each line end coincident with an arc end and tangent to both arcs.
+#[test]
+fn a_fixed_line_keeps_its_end_shared_with_an_arc_listed_first() {
+    // The arc comes first, so the shared point is created from it; the fixed line still holds.
+    let sketch = Sketch {
+        entities: vec![
+            (
+                "a".into(),
+                Entity::Arc {
+                    center: [0.0, 0.0],
+                    radius: 5.0,
+                    start_angle: 0.0,
+                    sweep_angle: FRAC_PI_2,
+                },
+            ),
+            line("l", [5.1, 0.0], [10.0, 0.0]),
+        ],
+        constraints: vec![C::Coincident(start("a"), start("l")), C::Fixed(e("l"))],
+    };
+    let solved = solve(&sketch).expect("valid input");
+    assert_eq!(solved.report.status, Status::Solved);
+    let (s, t) = line_ends(&solved.entities, "l");
+    assert!(near(s, [5.1, 0.0]) && near(t, [10.0, 0.0]), "{s:?} {t:?}");
+}
+
 fn rough_stadium(length: f64) -> Sketch {
     let r = 6.0;
     Sketch {

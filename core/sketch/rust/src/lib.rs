@@ -483,6 +483,9 @@ impl Model {
                     } else {
                         (on(s), on(s + w))
                     };
+                    // A shared end point starts where its fixed member put it, as for lines.
+                    let from = point(at(Some(from_role), [from.x, from.y]), id)?;
+                    let to = point(at(Some(to_role), [to.x, to.y]), id)?;
                     let pts = [
                         existing(&assigned, Some(Role::Center)),
                         existing(&assigned, Some(from_role)),
