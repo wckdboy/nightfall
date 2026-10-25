@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import selectors
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,8 @@ import time
 from pathlib import Path
 
 REL_TOLERANCE = 1e-6  # volume and area, relative to the golden value
+POSITION_TOLERANCE_MM = 1e-6  # centroid and bounds of an edited body, absolute
+NF_TIMEOUT = 300  # seconds for one `nf build` or one `nf mcp` reply
 EMPTY_PART = {"format": "nightfall.part", "version": 1, "units": {"length": "mm", "angle": "deg"},
               "meta": {}, "params": [], "references": [], "features": [], "history_end": None,
               "ui": {}}
@@ -38,7 +41,10 @@ def build(nf, part_path, out_dir, overrides=()):
     args = [str(nf), "build", str(part_path), "--out", str(step)]
     for name, value in overrides:
         args += ["--set", f"{name}={value}"]
-    run = subprocess.run(args, capture_output=True, text=True)
+    try:
+        run = subprocess.run(args, capture_output=True, text=True, timeout=NF_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None, [{"code": "timeout", "message": f"nf build took over {NF_TIMEOUT} s"}]
     if run.returncode != 0:
         try:
             errors = json.loads(run.stderr).get("errors", [])
@@ -81,6 +87,11 @@ def compare(task, result, golden):
         for key in ("solids", "faces", "edges"):
             deltas[f"{body}.{key}"] = {"golden": g[key], "actual": a[key]}
             passed = passed and a[key] == g[key]
+        # Volume, area and counts survive a rigid move: position must match too.
+        for key in ("centroid", "minimum", "maximum"):
+            deltas[f"{body}.{key}"] = {"golden": g[key], "actual": a[key]}
+            passed = passed and all(abs(x - y) <= POSITION_TOLERANCE_MM
+                                    for x, y in zip(a[key], g[key]))
     return passed, deltas
 
 
@@ -171,6 +182,11 @@ class Mcp:
         message = {"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params}
         self.process.stdin.write(json.dumps(message) + "\n")
         self.process.stdin.flush()
+        with selectors.DefaultSelector() as ready:
+            ready.register(self.process.stdout, selectors.EVENT_READ)
+            if not ready.select(timeout=NF_TIMEOUT):
+                self.process.kill()
+                raise RuntimeError(f"nf mcp gave no reply to {method} within {NF_TIMEOUT} s")
         line = self.process.stdout.readline()
         if not line:
             raise RuntimeError("nf mcp closed: " + self.process.stderr.read()[:500])
@@ -213,8 +229,11 @@ def run_claude(nf, task, start_path, save_path, allow, model, max_turns, timeout
         "mcp", "--in", str(start_path), "--allow-path", str(allow)]}}}
     config_path = Path(allow) / "mcp.json"
     config_path.write_text(json.dumps(config))
-    args = ["claude", "-p", task["prompt"].format(save_path=save_path), "--mcp-config",
-            str(config_path), "--strict-mcp-config", "--allowedTools", "mcp__nightfall",
+    # Only the placeholder is replaced: part descriptions may contain braces.
+    prompt = task["prompt"].replace("{save_path}", str(save_path))
+    # `--tools ""` removes the built-in tools; the nightfall MCP server stays the only tool.
+    args = ["claude", "-p", prompt, "--mcp-config", str(config_path), "--strict-mcp-config",
+            "--tools", "", "--allowedTools", "mcp__nightfall",
             "--output-format", "json", "--max-turns", str(max_turns)]
     if model:
         args += ["--model", model]
@@ -282,7 +301,18 @@ def main():
     with tempfile.TemporaryDirectory(prefix="nightfall-evals-") as golden_work:
         for part_path in parts:
             original = json.loads(part_path.read_text())
-            for task in make_tasks(nf, part_path, golden_work):
+            try:
+                part_tasks = make_tasks(nf, part_path, golden_work)
+            except RuntimeError as error:
+                # No golden, no verdict: the part's tasks are reported as not run.
+                for kind in kinds:
+                    results.append({"part": part_path.stem, "task": kind,
+                                    "part_sha256": part_digests[part_path.stem], "passed": None,
+                                    "errors": [{"code": "infrastructure",
+                                                "message": str(error)[:500]}]})
+                    print(f"SKIP {part_path.stem}.{kind} (no golden)", flush=True)
+                continue
+            for task in part_tasks:
                 if task["task"] not in kinds:
                     continue
                 label = f"{task['part']}.{task['task']}"
