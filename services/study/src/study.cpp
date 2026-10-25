@@ -5,11 +5,14 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <stdexcept>
 
 #include "geometry.hpp"
 #include "nf/ir/expression.hpp"
@@ -19,6 +22,37 @@
 
 namespace nf::study {
 namespace {
+/// A private directory (mode 0700, unique name) for one run's files, removed on every exit.
+struct ScratchDirectory {
+  std::filesystem::path path;
+  ScratchDirectory() {
+    auto pattern = (std::filesystem::temp_directory_path() / "nf-study-XXXXXX").string();
+    if (!mkdtemp(pattern.data())) throw std::runtime_error("cannot create a scratch directory");
+    path = pattern;
+  }
+  ScratchDirectory(const ScratchDirectory&) = delete;
+  ScratchDirectory& operator=(const ScratchDirectory&) = delete;
+  ~ScratchDirectory() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path, ignored);
+  }
+};
+/// SHA-256 of everything that defines a mesh: nodes, tetrahedra, boundary triangles and their
+/// faces, each array framed by its length.
+std::string mesh_digest(const PlainMesh& mesh) {
+  std::string bytes;
+  const auto append = [&](const auto& values) {
+    const std::uint64_t n = values.size();
+    bytes.append(reinterpret_cast<const char*>(&n), sizeof n);
+    bytes.append(reinterpret_cast<const char*>(values.data()),
+                 values.size() * sizeof(values.front()));
+  };
+  append(mesh.points);
+  append(mesh.tets);
+  append(mesh.triangles);
+  append(mesh.faces);
+  return ir::sha256(bytes).hex();
+}
 using ir::json::Array;
 using ir::json::Object;
 using ir::json::Value;
@@ -190,11 +224,15 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
     if (!parameters) return std::unexpected(parameters.error());
     const auto size = ir::evaluate_input(*study.find("mesh")->find("size"), ir::kLength,
                                          document->units, parameters->values);
-    if (!size) return std::unexpected(ir::Errors{size.error()});
+    if (!size) {
+      auto error = size.error();
+      error.pointer = base + "/mesh/size";
+      return std::unexpected(ir::Errors{std::move(error)});
+    }
     std::vector<double> sizes = options.refine;
     if (sizes.empty()) sizes.push_back(options.size.value_or(*size));
-    const auto path =
-        std::filesystem::temp_directory_path() / ("nf-study-" + std::to_string(getpid()) + ".brep");
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "body.brep";
     if (auto written = write_brep(body.shape, path.string()); !written)
       fail(base + "/body", written.error().message);
     Array runs;
@@ -204,16 +242,12 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
       try {
         mesh = mesh_brep(path.string(), h);
       } catch (const std::exception& e) {
-        std::filesystem::remove(path);
         fail(base + "/mesh", e.what(), "mesher");
       }
       Object run{{"mesh_size", h},
                  {"nodes", static_cast<double>(mesh.node_count())},
                  {"tetrahedra", static_cast<double>(mesh.tet_count())},
-                 {"mesh_sha256",
-                  ir::sha256(std::string_view(reinterpret_cast<const char*>(mesh.points.data()),
-                                              mesh.points.size() * sizeof(double)))
-                      .hex()}};
+                 {"mesh_sha256", mesh_digest(mesh)}};
       const auto q = quantities(prepared, mesh, run);
       Object listed;
       for (const auto& [name, v] : q) listed.push_back({name, v});
@@ -221,7 +255,6 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
       values.push_back(q);
       runs.push_back(std::move(run));
     }
-    std::filesystem::remove(path);
     const auto& final = values.back();
     Array criteria;
     bool passed = true;

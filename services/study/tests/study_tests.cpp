@@ -131,4 +131,7 @@ TEST_CASE("study errors carry pointers", "[study][run]") {
   e = runner.error(replaced(source, R"("body": "beam")", R"("body": "plate")"), "tip_load");
   CHECK(e.code == "unknown_id");
   CHECK(e.pointer == "/studies/0/body");
+  // A mesh size naming an unknown parameter points at the size, not at nothing.
+  e = runner.error(replaced(source, R"("size": "3.3 mm")", R"("size": "pitch / 2")"), "tip_load");
+  CHECK(e.pointer == "/studies/0/mesh/size");
 }
