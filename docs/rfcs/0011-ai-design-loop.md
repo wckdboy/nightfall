@@ -171,7 +171,9 @@ and MFEM (BSD-3) when the physics should be owned code; **SU2** (LGPL-2.1, dynam
 optional) for RANS and PyFR (BSD-2, native Metal) for high-order flow; **Chrono** (BSD-3)
 and MuJoCo (Apache-2.0) for multibody. GPL tools (Gmsh, CalculiX, OpenFOAM) are never
 linked; whether a user-installed binary driven by files is acceptable is a policy decision
-recorded in its RFC, not assumed. Materials: no open engineering dataset exists, so
+recorded in its RFC, not assumed. MPL-2.0 is not on the §8 list, so fTetWild cannot be
+the default as written; RFC 0014 settles this by meshing with Netgen (LGPL-2.1, dynamic,
+optional) and keeping fTetWild as an alternative that needs a policy change. Materials: no open engineering dataset exists, so
 `core/materials/` ships a curated CC0 JSON (density, E, ν, yield, k, Cp) with a source per
 value. Gates per regime are analytic first (cantilever, plate, thermal slab, Poiseuille)
 across three mesh refinements with conservation and convergence reported.
@@ -187,7 +189,7 @@ enter only behind a provider interface, like model providers.
 
 | Gate | Evidence |
 | --- | --- |
-| G1 Loop | An agent builds all 20 reference parts from text through `nf mcp`; every body within 1e-6 relative of its golden volume and area; the eval suite reports zero silent changes to unrelated features. |
+| G1 Loop | An agent builds all 20 reference parts from text through `nf mcp`; every body within 1e-6 relative of its golden volume and area (the golden is the reference part built by `nf build`, so bodies without a closed-form area, such as the elliptic duct, still have one); the eval suite reports zero silent changes to unrelated features. |
 | G2 Sketch | The v1 constraint corpus solves with reported DOF; conflicting and redundant sets named; no panic under fuzzing. |
 | G3 Assembly | Four-bar and slider-crank close with residuals < 1e-9 mm/rad; a six-joint arm exports URDF that loads and moves in MuJoCo with matching joint values. |
 | G4 Study | A cantilever and a thermal slab within 2% of analytic values on three refinements; Poiseuille pressure drop within 2%; every result carries mesh, solver and source digests. |

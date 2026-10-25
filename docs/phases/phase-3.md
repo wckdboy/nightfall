@@ -10,8 +10,9 @@
 All of these, with evidence linked:
 
 - [ ] **G1 Loop:** an agent builds all 20 reference parts from text through `nf mcp`; every
-      body within 1e-6 relative of its golden volume and area; the eval suite reports zero
-      silent changes to unrelated features
+      body within 1e-6 relative of its golden volume and area (the golden is the reference
+      part built by `nf build`, so the elliptic duct's area needs no closed form); the eval
+      suite reports zero silent changes to unrelated features
 - [ ] **G2 Sketch:** the v1 constraint corpus solves with reported degrees of freedom;
       conflicting and redundant sets are named; no panic under fuzzing
 - [ ] **G3 Assembly:** four-bar and slider-crank close with residuals < 1e-9 mm/rad; a
