@@ -380,6 +380,8 @@ struct Server {
       return outcome_object(
           session.clearance(*string_arg(args, "a", true), *string_arg(args, "b", true)));
     if (name == "sweep_joint") {
+      for (const char* key : {"from", "to", "steps"})
+        if (!args.find(key)) invalid_params(std::string(key) + " is required");
       const double steps = number_arg(args, "steps", 0);
       if (steps != std::floor(steps) || steps < 1 || steps > 360)
         invalid_params("steps must be an integer from 1 to 360");

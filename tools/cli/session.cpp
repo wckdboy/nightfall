@@ -757,6 +757,9 @@ std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, doubl
     auto state = evaluate(ir::json::write(*patched), false);
     if (!state || !state->build.ok || !state->build.assembly) {
       ir::Errors errors = state ? state->assembly_errors : state.error();
+      if (state)  // a failed feature fails the build before the assembly is solved
+        for (const auto& f : state->evaluation.features)
+          errors.insert(errors.end(), f.errors.begin(), f.errors.end());
       entry.push_back({"solved", false});
       entry.push_back({"errors", error_entries(errors)});
       results.push_back(std::move(entry));

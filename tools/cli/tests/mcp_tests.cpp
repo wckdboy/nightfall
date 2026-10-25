@@ -964,21 +964,24 @@ TEST_CASE("mcp reports interference, clearance and a motion sweep", "[cli-mcp][a
   Temp temp;
   const auto input = temp.path("blocks.nightfall");
   write(input, stacked_blocks("-2 mm"));
-  const auto process =
-      serve(temp, {"--in", input.string()},
-            {kInitialize, call(1, "check_interference"),
-             call(2, "measure_clearance", R"({"a":"base","b":"top/cube"})"),
-             call(3, "sweep_joint", R"({"joint":"lift","from":-4,"to":4,"steps":8})"),
-             call(4, "drive_joints", R"({"values":{"lift":"3 mm"}})"),
-             call(5, "measure_clearance", R"({"a":"top","b":"base"})"),
-             call(6, "check_interference", R"({"occurrences":["top"]})"),
-             call(7, "check_interference", R"({"occurrences":["nowhere"]})"),
-             call(8, "sweep_joint", R"({"joint":"missing","from":0,"to":1,"steps":1})"),
-             call(9, "sweep_joint", R"({"joint":"lift","from":0,"to":1,"steps":0})"),
-             call(10, "get_part")});
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "check_interference"),
+       call(2, "measure_clearance", R"({"a":"base","b":"top/cube"})"),
+       call(3, "sweep_joint", R"({"joint":"lift","from":-4,"to":4,"steps":8})"),
+       call(4, "drive_joints", R"({"values":{"lift":"3 mm"}})"),
+       call(5, "measure_clearance", R"({"a":"top","b":"base"})"),
+       call(6, "check_interference", R"({"occurrences":["top"]})"),
+       call(7, "check_interference", R"({"occurrences":["nowhere"]})"),
+       call(8, "sweep_joint", R"({"joint":"missing","from":0,"to":1,"steps":1})"),
+       call(9, "sweep_joint", R"({"joint":"lift","from":0,"to":1,"steps":0})"),
+       call(10, "get_part"), call(11, "sweep_joint", R"({"joint":"lift","from":0,"steps":2})")});
   INFO(process.error);
   REQUIRE(process.status == 0);
-  REQUIRE(process.replies.size() == 11);
+  REQUIRE(process.replies.size() == 12);
+  // A missing bound is an invalid call, never a sweep to 0.
+  REQUIRE(process.replies[11].find("error"));
+  CHECK(*process.replies[11].find("error")->find("code")->if_number() == -32602);
   // 2 mm deep over 10 x 10 mm.
   const auto& clash = content(process.replies[1]);
   REQUIRE(ids(clash, "overlapping").size() == 1);
