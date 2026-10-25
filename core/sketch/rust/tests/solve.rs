@@ -126,6 +126,42 @@ fn equal_perpendicular_parallel_and_angle_shape_a_rhombus() {
 }
 
 #[test]
+fn angle_operand_order_keeps_the_authored_branch() {
+    // The same rhombus with the angle's operands swapped: v1 angles are unsigned.
+    let sketch = Sketch {
+        entities: vec![
+            point("o", 0.0, 0.0),
+            line("a", [0.0, 0.0], [9.0, 0.5]),
+            line("b", [0.0, 0.0], [4.0, 8.0]),
+        ],
+        constraints: vec![
+            C::Fixed(e("o")),
+            C::Coincident(start("a"), e("o")),
+            C::Coincident(start("b"), e("o")),
+            C::Horizontal(e("a")),
+            C::Distance(start("a"), end("a"), 10.0),
+            C::Equal(e("a"), e("b")),
+            C::Angle(e("b"), e("a"), PI / 3.0),
+        ],
+    };
+    let solved = solve(&sketch).expect("valid input");
+    assert_eq!(solved.report.status, Status::Solved);
+    let (_, b_end) = line_ends(&solved.entities, "b");
+    assert!(near(b_end, [5.0, 5.0 * 3f64.sqrt()]), "{b_end:?}");
+}
+
+#[test]
+fn a_solution_that_collapses_a_line_fails_with_the_authored_geometry() {
+    let sketch = Sketch {
+        entities: vec![line("l", [0.0, 0.0], [3.0, 4.0])],
+        constraints: vec![C::Coincident(start("l"), end("l"))],
+    };
+    let solved = solve(&sketch).expect("valid input");
+    assert_eq!(solved.report.status, Status::Failed);
+    assert_eq!(solved.entities, sketch.entities);
+}
+
+#[test]
 fn perpendicular_and_parallel_lines() {
     let sketch = Sketch {
         entities: vec![

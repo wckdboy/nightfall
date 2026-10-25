@@ -383,6 +383,18 @@ impl Model {
         }
     }
 
+    /// Start-to-end vector of a line at its current (authored) coordinates.
+    fn direction(&self, i: usize, r: &Ref) -> Result<Point, Error> {
+        match (self.slot(i, r)?, r.point) {
+            (Slot::Line { start, end, .. }, None) => {
+                let at = |p: usize| self.sk.point(p).map_or(NAN2, |v| [v.x, v.y]);
+                let (s, e) = (at(start), at(end));
+                Ok([e[0] - s[0], e[1] - s[1]])
+            }
+            _ => Self::unsupported(i, r, "expected a line"),
+        }
+    }
+
     fn is_point(&self, r: &Ref) -> bool {
         r.point.is_some() || matches!(self.slots.get(&r.entity), Some(Slot::Point(_)))
     }
@@ -508,10 +520,18 @@ impl Model {
                 }
             }
             Constraint::Angle(a, b, v) => {
+                // RFC 0005 angles are unsigned and independent of operand order; the solver's
+                // runs counter-clockwise from `a` to `b`. Keep the authored turning direction.
+                let (da, db) = (self.direction(i, a)?, self.direction(i, b)?);
+                let v = value(*v)?;
                 vec![ConstraintKind::Angle {
                     a: self.line_of(i, a)?,
                     b: self.line_of(i, b)?,
-                    value: value(*v)?,
+                    value: if da[0] * db[1] - da[1] * db[0] < 0.0 {
+                        -v
+                    } else {
+                        v
+                    },
                     flip: false,
                 }]
             }
@@ -562,6 +582,33 @@ impl Model {
     }
 }
 
+/// Whether a solved entity is geometry the solver accepts as input: finite, lines longer than
+/// [`MIN_LENGTH`], radii above it.
+fn valid_geometry(e: &Entity) -> bool {
+    let finite = |p: &Point| p.iter().all(|v| v.is_finite());
+    match e {
+        Entity::Point { at } => finite(at),
+        Entity::Line { start, end } => {
+            finite(start)
+                && finite(end)
+                && (start[0] - end[0]).hypot(start[1] - end[1]) > MIN_LENGTH
+        }
+        Entity::Circle { center, radius } => finite(center) && *radius > MIN_LENGTH,
+        Entity::Arc {
+            center,
+            radius,
+            start_angle,
+            sweep_angle,
+        } => {
+            finite(center)
+                && *radius > MIN_LENGTH
+                && start_angle.is_finite()
+                && sweep_angle.is_finite()
+                && sweep_angle.abs() > 0.0
+        }
+    }
+}
+
 /// Solves `sketch` from its authored coordinates. A failed solve is a [`Report`] with
 /// [`Status::Failed`] and the entities as authored; invalid input is an [`Error`].
 pub fn solve(sketch: &Sketch) -> Result<Solution, Error> {
@@ -597,11 +644,17 @@ pub fn solve(sketch: &Sketch) -> Result<Solution, Error> {
             ..
         } => point_known(center) && point_known(start) && point_known(end) && curve_known(curve),
     };
-    let entities = sketch
+    let mut entities: Vec<(String, Entity)> = sketch
         .entities
         .iter()
         .map(|(id, e)| (id.clone(), model.read(id, e)))
         .collect();
+    // Constraints can be met by collapsing a curve (a line's ends made coincident). That is
+    // geometry `Model::build` would refuse, so it is a failure with the authored entities.
+    let collapsed = entities.iter().any(|(_, e)| !valid_geometry(e));
+    if collapsed {
+        entities = sketch.entities.clone();
+    }
     let underconstrained = sketch
         .entities
         .iter()
@@ -612,8 +665,8 @@ pub fn solve(sketch: &Sketch) -> Result<Solution, Error> {
         entities,
         report: Report {
             status: match report.status {
-                SolveStatus::Solved => Status::Solved,
-                SolveStatus::Failed => Status::Failed,
+                SolveStatus::Solved if !collapsed => Status::Solved,
+                _ => Status::Failed,
             },
             dof: report.dof,
             underconstrained,
