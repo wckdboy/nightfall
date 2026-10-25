@@ -460,3 +460,21 @@ TEST_CASE("mcp adopts an invalid startup document so an agent can repair it", "[
         "history");
   CHECK(read(input) == text);
 }
+
+TEST_CASE("mcp patch_part on a startup document that is not JSON reports a parse error",
+          "[cli-mcp]") {
+  Temp temp;
+  const auto input = temp.path("garbled.nightfall");
+  write(input, "{not json");
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "patch_part", R"({"patch":[{"op":"add","path":"/meta","value":{}}]})"),
+       call(2, "replace_part",
+            "{\"document\":" + ir::json::canonical(Value(source(part()))) + "}")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 3);
+  CHECK(*ids(content(process.replies[1], true), "errors").front().find("code")->if_string() ==
+        "parse");
+  CHECK(*content(process.replies[2]).find("ok")->if_bool());
+}

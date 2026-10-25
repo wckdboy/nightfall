@@ -245,6 +245,14 @@ struct Server {
       const auto* patch = args.find("patch");
       if (!patch || !patch->if_array()) invalid_params("patch must be an array");
       const auto current = ir::json::parse(session.source());
+      if (!current) {
+        // A malformed --in document is adopted for repair; only replace_part can fix it.
+        const ir::Errors errors{{"parse",
+                                 "the document is not JSON (" + current.error().message +
+                                     "); replace it with replace_part",
+                                 "", current.error().offset}};
+        return tool_result(Object{{"errors", error_entries(errors)}}, true);
+      }
       auto patched = ir::apply_patch(*current, *patch);
       if (!patched) return tool_result(Object{{"errors", error_entries(patched.error())}}, true);
       return outcome(session.replace(ir::json::write(*patched), bool_arg(args, "rollback", true)));
