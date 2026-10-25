@@ -278,6 +278,32 @@ fn degrees_of_freedom_follow_the_joint_kinds() {
 }
 
 #[test]
+fn a_rigid_joint_or_slider_turned_a_half_turn_is_not_solved_as_authored() {
+    // Every residual of a rigid joint vanishes at a half turn about z: the sine of the twist is
+    // zero there too. The solve must still bring the part back to the joint's orientation.
+    for kind in [JointKind::Rigid, JointKind::Slider] {
+        let asm = Assembly {
+            occurrences: vec![
+                occ("ground", true, Placement::IDENTITY),
+                occ("part", false, planar([0.0, 0.0], PI)),
+            ],
+            joints: vec![Joint::new(
+                "j",
+                kind,
+                "ground",
+                Frame::at([0.0; 3]),
+                "part",
+                Frame::at([0.0; 3]),
+            )],
+        };
+        let s = solve(&asm, &SolveOptions::default()).unwrap();
+        assert_solved(&s);
+        let x = s.placements[1].apply_vector([1.0, 0.0, 0.0]);
+        assert!((x[0] - 1.0).abs() <= CLOSE_RAD, "{kind:?}: {x:?}");
+    }
+}
+
+#[test]
 fn a_duplicate_joint_is_named_redundant() {
     let asm = Assembly {
         occurrences: vec![

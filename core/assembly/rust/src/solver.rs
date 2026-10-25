@@ -303,9 +303,17 @@ impl Model<'_> {
 
     /// Every joint but a ball keeps its frames' z axes pointing the same way. The tilt rows
     /// only ask z_b to be perpendicular to x_a and y_a, which a flipped part also satisfies.
+    /// Likewise `Align(0, 1)` is the sine of the twist about z, zero at a half turn too, so a
+    /// rigid joint or a slider also keeps its x axes pointing the same way.
     fn aligned(&self, joint: usize, x: &[Placement]) -> bool {
         let (a, b) = self.ends(joint, x);
-        self.asm.joints[joint].kind == JointKind::Ball || dot(b.axes[2], a.axes[2]) > 0.0
+        match self.asm.joints[joint].kind {
+            JointKind::Ball => true,
+            JointKind::Rigid | JointKind::Slider => {
+                dot(b.axes[2], a.axes[2]) > 0.0 && dot(b.axes[0], a.axes[0]) > 0.0
+            }
+            _ => dot(b.axes[2], a.axes[2]) > 0.0,
+        }
     }
 
     fn converged(&self, rows: &[Row], x: &[Placement], opt: &SolveOptions) -> bool {
