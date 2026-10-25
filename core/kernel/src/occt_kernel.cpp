@@ -558,9 +558,9 @@ class OcctKernel final : public IKernel {
       }
       // A thin wall's volume is close to the kept area times the thickness: less at outer
       // edges and corners, a little more where arc joins round inner ones. OCCT can report a
-      // thick solid built when it returned its input or a wrong wall, so a result outside
-      // [0.5, 1.25] of that estimate is refused, and the first build is retried with offset
-      // self-intersections handled. A wall too thick for this estimate is refused too.
+      // thick solid built when it returned its input or a wrong wall, so a wall above 1.25 of
+      // that estimate, or not smaller than the source, is refused, and the first build is
+      // retried with offset self-intersections handled.
       double kept = 0;
       TopTools_MapOfShape opened;
       for (const auto& f : removed) opened.Add(f);
@@ -573,6 +573,7 @@ class OcctKernel final : public IKernel {
           kept += properties.Mass();
         }
       const double estimate = kept * thickness;
+      const double source_volume = source->measures().volume;
       std::optional<BRepOffsetAPI_MakeThickSolid> operation;
       detail::SnapshotPtr shape;
       std::string why = "the thick solid was not built";
@@ -590,7 +591,10 @@ class OcctKernel final : public IKernel {
         const double wall = (*made)->measures().volume;  // the shell is its wall
         why = "a wall of " + std::to_string(wall) + " mm^3 where about " +
               std::to_string(estimate) + " was expected";
-        if (wall >= 0.5 * estimate && wall <= 1.25 * estimate) {
+        // The wall lies inside the source, so it is less than its volume (OCCT returning its
+        // input is not a shell). A thick wall can be far below kept area times thickness, so
+        // that estimate bounds the wall from above only.
+        if (wall > 0 && wall < source_volume * (1 - 1e-9) && wall <= 1.25 * estimate) {
           shape = *made;
           break;
         }

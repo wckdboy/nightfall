@@ -89,6 +89,16 @@ TEST_CASE("Shell hollows a block inward, its open face becoming the rim", "[shel
   CHECK(covered == 11);
 }
 
+TEST_CASE("Shell keeps a wall thick for its body", "[shell]") {
+  auto kernel = make_occt_kernel().value();
+  // 14 mm into a 40 x 30 x 20 block leaves a 12 x 2 x 6 cavity: the wall is far below the kept
+  // area times the thickness, and still a valid shell.
+  const auto source = block(*kernel);
+  const auto result = kernel->shell(source, faces_at(*kernel, source, 20), 14);
+  REQUIRE(result);
+  CHECK_THAT(result->shape->measures().volume, WithinRel(40.0 * 30 * 20 - 12.0 * 2 * 6, 1e-9));
+}
+
 TEST_CASE("Shell offsets curved walls", "[shell]") {
   auto kernel = make_occt_kernel().value();
   const auto source = prism(*kernel, {make_circle({}, 10)}, 20);
