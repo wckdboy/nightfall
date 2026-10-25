@@ -153,6 +153,9 @@ def make_tasks(nf, part_path, work):
                            f"`{new_value}`. Change nothing else. Verify with measure, then "
                            "save the document with save_part to {save_path}."),
             })
+        else:
+            # No golden for the edit: the task is reported as not run, never dropped.
+            tasks.append({"part": name, "task": "edit", "infrastructure": errors})
     if param and unitless(param["value"]):
         broken = json.loads(json.dumps(doc))
         broken["params"][0]["value"] = unitless(param["value"])
@@ -284,7 +287,7 @@ def main():
     if not parts or only - {p.stem for p in parts}:
         parser.error(f"--parts/--only select no part named {sorted(only) or '(any)'}")
     inputs = {"runner": args.runner, "model": args.model or None, "nf_sha256": digest(nf),
-              "rel_tolerance": REL_TOLERANCE}
+              "rel_tolerance": REL_TOLERANCE, "position_tolerance_mm": POSITION_TOLERANCE_MM}
     part_digests = {p.stem: digest(p) for p in parts}
     results = []
     kept = {}
@@ -318,6 +321,13 @@ def main():
                 label = f"{task['part']}.{task['task']}"
                 if (task["part"], task["task"]) in kept:
                     results.append(kept[(task["part"], task["task"])])
+                    continue
+                if "infrastructure" in task:
+                    results.append({"part": task["part"], "task": task["task"],
+                                    "part_sha256": part_digests[task["part"]], "passed": None,
+                                    "errors": [{"code": "infrastructure",
+                                                "message": json.dumps(task["infrastructure"])[:500]}]})
+                    print(f"SKIP {label} (no golden)", flush=True)
                     continue
                 work = out / label
                 shutil.rmtree(work, ignore_errors=True)
