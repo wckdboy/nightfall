@@ -7,6 +7,7 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -186,8 +187,12 @@ std::optional<std::string> solved_source(ir::Document document,
             if (authored_value.if_string()) expression = true;
             return authored_value;
           }
+          // Unit round trips (in -> mm -> in) are not exact: an unmoved number stays as written.
+          const double authored = *authored_value.if_number();
           const double next = *solved_value.if_number() * scale;
-          if (next != *authored_value.if_number()) touched = true;
+          if (std::abs(next - authored) <= 1e-12 * std::max(1.0, std::abs(authored)))
+            return authored_value;
+          touched = true;
           return next;
         };
         if (const auto* pair = member.value.if_array()) {

@@ -105,7 +105,10 @@ score is adopted; within 5 points, the smaller dependency closure wins.
 - Authored coordinates are the starting point (RFC 0005). On commit, `nf mcp` and the client
   write the solved coordinates back, so a saved document is self-consistent and `nf build`
   of it reproduces the same solve from a converged start. This writes only numbers the
-  solver produced; a document is never rewritten on read.
+  solver produced; a document is never rewritten on read. A sketch with any coordinate
+  authored as an expression is not rewritten: writing its numbers alone would move the next
+  solve's start and the source would drift on every rebuild. It is solved from the same
+  authored start each time instead, and its expression entities are reported.
 - `inspect_part` adds per-sketch `dof`, `underconstrained`, `conflicting` and `redundant`,
   which is what an agent proposing a relation needs to see next.
 - Dependencies: the chosen crate at an exact version with its transitive closure vendored
