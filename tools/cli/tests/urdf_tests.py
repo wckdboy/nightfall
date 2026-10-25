@@ -192,6 +192,16 @@ with tempfile.TemporaryDirectory() as folder:
     error, refused = cylinder.call("export_urdf", path=os.path.join(folder, "blocks.urdf"))
     check(error and refused["errors"][0]["pointer"] == "/joints/0/kind", f"cylindrical refused: {refused}")
     cylinder.close()
+    # A slider without limits would be locked at 0 in URDF: refused with its pointer.
+    with open(blocks) as f:
+        document = json.load(f)
+    document["joints"][0].update(kind="slider", value="1 mm")
+    with open(blocks, "w") as f:
+        json.dump(document, f)
+    slider = Server(blocks, folder)
+    error, refused = slider.call("export_urdf", path=os.path.join(folder, "blocks.urdf"))
+    check(error and refused["errors"][0]["pointer"] == "/joints/0/limits", f"slider refused: {refused}")
+    slider.close()
     print(f"URDF export: worst translation {worst_t:.3g} m, worst rotation entry {worst_r:.3g}")
 
 for f in failures:

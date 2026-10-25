@@ -97,8 +97,12 @@ std::expected<UrdfExport, ir::Errors> export_urdf(kernel::IKernel& kernel,
       std::string type;
       if (j.kind == "revolute")
         type = j.limits ? "revolute" : "continuous";
-      else if (j.kind == "slider")
+      else if (j.kind == "slider" && j.limits)
         type = "prismatic";
+      else if (j.kind == "slider")
+        // URDF reads a prismatic joint without bounds as locked at 0: a slider needs limits.
+        return std::unexpected(refuse(pointer + "/limits",
+                                      "a slider needs limits to export as a URDF prismatic joint"));
       else if (j.kind == "rigid")
         type = "fixed";
       else
