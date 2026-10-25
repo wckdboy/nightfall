@@ -74,12 +74,17 @@ lineage.
 
 - The client starts `nf kernel serve` as a child process. Requests go to stdin and responses
   come from stdout, one JSON object per line. Stderr is for logs only.
-- Requests are answered in order. Every response repeats the request's `id`.
-- The server exits when stdin closes. A request that runs longer than the RFC 0003 watchdog
-  limit ends the process with a report on stderr; the client restarts it and falls back to
-  its own kernel.
-- Lines are capped at 64 MiB. A longer line gets an error response and the server stops
-  reading.
+- Requests are answered in order. Every response repeats the request's `id`; a line that
+  is not a JSON object with an `id` is answered with `"id": null` and `bad_request`, and the
+  server keeps serving.
+- The server exits when stdin closes. A request that runs longer than `--timeout SECONDS`
+  (default 120, the RFC 0003 watchdog contract) gets no response: the server names the
+  request's `id` on stderr and exits with status 3. The client treats a closed stdout as
+  that timeout, restarts the server and falls back to its own kernel.
+- Lines are capped at 64 MiB. A longer line is answered with `"id": null` and `too_large`,
+  and the server exits with status 1.
+- Every length is in millimetres: sample coordinates, `radius`, `distance`, `thickness`
+  and `sample_tolerance`, as in the imported STEP, which is normalized to millimetres.
 
 ### Requests
 
@@ -106,7 +111,9 @@ virtual std::expected<OperationResult, KernelError> shell(const ShapePtr&,
 The default implementation reports it as unsupported. The OCCT backend uses
 `BRepOffsetAPI_MakeThickSolid` with arc joins.
 
-An operand is one solid:
+An operand is one body. STEP text holding several solids is one body in several pieces:
+the server unions them (they must not overlap) into one shape, and sample points map to its
+faces and edges.
 
 ```json
 {"step": "ISO-10303-21; ...", "faces": [[x, y, z], ...], "edges": [[x, y, z], ...]}
