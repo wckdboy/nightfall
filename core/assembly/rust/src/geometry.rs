@@ -95,8 +95,9 @@ impl Placement {
     /// Rotation by `angle` radians about the unit direction of `axis`, then translation.
     pub fn from_axis_angle(axis: Vec3, angle: f64, translation: Vec3) -> Option<Self> {
         let unit = normalized(axis)?;
+        // Reduced to one turn first: a huge finite angle would overflow Rodrigues' formula.
         (angle.is_finite() && finite(translation)).then(|| Self {
-            rotation: exp_so3(scale(unit, angle)),
+            rotation: exp_so3(scale(unit, angle.rem_euclid(std::f64::consts::TAU))),
             translation,
         })
     }

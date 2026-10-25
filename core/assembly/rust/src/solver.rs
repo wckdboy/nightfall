@@ -565,10 +565,13 @@ pub fn joint_coordinates(
     placements: &[Placement],
 ) -> Result<Vec<Vec<f64>>, AssemblyError> {
     let m = model(asm)?;
-    if placements.len() != asm.occurrences.len() || placements.iter().any(|p| !p.is_valid()) {
+    if placements.len() != asm.occurrences.len() {
         return Err(AssemblyError::InvalidPlacement {
             occurrence: placements.len().min(asm.occurrences.len()),
         });
+    }
+    if let Some(occurrence) = placements.iter().position(|p| !p.is_valid()) {
+        return Err(AssemblyError::InvalidPlacement { occurrence });
     }
     Ok((0..asm.joints.len())
         .map(|j| {

@@ -436,6 +436,19 @@ fn hostile_input_is_an_error_and_never_panics() {
     assert!(Frame::new([0.0; 3], [0.0; 3], [1.0, 0.0, 0.0]).is_err());
     assert!(Frame::new([0.0; 3], [0.0, 0.0, 1.0], [0.0, 0.0, 2.0]).is_err());
     assert!(Placement::from_axis_angle([0.0; 3], 1.0, [0.0; 3]).is_none());
+    // A huge finite angle is reduced to one turn, so the placement is a valid rotation.
+    let huge = Placement::from_axis_angle([0.0, 0.0, 1.0], 1e308, [0.0; 3]).unwrap();
+    assert!(huge.rotation.iter().flatten().all(|v| v.is_finite()));
+    let mut b = good();
+    b.occurrences[1].placement = huge;
+    assert!(solve(&b, &SolveOptions::default()).is_ok());
+    // The invalid placement is named by its own index.
+    let mut bad = vec![Placement::IDENTITY; 2];
+    bad[0].translation[0] = f64::NAN;
+    assert_eq!(
+        joint_coordinates(&good(), &bad),
+        Err(AssemblyError::InvalidPlacement { occurrence: 0 })
+    );
     // Huge but finite inputs solve or fail as values; they never panic.
     let mut a = good();
     a.occurrences[1].placement.translation = [1e150, -1e150, 1e150];
