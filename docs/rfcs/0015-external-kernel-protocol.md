@@ -1,10 +1,11 @@
 # RFC 0015: External kernel protocol
 
-- **Status:** Review
+- **Status:** Accepted
 - **Author(s):** Claude (agent), for the maintainer
 - **Phase:** 3
 - **Created:** 2026-10-23
-- **Decided:**
+- **Decided:** 2026-10-25 by the maintainer, who accepted the RFC and waived the WORKFLOW §3
+  review period.
 
 ## Summary
 
@@ -115,7 +116,9 @@ An operand is one solid:
   edge `j`. The client picks interior points, away from boundaries.
 - The server maps each point to the nearest face or edge of the imported solid, using
   `face_distance` and `edge_distance`. The match must lie within 10 linear tolerances plus
-  the client's stated `sample_tolerance` (default 1e-3 mm).
+  the request's `sample_tolerance`: an optional nonnegative number in mm on the request
+  object, default 1e-3, applied to every operand of that request; anything else is
+  `bad_request`.
 - An ambiguous or missing match is an error. The server never guesses.
 - Several client faces may map to one OCCT face (a seam split on the client's side).
 - In a fillet or chamfer request, `edges` holds indices into operand 0's `edges` list.
@@ -139,8 +142,9 @@ An operand is one solid:
 - `from` lists the client's own face and edge indices, translated back through the sample
   point map. Faces of the same OCCT input face are all listed.
 - `change` is derived from `IKernel` history:
-  - `kept`: the result face is an unchanged input face.
-  - `modified`: the input face had exactly one image.
+  - `kept`: the input face had one image with its area within 1e-9 relative. OCCT reports
+    an unchanged face as a modified copy, so the area tells kept from modified.
+  - `modified`: the input face had exactly one image, with a different area.
   - `split`: the input face had several images.
   - `merged`: the result face has several input faces.
   - `generated`: the result face has no input faces, only edges or a role.
