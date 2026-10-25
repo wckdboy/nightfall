@@ -600,6 +600,36 @@ fn arm(q: [f64; 6]) -> Assembly {
 }
 
 #[test]
+fn a_floating_serial_arm_is_seeded_from_its_first_occurrence() {
+    // Nothing grounded: the seed roots the chain at its base, which keeps its placement.
+    let q = [45.0, 90.0, 45.0, -45.0, 90.0, 180.0].map(f64::to_radians);
+    let mut asm = arm(q);
+    asm.occurrences[0].grounded = false;
+    let s = solve(&asm, &SolveOptions::default()).unwrap();
+    assert_solved(&s);
+    assert_eq!(s.report.dof, 6);
+    let base = &s.placements[0];
+    let mut parent = (base.rotation, base.translation);
+    for (k, j) in asm.joints.iter().enumerate() {
+        let child = compose(
+            &compose(&compose(&parent, &frame_pose(&j.frame_a)), &rz(q[k])),
+            &inverse(&frame_pose(&j.frame_b)),
+        );
+        let got = &s.placements[k + 1];
+        for i in 0..3 {
+            assert!((got.translation[i] - child.1[i]).abs() <= 1e-9, "link {k}");
+            for c in 0..3 {
+                assert!(
+                    (got.rotation[i][c] - child.0[i][c]).abs() <= 1e-9,
+                    "link {k}"
+                );
+            }
+        }
+        parent = child;
+    }
+}
+
+#[test]
 fn a_driven_serial_arm_solves_far_from_its_authored_pose() {
     let poses = [
         [0.0, 0.0, 0.0, -45.0, 0.0, 0.0],

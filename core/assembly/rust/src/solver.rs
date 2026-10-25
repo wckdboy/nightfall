@@ -353,10 +353,23 @@ impl Model<'_> {
 
     /// Places every occurrence reachable from a grounded one through a spanning tree of the
     /// joints, in joint order, each child exactly through its joint ([`Self::motion`]). A tree
-    /// is then solved by construction; a loop starts with only its cut joints open.
+    /// is then solved by construction; a loop starts with only its cut joints open. A connected
+    /// part with no grounded occurrence is rooted at its first occurrence, which keeps its
+    /// authored placement.
     fn seeded(&self, start: &[Placement]) -> Vec<Placement> {
         let mut x = start.to_vec();
         let mut placed: Vec<bool> = self.asm.occurrences.iter().map(|o| o.grounded).collect();
+        loop {
+            self.grow(start, &mut x, &mut placed);
+            match placed.iter().position(|p| !p) {
+                Some(root) => placed[root] = true,
+                None => return x,
+            }
+        }
+    }
+
+    /// One spanning-tree pass from the `placed` occurrences until nothing more is reachable.
+    fn grow(&self, start: &[Placement], x: &mut [Placement], placed: &mut [bool]) {
         let mut grew = true;
         while grew {
             grew = false;
@@ -380,7 +393,6 @@ impl Model<'_> {
                 grew = true;
             }
         }
-        x
     }
 
     fn satisfied(&self, row: &Row, residual: f64, opt: &SolveOptions) -> bool {
