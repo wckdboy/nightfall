@@ -29,9 +29,11 @@ std::unique_ptr<mfem::Mesh> build(const PlainMesh& plain) {
   mesh->FinalizeTetMesh(1, 1, true);
   return mesh;
 }
-/// A boundary-attribute marker selecting `faces`; empty when a face has no triangles.
+/// A boundary-attribute marker selecting `faces`; an error when there are none, or when a face
+/// has no triangles.
 std::expected<mfem::Array<int>, std::string> marker(const mfem::Mesh& mesh,
                                                     const std::vector<int>& faces) {
+  if (faces.empty()) return std::unexpected("a boundary condition selects no faces");
   mfem::Array<int> m(mesh.bdr_attributes.Max());
   m = 0;
   for (const int f : faces) {
@@ -225,6 +227,9 @@ std::expected<ThermalResult, std::string> solve_thermal(const PlainMesh& plain,
     auto selected = marker(*mesh, c.faces);
     if (!selected) return std::unexpected(selected.error());
     markers.push_back(std::move(*selected));
+    if (!(c.film_coefficient > 0) || !std::isfinite(c.film_coefficient) ||
+        !std::isfinite(c.ambient_kelvin))
+      return std::unexpected("a convection boundary needs a positive, finite film coefficient");
     const double h = c.film_coefficient * 1e-6;
     for (auto* form : {&a, &unconstrained})
       form->AddBoundaryIntegrator(new mfem::BoundaryMassIntegrator(*coefficient(h)),
@@ -251,11 +256,19 @@ std::expected<ThermalResult, std::string> solve_thermal(const PlainMesh& plain,
   mfem::Vector r(T.Size());
   unconstrained.Mult(T, r);
   r -= source;
+  // Adjacent groups share their common edge's DOFs: each DOF counts once, for the first group
+  // that holds it, so the groups' heat adds up to the total.
+  std::vector<bool> counted(static_cast<std::size_t>(r.Size()), false);
   for (const auto& group : groups) {
     mfem::Array<int> dofs;
     space.GetEssentialTrueDofs(group, dofs);
     double heat = 0;
-    for (int i = 0; i < dofs.Size(); ++i) heat += r(dofs[i]);
+    for (int i = 0; i < dofs.Size(); ++i) {
+      const auto dof = static_cast<std::size_t>(dofs[i]);
+      if (counted[dof]) continue;
+      counted[dof] = true;
+      heat += r(dofs[i]);
+    }
     result.heat_in.push_back(heat);
   }
   return result;

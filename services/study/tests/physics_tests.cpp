@@ -100,6 +100,28 @@ TEST_CASE("a slab between two temperatures conducts kA dT / t", "[study][thermal
   CHECK_THAT(result.min_temperature, WithinAbs(300, 1e-9));
 }
 
+TEST_CASE("adjacent temperature groups conserve heat and empty or inert groups fail",
+          "[study][thermal]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  const auto slab = box(*kernel, {100, 100, 10});
+  ThermalInput input{167, {}, {}, {}, 2};
+  input.temperatures.push_back({{face(*kernel, slab, {0, 0, 1})}, 400});
+  input.temperatures.push_back({{face(*kernel, slab, {0, 0, -1})}, 300});
+  input.temperatures.push_back({{face(*kernel, slab, {1, 0, 0})}, 350});  // touches both
+  const auto plain = mesh(slab, 10);
+  const auto result = solve_thermal(plain, input).value();
+  REQUIRE(result.heat_in.size() == 3);
+  // Everything else is insulated: what enters leaves. Shared edges count once.
+  const double total = result.heat_in[0] + result.heat_in[1] + result.heat_in[2];
+  CHECK_THAT(total, WithinAbs(0, 1e-9 * std::abs(result.heat_in[0])));
+  auto empty = input;
+  empty.temperatures.push_back({{}, 300});
+  CHECK_FALSE(solve_thermal(plain, empty));
+  ThermalInput inert{167, {}, {}, {}, 2};
+  inert.convection.push_back({{face(*kernel, slab, {0, 0, 1})}, 0, 350});
+  CHECK_FALSE(solve_thermal(plain, inert));
+}
+
 TEST_CASE("convection and a fixed temperature act in series", "[study][thermal]") {
   auto kernel = kernel::make_occt_kernel().value();
   // 300 K below; the top loses heat to 350 K air at 50 W/(m^2 K): q = dT / (1/h + t/k).
