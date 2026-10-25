@@ -173,6 +173,18 @@ TEST_CASE("over-driven or unsupported assemblies fail with pointers", "[assembly
   REQUIRE_FALSE(rejected);
   CHECK(rejected.error().front().code == "unsupported");
   CHECK(rejected.error().front().pointer == "/joints/0/a/frame/where");
+  // `role` filters only when given, as in feature selectors; `expect` can only say "one".
+  auto roleless = four_bar();
+  const std::string role = R"("role":"side",)";
+  roleless.erase(roleless.find(role), role.size());
+  const auto without_role = evaluate_assembly(evaluator, *kernel, parse(roleless));
+  REQUIRE(without_role);
+  closes(*without_role, 40);
+  auto many = four_bar();
+  many.replace(many.find(plain_end), plain_end.size(), R"("from":"outline/h0","expect":"some"})");
+  const auto expect_many = evaluate_assembly(evaluator, *kernel, parse(many));
+  REQUIRE_FALSE(expect_many);
+  CHECK(expect_many.error().front().pointer == "/joints/0/a/frame/expect");
   // A part without occurrences is not an assembly.
   auto plain = ir::Document{};
   const auto empty = evaluate_assembly(evaluator, *kernel, plain);

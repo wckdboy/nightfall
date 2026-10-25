@@ -95,12 +95,19 @@ nf_frame derive_frame(kernel::IKernel& kernel, const Evaluation& evaluation,
     return v && v->if_string() ? *v->if_string() : std::string();
   };
   const auto producer = text("created_by"), role = text("role"), from = text("from");
+  // A frame is one surface: `expect` may only restate that. Patches of one surface (OCCT splits
+  // periodic faces) are merged below, which keeps the centroid of a face that splits.
+  if (const auto* expect = end.frame.find("expect");
+      expect && !(expect->if_string() && *expect->if_string() == "one"))
+    fail(pointer + "/frame/expect", "a joint frame selects one surface; expect must be \"one\"",
+         "unsupported");
   std::vector<std::pair<kernel::ShapePtr, kernel::EntityPtr>> found;
   for (const auto& [id, body] : evaluation.bodies) {
     if (!body.shape || !body.unavailable.empty()) continue;
     for (const auto& name : body.names) {
-      if (name.feature != producer || name.role != role || (!from.empty() && name.from != from) ||
-          !name.entity || name.entity->kind() != kernel::EntityKind::kFace)
+      if (name.feature != producer || (!role.empty() && name.role != role) ||
+          (!from.empty() && name.from != from) || !name.entity ||
+          name.entity->kind() != kernel::EntityKind::kFace)
         continue;
       bool repeated = false;
       for (const auto& [shape, entity] : found)
@@ -193,12 +200,15 @@ std::pair<Vec3, double> axis_angle(const std::array<double, 9>& r) {
   if (angle < 1e-15) return {{0, 0, 1}, 0};
   Vec3 axis{r[7] - r[5], r[2] - r[6], r[3] - r[1]};
   if (auto u = unit(axis); u && std::numbers::pi - angle > 1e-6) return {*u, angle};
-  // Near a half turn: the axis is the column of R + I with the largest norm.
+  // Near a half turn: the axis is the column of R + I with the largest norm, signed by the
+  // skew-symmetric part (2 sin(angle) times the axis) while that still carries a sign.
   const Vec3 c[3] = {{r[0] + 1, r[3], r[6]}, {r[1], r[4] + 1, r[7]}, {r[2], r[5], r[8] + 1}};
   std::size_t best = 0;
   for (std::size_t k = 1; k < 3; ++k)
     if (dot(c[k], c[k]) > dot(c[best], c[best])) best = k;
-  return {*unit(c[best]), angle};
+  auto u = *unit(c[best]);
+  if (dot(u, axis) < 0) u = scale(u, -1);
+  return {u, angle};
 }
 }  // namespace
 
