@@ -1,0 +1,3 @@
+# SolidCraft's rustfmt.toml at 6f5d0038abffbd3e1fc26069b1b96ca89984058f.
+max_width = 150
+use_small_heuristics = "Max"

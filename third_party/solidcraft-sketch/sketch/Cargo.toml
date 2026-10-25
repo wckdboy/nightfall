@@ -1,0 +1,22 @@
+# Vendored from SolidCraft 6f5d0038abffbd3e1fc26069b1b96ca89984058f; see ../README.md.
+[package]
+name = "solidcraft-sketch"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+solidcraft-geom = { path = "../geom" }
+
+[lib]
+# Upstream's tests are not vendored (some need serde); nightfall-sketch tests the solver.
+test = false
+doctest = false
+
+[lints.rust]
+unsafe_code = "forbid"
+# Helpers that only serde attributes called, and the upstream profiling feature, stay
+# in the vendored source untouched.
+dead_code = "allow"
+unexpected_cfgs = "allow"

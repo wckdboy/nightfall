@@ -20,3 +20,22 @@ version = "0.0.1"
 dependencies = [
  "nightfall-math",
 ]
+
+[[package]]
+name = "nightfall-sketch"
+version = "0.0.1"
+dependencies = [
+ "solidcraft-geom",
+ "solidcraft-sketch",
+]
+
+[[package]]
+name = "solidcraft-geom"
+version = "0.0.0"
+
+[[package]]
+name = "solidcraft-sketch"
+version = "0.0.0"
+dependencies = [
+ "solidcraft-geom",
+]
