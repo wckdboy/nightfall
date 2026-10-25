@@ -485,14 +485,21 @@ TEST_CASE("mcp export_mesh writes a closed outward OBJ whose volume matches the 
   Temp temp;
   const auto input = temp.path("plate.nightfall");
   write(input, source(part()));
+  // A second, independent extrude fails while the plate stays live.
+  auto mixed = part();
+  mixed.features.push_back(feature("ghost_plate", "extrude", R"({"profile":{"sketch":"outline"},
+    "distance":"depth","result":{"new":"ghost","body_type":"mesh"}})"));
+  const auto escaped = ir::json::canonical(Value(source(mixed)));
   const auto process =
       serve(temp, {"--in", input.string()},
             {kInitialize, call(1, "export_mesh", R"({"path":"plate.obj"})"),
              call(2, "export_mesh", R"({"path":"ghost.obj","bodies":["ghost"]})"),
-             call(3, "export_mesh", R"({"path":"bad.obj","linear_deflection":"fine"})")});
+             call(3, "export_mesh", R"({"path":"bad.obj","linear_deflection":"fine"})"),
+             call(4, "replace_part", "{\"document\":" + escaped + ",\"rollback\":false}"),
+             call(5, "export_mesh", R"({"path":"partial.obj"})")});
   INFO(process.error);
   REQUIRE(process.status == 0);
-  REQUIRE(process.replies.size() == 4);
+  REQUIRE(process.replies.size() == 6);
   const auto& exported = content(process.replies[1]);
   CHECK(*exported.find("path")->if_string() == temp.path("plate.obj").string());
   // Parse the OBJ: positions, then triangles; signed volume by the divergence theorem.
@@ -534,4 +541,9 @@ TEST_CASE("mcp export_mesh writes a closed outward OBJ whose volume matches the 
   REQUIRE(process.replies[3].find("error"));
   CHECK(*process.replies[3].find("error")->find("code")->if_number() == -32602);
   CHECK_FALSE(fs::exists(temp.path("ghost.obj")));
+  // A failed build exports nothing, even when some bodies survived it.
+  CHECK_FALSE(*content(process.replies[4]).find("ok")->if_bool());
+  CHECK(*ids(content(process.replies[5], true), "errors").front().find("code")->if_string() ==
+        "failed");
+  CHECK_FALSE(fs::exists(temp.path("partial.obj")));
 }

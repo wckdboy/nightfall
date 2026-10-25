@@ -368,6 +368,8 @@ std::expected<Session::MeshExport, ir::Errors> Session::export_obj(
   }
   if (shapes.empty())
     return std::unexpected(ir::Errors{{"empty", "the document has no live solids", "", {}}});
+  if (!state_.build.ok)
+    return std::unexpected(ir::Errors{{"failed", "a feature failed; export refused", "", {}}});
   MeshExport result;
   result.obj = "# Nightfall derived mesh (mm); geometry is the part document, not this file\n";
   std::size_t offset = 1;  // OBJ indices are global and 1-based
