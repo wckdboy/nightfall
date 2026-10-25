@@ -729,14 +729,15 @@ std::expected<Object, ir::Errors> Session::mass_properties(
       density[o.id] = *c->density;
   }
   std::vector<std::string> only;
-  if (occurrence) only.push_back(*occurrence);
-  const auto m = kernel_service::mass_properties(kernel_, placed(state_.evaluation), density, only);
-  if (!m) {
-    if (occurrence)
-      return std::unexpected(
-          ir::Errors{{"unknown_id", "no live bodies in occurrence " + *occurrence, "", {}}});
-    return std::unexpected(m.error());
+  if (occurrence) {
+    if (std::ranges::find(state_.document.occurrences, *occurrence, &ir::Occurrence::id) ==
+        state_.document.occurrences.end())
+      return std::unexpected(ir::Errors{{"unknown_id", "no occurrence " + *occurrence, "", {}}});
+    only.push_back(*occurrence);
   }
+  // Kernel failures of an existing occurrence are reported as they are.
+  const auto m = kernel_service::mass_properties(kernel_, placed(state_.evaluation), density, only);
+  if (!m) return std::unexpected(m.error());
   const auto tensor = [](const std::array<double, 9>& t) {
     return Array{Array{t[0], t[1], t[2]}, Array{t[3], t[4], t[5]}, Array{t[6], t[7], t[8]}};
   };
