@@ -152,8 +152,8 @@ cylindrical face: origin on the axis, Z along it; vertex, edge midpoint, datum).
   materials; motion study as joint values over steps with collision at each step.
 - Exports: STEP with assembly structure; URDF with per-link meshes, mass and inertia so
   MuJoCo, Chrono, Isaac Sim or Gazebo can test the mechanism.
-- Format: version 1 → 2 with a pure migration (a v1 part becomes one component with one
-  grounded occurrence). Studies (Track 4) ride the same bump.
+- Format: version 1 → 2 with a pure migration that changes only `version` (RFC 0013);
+  studies (Track 4) join v2 before its first release (RFC 0014).
 
 ### Track 4: engineering studies
 
