@@ -221,8 +221,24 @@ std::vector<NamedEntity> names(const std::vector<const BodyState*>& inputs,
   }
   return result;
 }
+std::size_t json_bytes(const ir::json::Value& value) {
+  std::size_t bytes = sizeof(value);
+  if (const auto* text = value.if_string()) bytes += text->size();
+  if (const auto* array = value.if_array())
+    for (const auto& item : *array) bytes += json_bytes(item);
+  if (const auto* object = value.if_object())
+    for (const auto& member : *object)
+      bytes += sizeof(member.key) + member.key.size() + json_bytes(member.value);
+  return bytes;
+}
 std::size_t sketch_bytes(const Sketch& sketch) {
   std::size_t bytes = sizeof(Sketch);
+  // A solved sketch keeps its report, including a JSON copy of every solved entity.
+  if (const auto& report = sketch.report) {
+    for (const auto* ids : {&report->underconstrained, &report->redundant})
+      for (const auto& id : *ids) bytes += sizeof(id) + id.size();
+    if (report->entities) bytes += json_bytes(*report->entities);
+  }
   const auto curve_bytes = [](const auto& curve) {
     return sizeof(curve) + 128 + curve.points().size() * sizeof(math::Vec2) +
            (curve.weights().size() + curve.knots().size()) * sizeof(double);
@@ -284,7 +300,7 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
                                  feature.type == "loft" || feature.type == "sweep";
     const bool pattern_feature = feature.type == "pattern_linear" ||
                                  feature.type == "pattern_circular" || feature.type == "mirror";
-    result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}});
+    result.features.push_back({feature.id, FeatureStatus::kFailed, {}, {}, {}});
     auto& record = result.features.back();
     auto affected = targets(feature, previous);
     previous.emplace(feature.id, affected);
@@ -775,7 +791,10 @@ std::expected<Evaluation, ir::Errors> Evaluator::evaluate(std::string_view sourc
         }
       if (!keep_tools)
         for (const auto& tool : tools) result.bodies[tool] = {{}, {}, {}, "input_failed"};
-      if (output->sketch) sketches[feature.id] = output;
+      if (output->sketch) {
+        sketches[feature.id] = output;
+        record.sketch = output->sketch->report;
+      }
       if (cached)
         ++result.cache_hits;
       else

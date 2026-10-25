@@ -7,9 +7,11 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <numbers>
 
 namespace nf::cli {
 namespace {
@@ -132,14 +134,104 @@ void Session::adopt_invalid(std::string source, ir::Errors errors) {
 }
 
 Object Session::Build::json() const {
-  return {{"ok", ok},
-          {"evidence", evidence},
-          {"features", features},
-          {"bodies", bodies},
-          {"changed_bodies", changed},
-          {"added_bodies", added},
-          {"removed_bodies", removed}};
+  Object result{{"ok", ok},
+                {"evidence", evidence},
+                {"features", features},
+                {"bodies", bodies},
+                {"changed_bodies", changed},
+                {"added_bodies", added},
+                {"removed_bodies", removed}};
+  if (!written_back.empty()) result.push_back({"written_back", written_back});
+  return result;
 }
+
+namespace {
+/// RFC 0012 write-back: for every sketch the evaluator solved, the authored entities take the
+/// solved coordinates wherever they were plain numbers, converted from millimetres and radians
+/// to the document's units. A sketch with a coordinate authored as an expression is not
+/// rewritten at all: writing its numbers alone would change the start the next solve begins
+/// from, so the source would drift on every rebuild. Its expression entities are listed.
+/// Returns the rewritten document text, or nothing when no sketch was solved or nothing could
+/// change.
+std::optional<std::string> solved_source(ir::Document document,
+                                         const kernel_service::Evaluation& evaluation,
+                                         Array& written) {
+  static const std::map<std::string, double> mm_per{
+      {"mm", 1.0}, {"cm", 10.0}, {"m", 1000.0}, {"in", 25.4}, {"ft", 304.8}};
+  const double length =
+      mm_per.count(document.units.length) ? mm_per.at(document.units.length) : 1.0;
+  const double angle = document.units.angle == "deg" ? 180.0 / std::numbers::pi : 1.0;
+  bool changed = false;
+  for (std::size_t i = 0; i < document.features.size() && i < evaluation.features.size(); ++i) {
+    const auto& report = evaluation.features[i].sketch;
+    if (!report || !report->solved || !report->entities) continue;
+    const auto* authored = document.features[i].inputs.find("entities");
+    const auto* solved = report->entities->if_array();
+    if (!authored || !authored->if_array() || !solved) continue;
+    Array entities = *authored->if_array();
+    Array updated, expressions;
+    for (std::size_t k = 0; k < entities.size() && k < solved->size(); ++k) {
+      ir::json::Object entity = *entities[k].if_object();
+      const auto& result = (*solved)[k];
+      bool touched = false, expression = false;
+      for (auto& member : entity) {
+        const auto* value = result.find(member.key);
+        if (!value) continue;
+        const bool is_angle = member.key == "start_angle" || member.key == "sweep_angle";
+        const bool is_length = member.key == "at" || member.key == "start" || member.key == "end" ||
+                               member.key == "center" || member.key == "radius";
+        if (!is_angle && !is_length) continue;
+        const double scale = is_angle ? angle : 1.0 / length;
+        const auto convert = [&](const Value& authored_value, const Value& solved_value) -> Value {
+          if (!authored_value.if_number()) {
+            if (authored_value.if_string()) expression = true;
+            return authored_value;
+          }
+          // Unit round trips (in -> mm -> in) are not exact: an unmoved number stays as written.
+          const double authored = *authored_value.if_number();
+          const double next = *solved_value.if_number() * scale;
+          if (std::abs(next - authored) <= 1e-12 * std::max(1.0, std::abs(authored)))
+            return authored_value;
+          touched = true;
+          return next;
+        };
+        if (const auto* pair = member.value.if_array()) {
+          const auto* target = value->if_array();
+          if (!target || target->size() != pair->size()) continue;
+          Array next;
+          for (std::size_t c = 0; c < pair->size(); ++c)
+            next.push_back(convert((*pair)[c], (*target)[c]));
+          member.value = std::move(next);
+        } else if (value->if_number()) {
+          member.value = convert(member.value, *value);
+        }
+      }
+      if (touched) updated.push_back(*entities[k].find("id"));
+      if (expression) expressions.push_back(*entities[k].find("id"));
+      entities[k] = std::move(entity);
+    }
+    if (updated.empty() && expressions.empty()) continue;
+    if (!expressions.empty()) {
+      written.push_back(Object{{"feature", document.features[i].id},
+                               {"entities", Array{}},
+                               {"expressions", std::move(expressions)}});
+      continue;
+    }
+    written.push_back(Object{{"feature", document.features[i].id},
+                             {"entities", std::move(updated)},
+                             {"expressions", Array{}}});
+    ir::json::Object inputs = *document.features[i].inputs.if_object();
+    for (auto& member : inputs)
+      if (member.key == "entities") member.value = std::move(entities);
+    document.features[i].inputs = std::move(inputs);
+    changed = true;
+  }
+  if (!changed) return std::nullopt;
+  auto text = ir::write_document(document);
+  if (!text) return std::nullopt;
+  return std::move(*text);
+}
+}  // namespace
 
 Session::Session(kernel::IKernel& kernel, math::Tolerance tolerance)
     : kernel_(kernel), tolerance_(tolerance), evaluator_(kernel, {96, 64 * 1024 * 1024}) {
@@ -149,7 +241,7 @@ Session::Session(kernel::IKernel& kernel, math::Tolerance tolerance)
   state_ = std::move(*state);
 }
 
-std::expected<Session::State, ir::Errors> Session::evaluate(std::string source) {
+std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, bool write_back) {
   auto document = ir::read_document(source);
   if (!document) return std::unexpected(document.error());
   auto normalized = ir::write_document(*document);
@@ -160,6 +252,14 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source) 
   const double evaluation_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - start).count();
   if (!evaluated) return std::unexpected(evaluated.error());
+  Array written;  // also lists sketches left as authored because of expression coordinates
+  if (write_back) {
+    if (auto rewritten = solved_source(*document, *evaluated, written)) {
+      auto state = evaluate(std::move(*rewritten), false);
+      if (state) state->build.written_back = std::move(written);
+      return state;
+    }
+  }
   State state{std::move(*normalized), std::move(*document), std::move(*evaluated), {}, {}};
   auto& build = state.build;
   build.ok = state.evaluation.ok();
@@ -170,10 +270,20 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source) 
       if (e.offset) entry.push_back({"offset", numeric(*e.offset)});
       errors.push_back(std::move(entry));
     }
-    build.features.push_back(
-        Object{{"id", f.id},
-               {"status", std::string(kStatus[static_cast<std::size_t>(f.status)])},
-               {"errors", std::move(errors)}});
+    Object entry{{"id", f.id},
+                 {"status", std::string(kStatus[static_cast<std::size_t>(f.status)])},
+                 {"errors", std::move(errors)}};
+    if (f.sketch) {
+      Array under, redundant;
+      for (const auto& id : f.sketch->underconstrained) under.push_back(id);
+      for (const auto& pointer : f.sketch->redundant) redundant.push_back(pointer);
+      entry.push_back({"sketch", Object{{"dof", numeric(f.sketch->dof)},
+                                        {"fully_constrained", f.sketch->dof == 0},
+                                        {"underconstrained", std::move(under)},
+                                        {"redundant", std::move(redundant)},
+                                        {"solved", f.sketch->solved}}});
+    }
+    build.features.push_back(std::move(entry));
   }
   Array metrics;
   for (const auto& [id, body] : state.evaluation.bodies)
@@ -212,6 +322,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source) 
     if (live(body) && (next == state.evaluation.bodies.end() || !live(next->second)))
       build.removed.push_back(id);
   }
+  build.written_back = std::move(written);
   return state;
 }
 

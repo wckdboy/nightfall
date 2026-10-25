@@ -597,3 +597,144 @@ TEST_CASE("mcp body_topology lists faces and edges with generative names and fra
     }
   CHECK(radii == std::set<int>{5, 12});
 }
+
+namespace {
+/// A hand-drawn loop with full constraints, in the given length unit. Coordinates are rough.
+std::string rough_loop(const char* unit, double scale, const char* x0 = "0.3",
+                       bool redundant = false) {
+  auto n = [&](double v) { return ir::json::format_number(v * scale); };
+  std::string text = R"({"format":"nightfall.part","version":1,"units":{"length":")" +
+                     std::string(unit) + R"(","angle":"deg"},"meta":{},
+    "params":[{"name":"width","value":"10 mm"},{"name":"height","value":"20 mm"}],"references":[],
+    "features":[{"id":"outline","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"origin","type":"point","at":[0,0]},
+      {"id":"a","type":"line","start":[X0,)" +
+                     n(-0.2) + "],\"end\":[" + n(9.1) + "," + n(0.4) +
+                     R"(]},
+      {"id":"b","type":"line","start":[)" +
+                     n(9.1) + "," + n(0.4) + "],\"end\":[" + n(8.7) + "," + n(19.3) + R"(]},
+      {"id":"c","type":"line","start":[)" +
+                     n(8.7) + "," + n(19.3) + "],\"end\":[" + n(-0.4) + "," + n(18.8) + R"(]},
+      {"id":"d","type":"line","start":[)" +
+                     n(-0.4) + "," + n(18.8) + "],\"end\":[" + n(0.3) + "," + n(-0.2) +
+                     R"(]}],"constraints":[
+      {"type":"fixed","entities":["origin"]},
+      {"type":"coincident","entities":[{"entity":"a","point":"start"},"origin"]},
+      {"type":"coincident","entities":[{"entity":"a","point":"end"},{"entity":"b","point":"start"}]},
+      {"type":"coincident","entities":[{"entity":"b","point":"end"},{"entity":"c","point":"start"}]},
+      {"type":"coincident","entities":[{"entity":"c","point":"end"},{"entity":"d","point":"start"}]},
+      {"type":"coincident","entities":[{"entity":"d","point":"end"},{"entity":"a","point":"start"}]},
+      {"type":"horizontal","entities":["a"]},{"type":"vertical","entities":["b"]},
+      {"type":"parallel","entities":["a","c"]},{"type":"perpendicular","entities":["a","d"]},
+      {"type":"distance","entities":[{"entity":"a","point":"start"},{"entity":"a","point":"end"}],"value":"width"},
+      {"type":"distance","entities":[{"entity":"b","point":"start"},{"entity":"b","point":"end"}],"value":"height"}]}},
+    {"id":"base","type":"extrude","inputs":{"profile":{"sketch":"outline"},"distance":"30 mm",
+      "result":{"new":"plate","body_type":"brep"}}}],"history_end":null,"ui":{}})";
+  text.replace(text.find("X0"), 2, std::string(x0) == "0.3" ? n(0.3) : std::string(x0));
+  // d is already vertical through its perpendicular to the horizontal a.
+  if (redundant) text.replace(text.find("]}},"), 0, R"(,{"type":"vertical","entities":["d"]})");
+  return text;
+}
+const Value* feature(const Value& build, const char* id) {
+  for (const auto& f : *build.find("features")->if_array())
+    if (*f.find("id")->if_string() == id) return &f;
+  return nullptr;
+}
+}  // namespace
+
+TEST_CASE("mcp reports sketch freedom and writes solved coordinates back", "[cli-mcp][sketch]") {
+  Temp temp;
+  for (const auto& [unit, scale] : {std::pair{"mm", 1.0}, {"in", 1 / 25.4}}) {
+    CAPTURE(unit);
+    const auto input = temp.path("rough.nightfall");
+    write(input, rough_loop(unit, scale, "0.3", true));
+    const auto process = serve(temp, {"--in", input.string()},
+                               {kInitialize, call(1, "inspect_part"),
+                                call(2, "save_part", R"({"path":"saved.nightfall"})"),
+                                call(3, "open_part", R"({"path":"saved.nightfall"})")});
+    INFO(process.error);
+    REQUIRE(process.status == 0);
+    REQUIRE(process.replies.size() == 4);
+    // Startup solved the rough sketch and adopted the solved numbers.
+    const auto& inspected = content(process.replies[1]);
+    CHECK(*inspected.find("ok")->if_bool());
+    const auto* outline = feature(inspected, "outline");
+    REQUIRE(outline);
+    REQUIRE(outline->find("sketch"));
+    const auto& report = *outline->find("sketch");
+    CHECK(number(report, "dof") == 0);
+    CHECK(*report.find("fully_constrained")->if_bool());
+    CHECK(ids(report, "underconstrained").empty());
+    // The extra vertical on d adds nothing: it is named, and the sketch still solves.
+    CHECK_FALSE(ids(report, "redundant").empty());
+    const auto& plate = body(inspected, "plate");
+    CHECK_THAT(number(plate, "volume"), WithinAbs(6000, 6000 * 1e-9));
+    // The saved document holds the solved coordinates in its own unit.
+    const auto saved = ir::json::parse(read(temp.path("saved.nightfall"))).value();
+    const auto& entities =
+        *saved.find("features")->if_array()->front().find("inputs")->find("entities");
+    const auto& c = (*entities.if_array())[3];
+    CHECK_THAT(*c.find("start")->if_array()->at(0).if_number(), WithinAbs(10 * scale, 1e-9));
+    CHECK_THAT(*c.find("start")->if_array()->at(1).if_number(), WithinAbs(20 * scale, 1e-9));
+    // Reopened, nothing needs solving and nothing is written back.
+    const auto& reopened = content(process.replies[3]);
+    CHECK(*feature(reopened, "outline")->find("sketch")->find("solved")->if_bool() == false);
+    CHECK_FALSE(reopened.find("written_back"));
+    CHECK_THAT(number(body(reopened, "plate"), "volume"), WithinAbs(6000, 6000 * 1e-9));
+  }
+}
+
+TEST_CASE("mcp write-back keeps expressions and reports free sketches", "[cli-mcp][sketch]") {
+  Temp temp;
+  const auto input = temp.path("rough.nightfall");
+  write(input, rough_loop("mm", 1, "\"width - 9.7 mm\""));
+  auto loose = ir::json::parse(R"({"format":"nightfall.part","version":1,
+    "units":{"length":"mm","angle":"deg"},"meta":{},"params":[],"references":[],
+    "features":[{"id":"s","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"l","type":"line","start":[0,0],"end":[5,1]},{"id":"p","type":"point","at":[2,3]}],
+      "constraints":[{"type":"horizontal","entities":["l"]}]}}],"history_end":null,"ui":{}})")
+                   .value();
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize,
+             call(1, "patch_part",
+                  R"({"patch":[{"op":"replace","path":"/params/0/value","value":"12 mm"}]})"),
+             call(2, "get_part"),
+             call(3, "replace_part",
+                  "{\"document\":" + ir::json::canonical(Value(ir::json::write(loose))) + "}"),
+             call(4, "inspect_part")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 5);
+  // a's start is the expression "width - 9.7 mm": it is solved every rebuild and never overwritten.
+  const auto& patched = content(process.replies[1]);
+  CHECK_THAT(number(body(patched, "plate"), "volume"), WithinAbs(12 * 20 * 30, 7200 * 1e-9));
+  const auto& written = ids(patched, "written_back");
+  REQUIRE(written.size() == 1);
+  CHECK(*written[0].find("feature")->if_string() == "outline");
+  CHECK(ids(written[0], "expressions") == Array{"a"});
+  // Writing only the numbers would move the next solve's start: the sketch stays as authored.
+  CHECK(ids(written[0], "entities").empty());
+  const auto text = *content(process.replies[2]).find("document")->if_string();
+  CHECK(text.find("width - 9.7 mm") != std::string::npos);
+  const auto sketch_entities = [](const std::string& source) {
+    const auto doc = ir::json::parse(source).value();
+    for (const auto& f : *doc.find("features")->if_array())
+      if (*f.find("id")->if_string() == "outline") return *f.find("inputs")->find("entities");
+    return Value();
+  };
+  CHECK(sketch_entities(text) == sketch_entities(read(input)));
+  // A horizontal line and a free point: 3 + 2 degrees of freedom, both named.
+  const auto& free = content(process.replies[4]);
+  const auto& report = *feature(free, "s")->find("sketch");
+  CHECK(number(report, "dof") == 5);
+  CHECK_FALSE(*report.find("fully_constrained")->if_bool());
+  CHECK(ids(report, "underconstrained") == Array{"l", "p"});
+  CHECK_FALSE(*report.find("solved")->if_bool());
+  // Rectangles are outside the solver: no report rather than a wrong one.
+  const auto washer_like = serve(
+      temp, {"--in", (fs::path(NF_REFERENCE_PARTS_DIR) / "mounting_plate.nightfall").string()},
+      {kInitialize, call(1, "inspect_part")});
+  REQUIRE(washer_like.replies.size() == 2);
+  CHECK_FALSE(feature(content(washer_like.replies[1]), "outline")->find("sketch"));
+}

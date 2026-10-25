@@ -38,6 +38,11 @@ class Session {
   struct Build {
     ir::json::Object evidence;
     ir::json::Array features, bodies, changed, added, removed;
+    /// Sketches whose solved coordinates replaced authored numbers (RFC 0012 write-back):
+    /// `{feature, entities, expressions}`. A sketch with coordinates authored as expressions
+    /// lists them in `expressions` and is not rewritten (`entities` is empty): it is solved
+    /// again from the same authored start on every rebuild.
+    ir::json::Array written_back;
     bool ok = false;
     [[nodiscard]] ir::json::Object json() const;
   };
@@ -93,7 +98,10 @@ class Session {
     Build build;
     ir::Errors errors;  // document-level errors of an adopted invalid source
   };
-  [[nodiscard]] std::expected<State, ir::Errors> evaluate(std::string source);
+  /// With `write_back`, a rebuild that solved a sketch rewrites the authored plain numbers to
+  /// the solved coordinates and evaluates the rewritten document instead.
+  [[nodiscard]] std::expected<State, ir::Errors> evaluate(std::string source,
+                                                          bool write_back = true);
   [[nodiscard]] std::expected<Build, ir::Errors> commit(std::string source, bool rollback,
                                                         std::vector<std::string>& from,
                                                         std::vector<std::string>& to);

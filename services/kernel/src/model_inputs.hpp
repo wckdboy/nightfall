@@ -9,6 +9,15 @@
 #include "nf/kernel/kernel.hpp"
 
 namespace nf::kernel_service {
+/// What the sketch solver (RFC 0012) found, for sketches whose entities are all points, lines,
+/// circles and arcs. Computed for satisfied sketches too, so an agent sees free freedoms.
+struct SketchReport {
+  bool solved = false;  // the authored coordinates violated a constraint and were solved
+  std::size_t dof = 0;  // remaining degrees of freedom
+  std::vector<std::string> underconstrained;  // entity ids, in authored order
+  std::vector<std::string> redundant;         // constraint pointers, "/constraints/<j>"
+  std::optional<ir::json::Value> entities;    // the solved entities array, when solved
+};
 struct Sketch {
   struct Line {
     math::Vec2 start, end;
@@ -21,6 +30,7 @@ struct Sketch {
   // Optional metadata parallel to paths/segments; omitted entries have no authored source.
   std::vector<std::vector<std::string>> path_entities;
   std::vector<std::string> segment_entities;
+  std::optional<SketchReport> report;  // absent when the solver does not handle every entity
 };
 /// Local authored entity IDs by final region/loop/curve. Empty sets denote synthetic bridges.
 /// No producer/sketch ID is cached here; publication binds the current evaluation's IDs.
