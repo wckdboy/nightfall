@@ -43,7 +43,12 @@ bool cholesky_solve(int n, std::span<const int> rows, std::span<const int> cols,
   structure.attributes.triangle = SparseLowerTriangle;
   structure.blockSize = 1;
   const SparseMatrix_Double matrix{structure, data.data()};
-  auto factor = SparseFactor(SparseFactorizationCholesky, matrix);
+  // Without a reportError callback Accelerate traps on a factorization error and ends the
+  // process; with one, a matrix that is not SPD comes back as a status and CG takes over.
+  auto symbolic = _SparseDefaultSymbolicFactorOptions;
+  symbolic.reportError = [](const char*) {};
+  auto factor = SparseFactor(SparseFactorizationCholesky, matrix, symbolic,
+                             _SparseDefaultNumericFactorOptions_Double);
   if (factor.status != SparseStatusOK) {
     SparseCleanup(factor);
     return false;

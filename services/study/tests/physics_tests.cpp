@@ -5,6 +5,7 @@
 #include "geometry.hpp"
 #include "nf/math/constructors.hpp"
 #include "physics.hpp"
+#include "sparse_cholesky.hpp"
 
 #include <unistd.h>
 #include <cmath>
@@ -157,4 +158,17 @@ TEST_CASE("the direct solve agrees with the iterative one", "[study][structural]
   CHECK_THAT(direct.max_von_mises, WithinRel(iterative.max_von_mises, 1e-9));
   for (std::size_t c = 0; c < 3; ++c)
     CHECK_THAT(direct.reaction[c], WithinAbs(iterative.reaction[c], 1e-9));
+}
+
+TEST_CASE("the direct solver declines a matrix that is not SPD instead of trapping",
+          "[study][solver]") {
+  // CSR of [[4, 1], [1, 3]] (SPD) and [[1, 2], [2, 1]] (indefinite).
+  const std::vector<int> rows{0, 2, 4}, cols{0, 1, 0, 1};
+  const std::vector<double> b{1, 2};
+  std::vector<double> x(2);
+  if (cholesky_solve(2, rows, cols, std::vector<double>{4, 1, 1, 3}, b, x)) {
+    CHECK_THAT(x[0], WithinAbs(1.0 / 11, 1e-15));
+    CHECK_THAT(x[1], WithinAbs(7.0 / 11, 1e-15));
+  }
+  CHECK_FALSE(cholesky_solve(2, rows, cols, std::vector<double>{1, 2, 2, 1}, b, x));
 }
