@@ -47,9 +47,9 @@ struct StructuralResult {
   double max_von_mises = 0;                // MPa, at quadrature points and vertices
   std::vector<double> nodal_von_mises;     // MPa per mesh node: averaged over its elements
   std::vector<double> nodal_displacement;  // mm, x, y, z per mesh node
-  /// A boundary edge between mesh nodes `a` and `b`, with the values at its midpoint: the P2
-  /// mid-edge DOF's displacement (exact; the endpoint mean at order 1) and the mean of its
-  /// endpoints' averaged stress. With the corner nodes these hold every surface DOF (#335).
+  /// A boundary edge between mesh nodes `a` and `b`, with the values at its midpoint: the
+  /// solution's displacement there (the mid-edge DOF at P2) and the mean of its endpoints'
+  /// averaged stress. With the corner nodes these hold every surface DOF (#335).
   struct SurfaceEdge {
     int a = 0, b = 0;
     std::array<double, 3> displacement{};

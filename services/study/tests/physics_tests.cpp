@@ -138,6 +138,22 @@ TEST_CASE("convection and a fixed temperature act in series", "[study][thermal]"
   CHECK_THAT(result.max_temperature, WithinAbs(300 + flux * 0.01 / 1.0, 1e-8));
 }
 
+TEST_CASE("surface edge values are the solution at each edge's midpoint", "[study][structural]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  const auto beam = box(*kernel, {200, 10, 10});
+  StructuralInput input{69000, 0.33, {face(*kernel, beam, {-1, 0, 0})}, {}, {}, 1};
+  input.forces.push_back({{face(*kernel, beam, {1, 0, 0})}, {0, 0, -10}});
+  // At order 1 the solution is linear along an edge: the midpoint value is the mean of the ends.
+  const auto r = solve_structural(mesh(beam, 5), input).value();
+  REQUIRE_FALSE(r.surface_edges.empty());
+  for (const auto& e : r.surface_edges)
+    for (std::size_t c = 0; c < 3; ++c) {
+      const double mean = 0.5 * (r.nodal_displacement[3 * static_cast<std::size_t>(e.a) + c] +
+                                 r.nodal_displacement[3 * static_cast<std::size_t>(e.b) + c]);
+      CHECK_THAT(e.displacement[c], WithinAbs(mean, 1e-12));
+    }
+}
+
 TEST_CASE("the direct solve agrees with the iterative one", "[study][structural][solver]") {
   auto kernel = kernel::make_occt_kernel().value();
   const auto beam = box(*kernel, {200, 10, 10});
