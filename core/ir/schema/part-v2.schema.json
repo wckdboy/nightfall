@@ -2741,6 +2741,176 @@
         "^x-": {}
       },
       "additionalProperties": false
+    },
+    "study_value": {
+      "$comment": "<number> <unit>",
+      "type": "string",
+      "minLength": 3
+    },
+    "study_boundary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "fixed",
+            "force",
+            "pressure",
+            "temperature",
+            "heat_flux",
+            "convection"
+          ]
+        },
+        "faces": {
+          "$ref": "#/$defs/selector"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/study_value"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/study_value"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        },
+        "film": {
+          "$ref": "#/$defs/study_value"
+        },
+        "ambient": {
+          "$ref": "#/$defs/study_value"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "faces"
+      ],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "study_material": {
+      "type": "object",
+      "properties": {
+        "youngs_modulus": {
+          "$ref": "#/$defs/study_value"
+        },
+        "poisson_ratio": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 0.5,
+          "not": {
+            "enum": [
+              -1,
+              0.5
+            ]
+          }
+        },
+        "conductivity": {
+          "$ref": "#/$defs/study_value"
+        }
+      },
+      "required": [],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "study_criterion": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "enum": [
+            "max_displacement",
+            "max_von_mises",
+            "max_temperature",
+            "min_temperature"
+          ]
+        },
+        "below": {
+          "$ref": "#/$defs/value"
+        },
+        "above": {
+          "$ref": "#/$defs/value"
+        }
+      },
+      "required": [
+        "quantity"
+      ],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "study": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "static_structural",
+            "steady_thermal"
+          ]
+        },
+        "body": {
+          "$ref": "#/$defs/id"
+        },
+        "material": {
+          "$ref": "#/$defs/study_material"
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/study_boundary"
+          },
+          "minItems": 1
+        },
+        "mesh": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "$ref": "#/$defs/study_value"
+            }
+          },
+          "required": [
+            "size"
+          ],
+          "patternProperties": {
+            "^x-": {}
+          },
+          "additionalProperties": false
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/study_criterion"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "body",
+        "material",
+        "boundaries",
+        "mesh"
+      ],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
     }
   },
   "type": "object",
@@ -2796,6 +2966,13 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/joint"
+      },
+      "minItems": 0
+    },
+    "studies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/study"
       },
       "minItems": 0
     },

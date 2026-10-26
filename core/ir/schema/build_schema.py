@@ -182,8 +182,31 @@ v2["joint"] = obj({"id": ref("id"),
                    "kind": {"enum": ["rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar", "ball"]},
                    "a": ref("joint_end"), "b": ref("joint_end"), "value": ref("joint_value"),
                    "limits": ref("joint_limits")}, ["id", "kind", "a", "b"])
+# RFC 0014 studies. Physical values are "<number> <unit>" strings checked by the study runner.
+v2["study_value"] = {"$comment": "<number> <unit>", "type": "string", "minLength": 3}
+v2["study_boundary"] = obj({"id": ref("id"),
+                            "type": {"enum": ["fixed", "force", "pressure", "temperature", "heat_flux",
+                                              "convection"]},
+                            "faces": ref("selector"),
+                            "value": choice(ref("study_value"), array(ref("study_value"), 3, 3)),
+                            "film": ref("study_value"), "ambient": ref("study_value")},
+                           ["id", "type", "faces"])
+v2["study_material"] = obj({"youngs_modulus": ref("study_value"),
+                            # -1 < nu < 0.5 (the native checker has no exclusive bounds)
+                            "poisson_ratio": {"type": "number", "minimum": -1, "maximum": 0.5,
+                                              "not": {"enum": [-1, 0.5]}},
+                            "conductivity": ref("study_value")}, [])
+v2["study_criterion"] = obj({"quantity": {"enum": ["max_displacement", "max_von_mises", "max_temperature",
+                                                   "min_temperature"]},
+                             "below": ref("value"), "above": ref("value")}, ["quantity"])
+v2["study"] = obj({"id": ref("id"), "kind": {"enum": ["static_structural", "steady_thermal"]},
+                   "body": ref("id"), "material": ref("study_material"),
+                   "boundaries": array(ref("study_boundary"), 1),
+                   "mesh": obj({"size": ref("study_value")}, ["size"]),
+                   "criteria": array(ref("study_criterion"))},
+                  ["id", "kind", "body", "material", "boundaries", "mesh"])
 assembly = {"components": array(ref("component")), "occurrences": array(ref("occurrence")),
-            "joints": array(ref("joint"))}
+            "joints": array(ref("joint")), "studies": array(ref("study"))}
 here = Path(__file__)
 outputs = {here.with_name("part-v1.schema.json"): part_schema(1, defs, {}),
            here.with_name("part-v2.schema.json"): part_schema(2, v2, assembly)}

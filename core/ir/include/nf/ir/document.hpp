@@ -99,6 +99,8 @@ struct Document {
   std::vector<Component> components;  // RFC 0013 sections, omitted from files when empty
   std::vector<Occurrence> occurrences;
   std::vector<Joint> joints;
+  /// RFC 0014 studies, each a schema-checked JSON object run by the study runner.
+  std::vector<json::Value> studies;
   std::optional<std::string> history_end;
   json::Object ui, extensions;
 };
