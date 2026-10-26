@@ -79,6 +79,8 @@ bool cholesky_solve(int n, std::span<const int> rows, std::span<const int> cols,
     for (std::size_t i = 0; i < solution.size(); ++i) solution[i] += correction[i];
   }
   SparseCleanup(factor);
+  // A solve that reported an error through the callback leaves x undefined: never pass it on.
+  if (!std::ranges::all_of(solution, [](double v) { return std::isfinite(v); })) return false;
   std::ranges::copy(solution, x.begin());
   return true;
 #else

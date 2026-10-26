@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
+#include <utility>
 #include <deque>
 #include <memory>
 
@@ -79,7 +81,9 @@ std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vecto
     return SolverStats{unknowns, iterations, norm > 0 ? r.Norml2() / norm : 0,
                        scale > 0 ? r.Normlinf() / scale : 0, method};
   };
-  bool warm = false;  // CG starts from the direct answer when that is not accurate enough
+  // A direct answer that misses the tolerance is kept as a fallback; CG starts from zero, since a
+  // warm start would make its relative tolerance relative to that answer's tiny residual.
+  std::optional<std::pair<mfem::Vector, SolverStats>> fallback;
   if (direct) {
     A.SortColumnIndices();
     const auto n = static_cast<std::size_t>(A.Height());
@@ -88,12 +92,13 @@ std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vecto
                        {B.GetData(), n}, {X.GetData(), n})) {
       auto stats = measured(X, 0, "cholesky");
       if (stats.backward_error <= kTolerance) return stats;
-      warm = std::isfinite(stats.relative_residual);
+      if (std::isfinite(stats.relative_residual)) fallback.emplace(X, stats);
     }
   }
+  X = 0.0;
   mfem::GSSmoother preconditioner(A);
   mfem::CGSolver cg;
-  cg.iterative_mode = warm;
+  cg.iterative_mode = false;
   cg.SetOperator(A);
   cg.SetPreconditioner(preconditioner);
   cg.SetRelTol(kTolerance);
@@ -101,9 +106,14 @@ std::expected<SolverStats, std::string> solve(mfem::SparseMatrix& A, mfem::Vecto
   cg.SetMaxIter(kMaxIterations);
   cg.SetPrintLevel(-1);
   cg.Mult(B, X);
-  if (!cg.GetConverged())
+  if (!cg.GetConverged()) {
+    if (fallback) {
+      X = fallback->first;
+      return fallback->second;
+    }
     return std::unexpected("the solver did not converge after " +
                            std::to_string(cg.GetNumIterations()) + " iterations");
+  }
   return measured(X, cg.GetNumIterations(), "cg");
 }
 }  // namespace
