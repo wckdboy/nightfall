@@ -43,10 +43,12 @@ struct StructuralInput {
   bool direct = true;  // factor with the system's sparse Cholesky where there is one, else CG
 };
 struct StructuralResult {
-  double max_displacement = 0;       // mm, largest nodal displacement magnitude
-  double max_von_mises = 0;          // MPa, at quadrature points and vertices
-  std::array<double, 3> applied{};   // N, total load
-  std::array<double, 3> reaction{};  // N, total support reaction; balances `applied`
+  double max_displacement = 0;             // mm, largest nodal displacement magnitude
+  double max_von_mises = 0;                // MPa, at quadrature points and vertices
+  std::vector<double> nodal_von_mises;     // MPa per mesh node: averaged over its elements
+  std::vector<double> nodal_displacement;  // mm, x, y, z per mesh node
+  std::array<double, 3> applied{};         // N, total load
+  std::array<double, 3> reaction{};        // N, total support reaction; balances `applied`
   SolverStats solver;
 };
 std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& mesh,

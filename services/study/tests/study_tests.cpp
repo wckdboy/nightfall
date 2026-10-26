@@ -9,8 +9,10 @@
 #include <fstream>
 #include <iterator>
 
+#include <unistd.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <filesystem>
 
 using namespace nf;
 using Catch::Matchers::WithinAbs;
@@ -56,7 +58,7 @@ TEST_CASE("the cantilever study converges to beam theory with balanced reactions
   Runner runner;
   const auto source = example("cantilever.nightfall");
   // Three sizes in a constant ratio give an observed convergence order.
-  const auto result = runner.run(source, "tip_load", {std::nullopt, {5.0, 10.0 / 3, 20.0 / 9}});
+  const auto result = runner.run(source, "tip_load", {std::nullopt, {5.0, 10.0 / 3, 20.0 / 9}, {}});
   const double P = 10, L = 200, E = 69000, I = 10.0 * 1000 / 12;
   const double beam = P * L * L * L / (3 * E * I);
   const auto& runs = *result.find("runs")->if_array();
@@ -181,6 +183,78 @@ TEST_CASE("a STEP part's study picks faces by points and matches beam theory", "
     CHECK_THAT(*applied[c].if_number() + *reaction[c].if_number(), WithinAbs(0, 1e-9 * P));
   CHECK(*r.find("passed")->if_bool());
   CHECK(r.find("provenance")->find("step_sha256"));
+}
+
+TEST_CASE("a STEP study with a bad criterion leaves an existing field alone",
+          "[study][step][field]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  const auto path = std::filesystem::temp_directory_path() /
+                    ("nf-field-kept-" + std::to_string(getpid()) + ".json");
+  std::ofstream(path) << "previous";
+  study::RunOptions options;
+  options.field = path.string();
+  auto spec = beam_case.spec();
+  spec.replace(spec.find(R"("criteria": [)"), 13, R"("criteria": {"x": )");
+  spec.replace(spec.rfind("]}"), 2, "}}");
+  REQUIRE_FALSE(study::run_step_study(*runner.kernel, beam_case.step, spec, options));
+  std::ifstream in(path);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::filesystem::remove(path);
+  CHECK(text == "previous");
+}
+
+TEST_CASE("a STEP study writes its surface field for display", "[study][step][field]") {
+  Runner runner;
+  const auto beam_case = beam(runner);
+  const auto path =
+      std::filesystem::temp_directory_path() / ("nf-field-" + std::to_string(getpid()) + ".json");
+  study::RunOptions options;
+  options.field = path.string();
+  auto result = study::run_step_study(*runner.kernel, beam_case.step, beam_case.spec(), options);
+  REQUIRE(result);
+  const Value r(*result);
+  std::ifstream in(path);
+  REQUIRE(in);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::filesystem::remove(path);
+  const auto parsed = ir::json::parse(text);
+  REQUIRE(parsed);
+  const auto& field = *parsed;
+  CHECK(*field.find("kind")->if_string() == "static_structural");
+  const auto& points = *field.find("points")->if_array();
+  const auto& triangles = *field.find("triangles")->if_array();
+  const auto& stress = *field.find("von_mises")->if_array();
+  const auto& displacement = *field.find("displacement")->if_array();
+  const std::size_t nodes = points.size() / 3;
+  REQUIRE(nodes > 0);
+  REQUIRE(points.size() == 3 * nodes);
+  REQUIRE(stress.size() == nodes);
+  REQUIRE(displacement.size() == 3 * nodes);
+  REQUIRE(!triangles.empty());
+  REQUIRE(triangles.size() % 3 == 0);
+  for (const auto& i : triangles) {
+    REQUIRE(i.if_number());
+    CHECK(*i.if_number() >= 0);
+    CHECK(*i.if_number() < static_cast<double>(nodes));
+  }
+  double most_stress = 0, most_moved = 0;
+  for (std::size_t n = 0; n < nodes; ++n) {
+    most_stress = std::max(most_stress, *stress[n].if_number());
+    double m2 = 0;
+    for (std::size_t c = 0; c < 3; ++c) m2 += std::pow(*displacement[3 * n + c].if_number(), 2);
+    most_moved = std::max(most_moved, std::sqrt(m2));
+  }
+  const double max_displacement = number(*r.find("quantities"), "max_displacement");
+  const double max_von_mises = number(*r.find("quantities"), "max_von_mises");
+  // The tip moves most and lies on the surface. The field holds the mesh's corner nodes, the
+  // reported maximum all of its P2 nodes (mid-edge ones too): here they differ by 1.4e-7
+  // relative, so the field is checked to 1e-6 until it carries mid-edge nodes (#335).
+  CHECK(most_moved <= max_displacement * (1 + 1e-9));
+  CHECK_THAT(most_moved, WithinRel(max_displacement, 1e-6));
+  // Nodal averaging smooths the quadrature peak, never past it.
+  CHECK(most_stress > 0.5 * max_von_mises);
+  CHECK(most_stress <= max_von_mises * (1 + 1e-9));
 }
 
 TEST_CASE("a STEP study refuses points on no face or on several", "[study][step]") {

@@ -156,8 +156,10 @@ TEST_CASE("the direct solve agrees with the iterative one", "[study][structural]
   // Both solve the same system to 1e-12: their answers agree far inside that.
   CHECK_THAT(direct.max_displacement, WithinRel(iterative.max_displacement, 1e-9));
   CHECK_THAT(direct.max_von_mises, WithinRel(iterative.max_von_mises, 1e-9));
+  // Reactions sum residual-sized nodal forces: CG's 1e-12 tolerance leaves them about 1e-9 N
+  // apart on the 10 N load (seen up to 1.0e-9), so they are compared to 1e-9 of the load.
   for (std::size_t c = 0; c < 3; ++c)
-    CHECK_THAT(direct.reaction[c], WithinAbs(iterative.reaction[c], 1e-9));
+    CHECK_THAT(direct.reaction[c], WithinAbs(iterative.reaction[c], 1e-8));
 }
 
 TEST_CASE("the direct solver declines a matrix that is not SPD instead of trapping",

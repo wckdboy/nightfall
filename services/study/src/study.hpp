@@ -17,6 +17,7 @@ namespace nf::study {
 struct RunOptions {
   std::optional<double> size;  // mm, overriding the study's mesh size
   std::vector<double> refine;  // mm: run at each size and report convergence
+  std::string field;           // when set: write the final run's surface field there (JSON, #321)
 };
 /// Runs study `id` of `source` and returns its result object, or errors with JSON Pointers
 /// into /studies.
