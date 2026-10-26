@@ -755,7 +755,7 @@ TEST_CASE(
   write(input, "{}");
   write(output, "prior artifact");
   const auto process = run(temp, {"build", input.string(), "--out", output.string()});
-  REQUIRE(process.status != 0);
+  REQUIRE(process.status == 1);  // a build failure, not a usage error
   CHECK(process.output.empty());
   const auto value = json(process.error);
   REQUIRE_FALSE(value.find("errors")->if_array()->empty());
@@ -792,7 +792,7 @@ TEST_CASE("partial evaluation and publication failures never emit success-only e
     else
       write(output, "prior artifact");
     const auto process = run(temp, {"build", input.string(), "--out", output.string()});
-    REQUIRE(process.status != 0);
+    REQUIRE(process.status == 1);  // a build failure, not a usage error
     CHECK(process.output.empty());
     const auto value = json(process.error);
     REQUIRE_FALSE(value.find("errors")->if_array()->empty());
