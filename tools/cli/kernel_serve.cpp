@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -270,6 +271,7 @@ class Server {
       std::size_t client_faces = 0;  // the client's faces among them
       const kernel::History* only = nullptr;
       for (const auto& h : result.history) {
+        if (!h.before) continue;
         const auto s = owner(h.before);
         if (!s) continue;
         auto& operand = operands[*s];
@@ -336,6 +338,7 @@ void send(int fd, const Value& response) {
   text.push_back('\n');
   for (std::string_view rest = text; !rest.empty();) {
     const auto n = ::write(fd, rest.data(), rest.size());
+    if (n < 0 && errno == EINTR) continue;
     if (n <= 0) throw std::runtime_error("cannot write a response");
     rest.remove_prefix(static_cast<std::size_t>(n));
   }
@@ -350,8 +353,8 @@ int run_kernel_serve(int argc, char** argv) {
     const char* value = i + 1 < argc ? argv[i + 1] : "";
     char* end = nullptr;
     timeout = std::strtod(value, &end);
-    if (option != "--timeout" || end == value || *end || !(timeout > 0) ||
-        !std::isfinite(timeout)) {
+    // At most a day: larger values would overflow the watchdog's nanosecond clock.
+    if (option != "--timeout" || end == value || *end || !(timeout > 0) || !(timeout <= 86400)) {
       std::cerr << "usage: nf kernel serve [--timeout SECONDS]\n";
       return 2;
     }
@@ -374,6 +377,15 @@ int run_kernel_serve(int argc, char** argv) {
     std::atomic<bool> done{false};
     std::mutex naming;
     std::string current;  // the running request's id, for the watchdog's report
+    // Joined on every exit, including a throwing write, so the thread never outlives this scope.
+    struct Join {
+      std::atomic<bool>& done;
+      std::thread& thread;
+      ~Join() {
+        done = true;
+        if (thread.joinable()) thread.join();
+      }
+    };
     std::thread watchdog([&] {
       const auto limit =
           std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(timeout));
@@ -388,6 +400,7 @@ int run_kernel_serve(int argc, char** argv) {
         }
       }
     });
+    const Join join{done, watchdog};
     auto& in = *std::cin.rdbuf();
     int status = 0;
     bool too_long = false;
@@ -430,8 +443,6 @@ int run_kernel_serve(int argc, char** argv) {
           {"ms", std::chrono::duration<double, std::milli>(Clock::now() - t0).count()});
       send(out, response);
     }
-    done = true;
-    watchdog.join();
     return status;
   } catch (const std::exception& error) {
     std::cerr << "fatal: " << error.what() << '\n';
