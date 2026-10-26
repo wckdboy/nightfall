@@ -6,6 +6,7 @@
 #include <cmath>
 #include <map>
 #include <numbers>
+#include <unordered_map>
 
 #include "nf/assembly/solve.h"
 #include "nf/ir/parameters.hpp"
@@ -194,6 +195,30 @@ nf_frame derive_frame(kernel::IKernel& kernel, const Evaluation& evaluation,
   const auto nx = rotate({1, 0, 0}), ny = rotate({0, 1, 0}), nz = rotate({0, 0, 1});
   return nf_frame{
       {origin.x, origin.y, origin.z}, {nx.x, nx.y, nx.z}, {ny.x, ny.y, ny.z}, {nz.x, nz.y, nz.z}};
+}
+
+/// The names of a component body rebound through its rigid placement: a transform maps every
+/// face and edge one to one, so each name moves to its image on the placed shape.
+std::vector<NamedEntity> placed_names(const BodyState& body, const kernel::OperationResult& placed,
+                                      const std::string& pointer) {
+  std::unordered_map<const kernel::Entity*, const kernel::History*> by_entity;
+  for (const auto& h : placed.history)
+    if (h.before) by_entity.emplace(h.before.get(), &h);
+  std::vector<NamedEntity> result;
+  result.reserve(body.names.size());
+  for (const auto& name : body.names) {
+    if (!name.entity) continue;
+    const kernel::History* history = nullptr;
+    if (const auto found = by_entity.find(name.entity.get()); found != by_entity.end())
+      history = found->second;
+    else
+      for (const auto& h : placed.history)
+        if (h.before && h.before->same_as(*name.entity)) history = &h;
+    if (!history || history->deleted || history->modified.size() != 1)
+      fail(pointer, "placement history does not map a named entity one to one");
+    result.push_back({name.feature, name.role, history->modified.front(), name.from});
+  }
+  return result;
 }
 
 /// Axis-angle form of a proper rotation (for the kernel's rigid transform).
@@ -410,7 +435,7 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
       result.joints.push_back(std::move(joint));
     }
     for (std::size_t i = 0; i < flat.size(); ++i) {
-      AssemblyOccurrence occurrence{document.occurrences[i].id, {}, {}, {}};
+      AssemblyOccurrence occurrence{document.occurrences[i].id, {}, {}, {}, {}};
       std::copy(std::begin(placements[i].rotation), std::end(placements[i].rotation),
                 occurrence.placement.rotation.begin());
       occurrence.placement.translation = {
@@ -423,6 +448,8 @@ std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator
             take(kernel.transform(body.shape, transform), "/occurrences/" + std::to_string(i));
         occurrence.bodies.emplace_back(id, placed.shape);
         occurrence.source_hashes.push_back(body.hash);
+        occurrence.body_names.push_back(
+            placed_names(body, placed, "/occurrences/" + std::to_string(i)));
       }
       result.occurrences.push_back(std::move(occurrence));
     }

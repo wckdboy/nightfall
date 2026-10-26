@@ -36,6 +36,9 @@ struct AssemblyOccurrence {
   std::vector<std::pair<std::string, kernel::ShapePtr>> bodies;
   /// The component body's state hash for each entry of `bodies`, in the same order.
   std::vector<std::optional<ir::Hash>> source_hashes;
+  /// The component body's generative names rebound to the placed shape, per entry of `bodies`,
+  /// so selectors, topology and display see the same names as the component (#328).
+  std::vector<std::vector<NamedEntity>> body_names;
 };
 /// RFC 0013 assembly evaluation.
 struct AssemblyResult {

@@ -106,6 +106,7 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
               placement.push_back(t);
             BodyState body;
             body.shape = shape;
+            body.names = o.body_names[k];
             // The component body's state is part of the identity: an edit that keeps volume,
             // area and placement still changes it.
             body.hash = ir::sha256(ir::json::canonical(
