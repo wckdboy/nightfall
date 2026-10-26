@@ -3,7 +3,9 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "evaluator.hpp"
@@ -14,11 +16,18 @@ struct Placement {
   std::array<double, 9> rotation{1, 0, 0, 0, 1, 0, 0, 0, 1};
   math::Vec3 translation;
 };
-/// One joint after solving: largest residuals of its constrained coordinates.
+/// One joint after solving: largest residuals of its constrained coordinates, and what an
+/// exporter needs: its kind, occurrence indices, each end's frame in its own occurrence's
+/// coordinates (rotation columns are the frame's x, y and z axes) and the first degree of
+/// freedom's limits (rad or mm).
 struct AssemblyJoint {
   std::string id;
   double residual_mm = 0, residual_rad = 0;
   bool redundant = false, conflicting = false;
+  std::string kind;
+  std::size_t a = 0, b = 0;
+  Placement frame_a, frame_b;
+  std::optional<std::pair<double, double>> limits;
 };
 /// A placed occurrence and its bodies at the solved placement ("occurrence/body").
 struct AssemblyOccurrence {
