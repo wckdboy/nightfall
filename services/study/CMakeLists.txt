@@ -9,7 +9,7 @@ target_include_directories(nf_study_mesher PUBLIC src)
 target_link_libraries(nf_study_mesher PRIVATE nf::netgen)
 set_target_properties(nf_study_mesher PROPERTIES CXX_STANDARD 17)
 
-add_library(nf_study STATIC src/geometry.cpp src/physics.cpp src/units.cpp src/study.cpp)
+add_library(nf_study STATIC src/geometry.cpp src/physics.cpp src/units.cpp src/study.cpp src/command.cpp)
 target_include_directories(nf_study PUBLIC src PRIVATE "${PROJECT_SOURCE_DIR}/core/kernel/src")
 # The runner evaluates documents; the evaluator lives with the kernel service.
 target_link_libraries(nf_study PUBLIC nf_evaluator)

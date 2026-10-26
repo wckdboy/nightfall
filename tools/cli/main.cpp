@@ -6,6 +6,9 @@
 
 #include "mcp.hpp"
 #include "session.hpp"
+#ifdef NF_WITH_STUDIES
+#include "study.hpp"
+#endif
 
 namespace {
 namespace fs = std::filesystem;
@@ -80,6 +83,10 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (argc >= 2 && std::string_view(argv[1]) == "mcp") return cli::run_mcp(argc, argv);
+#ifdef NF_WITH_STUDIES
+  if (argc >= 2 && std::string_view(argv[1]) == "study")
+    return study::run_study_command(argc, argv);
+#endif
   Object evidence;
   try {
     auto arguments = parse_arguments(argc, argv);
