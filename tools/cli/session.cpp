@@ -324,6 +324,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
           const auto& component_hash = o.source_hashes[k];
           kernel_service::BodyState body;
           body.shape = shape;
+          body.names = o.body_names[k];
           // Identity of a placed body: its occurrence, the component body's state and the
           // exact placement, so a component edit that keeps volume and area still changes it.
           body.hash = ir::sha256(ir::json::canonical(

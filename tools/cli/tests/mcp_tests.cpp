@@ -828,6 +828,33 @@ void solved(const Value& assembly) {
 }
 }  // namespace
 
+TEST_CASE("mcp body_topology names the faces of placed assembly bodies", "[cli-mcp][assembly]") {
+  Temp temp;
+  const auto input = temp.path("four_bar.nightfall");
+  write(input, kFourBar);
+  const auto process = serve(
+      temp, {"--in", input.string()},
+      {kInitialize, call(1, "body_topology", R"({"body":"crank/bar"})"), call(2, "inspect_part")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 3);
+  // The component's generative names survive placement: every face is named by its feature.
+  const auto& topology = content(process.replies[1]);
+  CHECK(number(body(content(process.replies[2]), "crank/bar"), "name_records") > 0);
+  std::set<std::string> roles;
+  for (const auto& face : ids(topology, "faces")) {
+    const auto& names = ids(face, "names");
+    REQUIRE_FALSE(names.empty());
+    for (const auto& n : names) {
+      CHECK(*n.find("created_by")->if_string() == "bar");
+      roles.insert(*n.find("role")->if_string());
+    }
+  }
+  CHECK(roles.count("cap_start") == 1);
+  CHECK(roles.count("cap_end") == 1);
+  CHECK(roles.count("side") == 1);
+}
+
 TEST_CASE("mcp solves, drives and exports a four-bar assembly", "[cli-mcp][assembly]") {
   Temp temp;
   const auto input = temp.path("four_bar.nightfall");
