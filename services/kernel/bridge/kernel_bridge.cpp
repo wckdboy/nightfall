@@ -83,44 +83,45 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
   const auto* live = &evaluated->bodies;
   std::map<std::string, BodyState> placed;
   std::size_t component_calls = 0, component_hits = 0, component_misses = 0;
-  if (errors.empty()) {
-    auto document = ir::read_document(source);
-    if (!document) throw document.error();
-    if (!document->occurrences.empty()) {
-      const auto assembly = evaluate_assembly(s.evaluator, *s.kernel, *document);
-      if (!assembly) {
-        for (const auto& error : assembly.error()) errors.emplace_back(diagnostic(error));
-      } else {
-        // The components' evaluations are this request's work too.
-        component_calls = assembly->kernel_calls;
-        component_hits = assembly->cache_hits;
-        component_misses = assembly->binding_misses;
-        for (const auto& o : assembly->occurrences)
-          for (std::size_t k = 0; k < o.bodies.size(); ++k) {
-            const auto& [id, shape] = o.bodies[k];
-            const auto& component_hash = o.source_hashes[k];
-            Array placement;
-            for (const double r : o.placement.rotation) placement.push_back(r);
-            for (const double t :
-                 {o.placement.translation.x, o.placement.translation.y, o.placement.translation.z})
-              placement.push_back(t);
-            BodyState body;
-            body.shape = shape;
-            body.names = o.body_names[k];
-            // The component body's state is part of the identity: an edit that keeps volume,
-            // area and placement still changes it.
-            body.hash = ir::sha256(ir::json::canonical(
-                Object{{"occurrence", o.id},
-                       {"body", id},
-                       {"source", component_hash ? Value(component_hash->hex()) : Value()},
-                       {"placement", std::move(placement)},
-                       {"volume", shape->measures().volume},
-                       {"area", shape->measures().area}}));
-            placed.emplace(o.id + "/" + id, std::move(body));
-          }
-      }
-      live = &placed;
+  auto document = ir::read_document(source);
+  if (!document) throw document.error();
+  // An occurrence of the root evaluates it with its own overrides: then the assembly, not the
+  // bare root build, decides whether the document builds and which errors it reports (#330).
+  if (!document->occurrences.empty() && (errors.empty() || instances_root(*document))) {
+    errors.clear();  // the root's default-parameter errors do not apply to its occurrences
+    const auto assembly = evaluate_assembly(s.evaluator, *s.kernel, *document);
+    if (!assembly) {
+      for (const auto& error : assembly.error()) errors.emplace_back(diagnostic(error));
+    } else {
+      // The components' evaluations are this request's work too.
+      component_calls = assembly->kernel_calls;
+      component_hits = assembly->cache_hits;
+      component_misses = assembly->binding_misses;
+      for (const auto& o : assembly->occurrences)
+        for (std::size_t k = 0; k < o.bodies.size(); ++k) {
+          const auto& [id, shape] = o.bodies[k];
+          const auto& component_hash = o.source_hashes[k];
+          Array placement;
+          for (const double r : o.placement.rotation) placement.push_back(r);
+          for (const double t :
+               {o.placement.translation.x, o.placement.translation.y, o.placement.translation.z})
+            placement.push_back(t);
+          BodyState body;
+          body.shape = shape;
+          body.names = o.body_names[k];
+          // The component body's state is part of the identity: an edit that keeps volume,
+          // area and placement still changes it.
+          body.hash = ir::sha256(ir::json::canonical(
+              Object{{"occurrence", o.id},
+                     {"body", id},
+                     {"source", component_hash ? Value(component_hash->hex()) : Value()},
+                     {"placement", std::move(placement)},
+                     {"volume", shape->measures().volume},
+                     {"area", shape->measures().area}}));
+          placed.emplace(o.id + "/" + id, std::move(body));
+        }
     }
+    live = &placed;
   }
   if (errors.empty()) {
     for (const auto& [id, body] : *live) {

@@ -295,7 +295,10 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
   // RFC 0013: an assembly publishes its occurrences' bodies at their solved placements, as
   // "occurrence/body"; the root part's own bodies are not separate results.
   std::vector<kernel_service::FeatureStatus> component_features;
-  if (!state.document.occurrences.empty() && build.ok) {
+  // An occurrence of the root evaluates it with its own overrides: then the assembly, not the
+  // bare root build, decides whether the document builds (#330).
+  const bool root_instanced = kernel_service::instances_root(state.document);
+  if (!state.document.occurrences.empty() && (build.ok || root_instanced)) {
     auto assembly = kernel_service::evaluate_assembly(evaluator_, kernel_, state.document);
     state.evaluation.bodies.clear();
     if (!assembly) {
@@ -303,6 +306,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
       state.assembly_errors = assembly.error();
       build.assembly = Object{{"solved", false}, {"errors", error_entries(assembly.error())}};
     } else {
+      build.ok = true;  // every occurrence, the root's included, built and the joints solved
       // The components' evaluations are this build's work too.
       state.evaluation.kernel_calls += assembly->kernel_calls;
       state.evaluation.cache_hits += assembly->cache_hits;
@@ -400,6 +404,8 @@ std::expected<Session::Build, ir::Errors> Session::commit(std::string source, bo
     ir::Errors errors;
     for (const auto& f : state->evaluation.features)
       errors.insert(errors.end(), f.errors.begin(), f.errors.end());
+    // A root occurrence owns the build: the root's default-parameter errors do not apply.
+    if (kernel_service::instances_root(state->document)) errors.clear();
     errors.insert(errors.end(), state->assembly_errors.begin(), state->assembly_errors.end());
     return std::unexpected(std::move(errors));
   }
@@ -824,7 +830,9 @@ std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, doubl
     auto state = evaluate(ir::json::write(*patched), false);
     if (!state || !state->build.ok || !state->build.assembly) {
       ir::Errors errors = state ? state->assembly_errors : state.error();
-      if (state)  // a failed feature fails the build before the assembly is solved
+      // A failed feature fails the build before the assembly is solved, unless a root
+      // occurrence owns the build (#330).
+      if (state && !kernel_service::instances_root(state->document))
         for (const auto& f : state->evaluation.features)
           errors.insert(errors.end(), f.errors.begin(), f.errors.end());
       entry.push_back({"solved", false});

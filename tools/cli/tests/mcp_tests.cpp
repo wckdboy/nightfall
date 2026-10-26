@@ -855,6 +855,32 @@ TEST_CASE("mcp body_topology names the faces of placed assembly bodies", "[cli-m
   CHECK(roles.count("side") == 1);
 }
 
+TEST_CASE("mcp opens a root occurrence whose override fixes the root's default",
+          "[cli-mcp][assembly]") {
+  // #330: the root extrudes 0 mm by default, which fails, but its occurrence overrides the
+  // depth: the occurrence's evaluation, not the bare root's, decides whether the document builds.
+  Temp temp;
+  const auto input = temp.path("root.nightfall");
+  write(input, R"({"format":"nightfall.part","version":2,"units":{"length":"mm","angle":"deg"},
+  "meta":{},"params":[{"name":"depth","value":"0 mm"}],"references":[],"features":[
+    {"id":"outline","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]}},
+    {"id":"body","type":"extrude","inputs":{"profile":{"sketch":"outline"},"distance":"depth",
+      "result":{"new":"body","body_type":"brep"}}}],"history_end":null,"ui":{},"components":[],
+  "occurrences":[{"id":"part","component":"root","grounded":true,"params":{"depth":"5 mm"}}],
+  "joints":[]})");
+  const auto process =
+      serve(temp, {"--in", input.string()},
+            {kInitialize, call(1, "inspect_part"), call(2, "measure", R"({"body":"part/body"})")});
+  INFO(process.error);
+  REQUIRE(process.status == 0);
+  REQUIRE(process.replies.size() == 3);
+  const auto& part = content(process.replies[1]);
+  CHECK(*part.find("ok")->if_bool());
+  CHECK(*part.find("assembly")->find("solved")->if_bool());
+  CHECK_THAT(number(content(process.replies[2]), "volume"), WithinAbs(1000.0, 1e-9));
+}
+
 TEST_CASE("mcp solves, drives and exports a four-bar assembly", "[cli-mcp][assembly]") {
   Temp temp;
   const auto input = temp.path("four_bar.nightfall");

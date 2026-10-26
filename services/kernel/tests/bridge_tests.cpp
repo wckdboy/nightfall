@@ -479,3 +479,34 @@ TEST_CASE("C bridge reports an assembly conflict with its pointer and no geometr
   CHECK(nf_result_vertices(result.get(), &vertices) == nullptr);
   CHECK(vertices == 0);
 }
+
+TEST_CASE("C bridge builds a root occurrence whose override fixes the root's default",
+          "[bridge][assembly]") {
+  // #330: the bare root fails with its default depth, but its occurrence overrides the depth,
+  // so the document opens as an assembly and only the occurrence's evaluation decides.
+  const auto document = [](const char* depth) {
+    return std::string(
+               R"({"format":"nightfall.part","version":2,"units":{"length":"mm","angle":"deg"},
+  "meta":{},"params":[{"name":"depth","value":"0 mm"}],"references":[],"features":[
+    {"id":"outline","type":"sketch","inputs":{"plane":{"datum":"xy"},"entities":[
+      {"id":"r","type":"rect","corner":[0,0],"size":[10,20]}],"constraints":[]}},
+    {"id":"body","type":"extrude","inputs":{"profile":{"sketch":"outline"},"distance":"depth",
+      "result":{"new":"body","body_type":"brep"}}}],"history_end":null,"ui":{},"components":[],
+  "occurrences":[{"id":"part","component":"root","grounded":true,"params":{"depth":")") +
+           depth + R"("}}],"joints":[]})";
+  };
+  auto s = session();
+  const auto m = manifest(build(s.get(), document("5 mm")));
+  INFO(ir::json::canonical(m));
+  REQUIRE(m.find("errors")->if_array()->empty());
+  const auto& bodies = *m.find("bodies")->if_array();
+  REQUIRE(bodies.size() == 1);
+  CHECK(*bodies.front().find("id")->if_string() == "part/body");
+  CHECK_THAT(*bodies.front().find("volume")->if_number(), WithinAbs(1000.0, 1e-9));
+  // When the occurrence keeps an invalid depth, only the occurrence's failure is reported:
+  // the root's own default errors are not reported alongside it.
+  const auto bad = build(s.get(), document("0 mm"));
+  failed(bad);
+  for (const auto& error : *manifest(bad).find("errors")->if_array())
+    CHECK(error.find("pointer")->if_string()->starts_with("/occurrences/0"));
+}
