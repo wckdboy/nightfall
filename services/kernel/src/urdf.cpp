@@ -46,6 +46,32 @@ std::array<double, 3> rpy(const R3& r) {
   return {0.0, pitch, std::atan2(-r[1], r[4])};  // gimbal lock: all of the turn in yaw
 }
 std::string number(double v) { return ir::json::format_number(std::abs(v) < 1e-15 ? 0.0 : v); }
+/// Escapes text for an XML attribute value (file stems may hold any character).
+std::string attribute(std::string_view text) {
+  std::string out;
+  for (const char c : text) {
+    switch (c) {
+      case '&':
+        out += "&amp;";
+        break;
+      case '<':
+        out += "&lt;";
+        break;
+      case '>':
+        out += "&gt;";
+        break;
+      case '"':
+        out += "&quot;";
+        break;
+      case '\'':
+        out += "&apos;";
+        break;
+      default:
+        out += c;
+    }
+  }
+  return out;
+}
 std::string triple(double x, double y, double z) {
   return number(x) + " " + number(y) + " " + number(z);
 }
@@ -198,8 +224,8 @@ std::expected<UrdfExport, ir::Errors> export_urdf(kernel::IKernel& kernel,
                  number(inertia[8]) + "\"/>\n    </inertial>\n";
     for (const auto* tag : {"visual", "collision"})
       links_xml += std::string("    <") + tag + ">\n      " + visual +
-                   "\n      <geometry><mesh filename=\"" + mesh_path + "\"/></geometry>\n    </" +
-                   tag + ">\n";
+                   "\n      <geometry><mesh filename=\"" + attribute(mesh_path) +
+                   "\"/></geometry>\n    </" + tag + ">\n";
     links_xml += "  </link>\n";
   }
   for (const auto& id : out.cut_joints)
@@ -207,7 +233,7 @@ std::expected<UrdfExport, ir::Errors> export_urdf(kernel::IKernel& kernel,
   out.urdf =
       "<?xml version=\"1.0\"?>\n<!-- Nightfall RFC 0013 export: metres, kilograms, "
       "radians. Geometry is the part document; meshes are derived. -->\n<robot name=\"" +
-      name + "\">\n" + links_xml + joints_xml + "</robot>\n";
+      attribute(name) + "\">\n" + links_xml + joints_xml + "</robot>\n";
   return out;
 }
 }  // namespace nf::kernel_service
