@@ -141,20 +141,36 @@ std::optional<CircularArc> circular_arc(const math::NurbsCurve2& curve, const Pl
   if (std::abs(turn) <= 1e-6) return {};
   const auto center = math::Vec2{-u.y, u.x} * (math::dot(end, v) / turn);
   const auto a = center * -1, b = u - center, c = end - center;
-  const double radius2 = math::dot(a, a), pole2 = math::dot(b, b), end2 = math::dot(c, c);
-  const double epsilon = rounding * std::max({radius2, pole2, end2});
+  const double start2 = math::dot(a, a), pole2 = math::dot(b, b), end2 = math::dot(c, c);
+  const double epsilon = rounding * std::max({start2, pole2, end2});
   // All five degree-4 Bernstein coefficients of |N - center*W|² - radius²*W²
-  // must vanish. The first is zero by construction; the middle includes the weights.
+  // must vanish to roundoff. Both endpoints are checked; the middle includes weights.
   // This checks the entire rational quadratic, not sampled points or modeling tolerance.
-  if (std::abs(math::dot(a, b) - radius2) > epsilon ||
-      std::abs(math::dot(b, c) - radius2) > epsilon || std::abs(end2 - radius2) > epsilon)
-    return {};
   const auto weights = curve.weights();
-  const double first = weights[0] * weights[2] * (math::dot(a, c) - radius2),
-               second = 2 * weights[1] * weights[1] * (pole2 - radius2);
-  if (!(first < 0 && second > 0) ||
-      std::abs(first + second) > rounding * (std::abs(first) + second))
-    return {};
+  const auto certified = [&](double radius2) {
+    if (std::abs(start2 - radius2) > epsilon || std::abs(math::dot(a, b) - radius2) > epsilon ||
+        std::abs(math::dot(b, c) - radius2) > epsilon || std::abs(end2 - radius2) > epsilon)
+      return false;
+    const double first = weights[0] * weights[2] * (math::dot(a, c) - radius2),
+                 second = 2 * weights[1] * weights[1] * (pole2 - radius2);
+    return first < 0 && second > 0 &&
+           std::abs(first + second) <= rounding * (std::abs(first) + second);
+  };
+  // Preserve already certified primitives exactly, including their tessellation.
+  // A symmetric candidate balances endpoint rounding after large sketch translations;
+  // it must pass the SAME five-coefficient bound, now checking both endpoints.
+  double radius2 = start2;
+  if (!certified(radius2)) {
+    radius2 = (start2 + end2) / 2;
+    if (!certified(radius2)) return {};
+    // The circle starts on `a`'s ray at the averaged radius, so the endpoints move radially by
+    // the radius difference. Past half of OCCT's joining tolerance an adjacent edge built from
+    // the authored endpoint could disconnect: keep the exact NURBS instead.
+    const double moved = std::max(std::abs(std::sqrt(radius2) - std::sqrt(start2)),
+                                  std::abs(std::sqrt(radius2) - std::sqrt(end2))) *
+                         scale;
+    if (!(moved <= 0.5 * Precision::Confusion())) return {};
+  }
   const double sign = turn > 0 ? 1 : -1;
   const double angle = std::atan2(sign * math::cross(a, c), math::dot(a, c));
   const double radius = std::sqrt(radius2) * scale;
@@ -185,7 +201,7 @@ class OcctKernel final : public IKernel {
                 "fillet=copy-contour-vertex-boundaries-v1;"
                 "mesh=indexed-faces-copy-parallel-v2;"
                 "face-distance=trimmed-v1;step=ap242-mm-v1;"
-                "profile=exact-lines-arcs-v3;names=2;validation=parallel-compounds-v1;"
+                "profile=exact-lines-arcs-v4;names=2;validation=parallel-compounds-v1;"
                 "bounds=single-shell-reuse-v1;"
                 "mass-reference=shell-corner-v1;"
                 "mass-evaluation=parallel-face-batch-v2;"
