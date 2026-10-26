@@ -699,3 +699,55 @@ fn a_driven_serial_arm_solves_far_from_its_authored_pose() {
         }
     }
 }
+
+#[test]
+fn a_hundred_link_chain_finds_its_redundant_joint_in_bounded_time() {
+    // 100 occurrences, 100 joints: each 10 mm link hinged to the one before it, and the last
+    // hinge authored twice. The redundancy search is one incremental factorization, not a
+    // pivoted QR per joint: measured 9.8 s debug and 0.14 s release on a host at load 200,
+    // where the per-joint search ran past 20 minutes in a debug build.
+    const LINKS: usize = 100;
+    const BOUND_S: f64 = 30.0;
+    let mut occurrences = vec![occ("ground", true, Placement::IDENTITY)];
+    let mut joints = Vec::new();
+    for i in 1..LINKS {
+        occurrences.push(occ(
+            &format!("link{i}"),
+            false,
+            planar([10.0 * (i - 1) as f64, 0.0], 0.0),
+        ));
+        let before = if i == 1 {
+            "ground".to_string()
+        } else {
+            format!("link{}", i - 1)
+        };
+        let at = if i == 1 { [0.0; 3] } else { [10.0, 0.0, 0.0] };
+        joints.push(revolute(
+            &format!("hinge{i}"),
+            &before,
+            at,
+            &format!("link{i}"),
+            [0.0; 3],
+        ));
+    }
+    let last = joints.last().unwrap().clone();
+    joints.push(Joint {
+        id: "hinge_again".into(),
+        ..last
+    });
+    let asm = Assembly {
+        occurrences,
+        joints,
+    };
+    let started = std::time::Instant::now();
+    let s = solve(&asm, &SolveOptions::default()).unwrap();
+    let elapsed = started.elapsed().as_secs_f64();
+    assert_solved(&s);
+    assert_eq!(s.report.redundant, vec!["hinge_again".to_string()]);
+    assert_eq!(s.report.dof, LINKS - 1);
+    eprintln!(
+        "chain: {LINKS} occurrences, {} joints, {elapsed:.3} s",
+        asm.joints.len()
+    );
+    assert!(elapsed <= BOUND_S, "{elapsed} s");
+}
