@@ -81,6 +81,7 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
     return std::unexpected("material needs E > 0 and -1 < nu < 0.5");
   if (input.fixed.empty()) return std::unexpected("a structural study needs a fixed support");
   auto mesh = build(plain);
+  if (input.order < 1) return std::unexpected("the element order must be at least 1");
   mfem::H1_FECollection collection(input.order, 3);
   mfem::FiniteElementSpace space(mesh.get(), &collection, 3);
   auto fixed = marker(*mesh, input.fixed);
@@ -186,6 +187,7 @@ std::expected<ThermalResult, std::string> solve_thermal(const PlainMesh& plain,
   if (input.temperatures.empty() && input.convection.empty())
     return std::unexpected("a thermal study needs a temperature or convection boundary");
   auto mesh = build(plain);
+  if (input.order < 1) return std::unexpected("the element order must be at least 1");
   mfem::H1_FECollection collection(input.order, 3);
   mfem::FiniteElementSpace space(mesh.get(), &collection);
   // Millimetres: W/(m K) -> W/(mm K); W/m^2 and W/(m^2 K) -> per mm^2.
