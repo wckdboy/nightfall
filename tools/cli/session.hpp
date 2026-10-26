@@ -56,8 +56,10 @@ class Session {
   };
   Session(kernel::IKernel& kernel, math::Tolerance tolerance);
   /// Validates, normalizes (read/write_document) and rebuilds `source`. Structural errors keep
-  /// the previous state. With `rollback`, any failed feature also keeps it and returns the
-  /// feature errors; without it the state is committed and Build::ok reports the failure.
+  /// the previous state. With `rollback`, a failed build also keeps it and returns the feature
+  /// and assembly errors; when an occurrence instances the root, the occurrences decide and
+  /// only the assembly errors are returned (#330). Without `rollback` the state is committed
+  /// and Build::ok reports the failure.
   [[nodiscard]] std::expected<Build, ir::Errors> replace(std::string source, bool rollback);
   [[nodiscard]] std::expected<Build, ir::Errors> set_parameters(
       const std::map<std::string, std::string>& values, bool rollback);
