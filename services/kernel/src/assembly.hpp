@@ -51,6 +51,11 @@ struct AssemblyResult {
   std::vector<FeatureStatus> component_features;
 };
 
+/// True when an occurrence instantiates the root component. Each such occurrence evaluates the
+/// root with its own parameter overrides, so the bare root build (document defaults) does not
+/// decide whether the assembly builds: a default that fails may be overridden (#330).
+[[nodiscard]] bool instances_root(const ir::Document& document);
+
 /// Evaluates the occurrences, joints and components of a v2 document (RFC 0013). Each distinct
 /// component and parameter set evaluates once through `evaluator` (sharing its cache); joint
 /// frames derive from `{created_by, role, from}` selectors on the component's bodies by the

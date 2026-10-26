@@ -295,7 +295,10 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
   // RFC 0013: an assembly publishes its occurrences' bodies at their solved placements, as
   // "occurrence/body"; the root part's own bodies are not separate results.
   std::vector<kernel_service::FeatureStatus> component_features;
-  if (!state.document.occurrences.empty() && build.ok) {
+  // An occurrence of the root evaluates it with its own overrides: then the assembly, not the
+  // bare root build, decides whether the document builds (#330).
+  const bool root_instanced = kernel_service::instances_root(state.document);
+  if (!state.document.occurrences.empty() && (build.ok || root_instanced)) {
     auto assembly = kernel_service::evaluate_assembly(evaluator_, kernel_, state.document);
     state.evaluation.bodies.clear();
     if (!assembly) {
@@ -303,6 +306,7 @@ std::expected<Session::State, ir::Errors> Session::evaluate(std::string source, 
       state.assembly_errors = assembly.error();
       build.assembly = Object{{"solved", false}, {"errors", error_entries(assembly.error())}};
     } else {
+      build.ok = true;  // every occurrence, the root's included, built and the joints solved
       // The components' evaluations are this build's work too.
       state.evaluation.kernel_calls += assembly->kernel_calls;
       state.evaluation.cache_hits += assembly->cache_hits;
