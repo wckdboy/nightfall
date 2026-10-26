@@ -7,10 +7,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <optional>
-#include <utility>
 #include <deque>
 #include <memory>
+#include <optional>
+#include <utility>
 
 #include "mfem.hpp"
 
