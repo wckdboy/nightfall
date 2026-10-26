@@ -50,12 +50,43 @@ assertions in 11 mesh cases**, with unchanged vane mesh metrics and no sanitizer
 The exact five-feature document reduction passes **79564 assertions** in both configurations.
 Nightfall C++ is instrumented; vendor OCCT and Rust remain uninstrumented. Logs:
 `/tmp/nightfall-242-{boundary-budget-focused,boundary-budget-asan,forearm-document,forearm-document-asan}.log`.
-The updated complete gate remains pending at this checkpoint.
+The subsequent full core gate at `d061020` passes **897/897 in 240.59 s**; the
+full Eclipse acceptance remains separate and failed.
 
 Private diagnostic source/logs and the two forearm B-reps remain under
 `out/kernel-evidence-gh242/`. #244 tracks efficient cable/surface tessellation and completing
 the full fixture within the unchanged quality, output and deadline contracts. Full Eclipse
 acceptance, final retained full-model B-rep immutability and assembly/physics remain unverified.
+
+## Eclipse run-limit and worker-lifecycle evidence (#225)
+
+On the corrected mesh backend, a complete run hits the unchanged **120-second** bound.
+Independent Rust seed integration passes; cold full-model evaluation reports
+**21219.534 ms**, but the complete acceptance does not finish. A short post-timeout
+stack sample includes STEP export and later evaluator work. Host load averages observed
+after that timeout are **247.46 / 441.27 / 638.56**; this is uncontrolled host context,
+not proof that every delay is external or a representative kernel latency measurement.
+The old outer Python timeout leaves a native descendant running; that owned worker is
+sampled and terminated. Failure/source/binary digests and the sample remain under
+`out/kernel-evidence-gh225-complete/` and `/tmp/nightfall-225-complete.log`.
+
+The private driver now owns POSIX process groups for each stage, applies one unchanged
+120-second complete-run deadline, and stops nested workers on timeout/interruption.
+CTest retains its 120-second failure bound and uses SIGTERM for orderly child cleanup.
+A fault-injected CTest case confirms that even graceful exit zero after its deadline
+remains a Timeout failure. Four real-process regressions pass: success JSON, failure
+cannot publish success, nested-worker timeout cleanup and nested-worker SIGTERM cleanup.
+Native stage/checkpoint and feature-index events distinguish completed checks from an
+in-progress operation; timeout metadata records source/build identity and host load.
+
+The instrumented run again times out: it reaches the source/kernel-bound oracle check,
+but not the complete cold-build checkpoint. Driver preflight plus independent reference
+take **36.359448 s**; the failure is reported at **120.634441 s**, including cleanup.
+Observed start/full-stage/finish load averages exceed 147 in that run. Worker inventory
+confirms no remaining native/Rust acceptance workers. This remains failed full acceptance;
+no geometry, output budget, deadline or fixture is relaxed. The journal is retained at
+`out/kernel-evidence-gh225-instrumented/` and `/tmp/nightfall-225-instrumented.log`.
+Those runs predate the complete-gate and separate-machine results recorded above.
 
 ## Shared-boundary normal control for loft meshes (#242)
 
@@ -101,9 +132,35 @@ budget; these measured differences do not bound the exact-solid uncertainty.
 
 The full local gate passes **895/895 in 248.66 s**, plus Rust Debug/Release,
 Clippy/format, schema/hygiene, native XPC/Metal/recovery and concurrency/TSAN checks.
-Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. Remote CI/review and
-#225's full acceptance rerun remain pending. Exact-solid V/A integration and the
-independent Rust surface oracle are unchanged by this tessellation correction.
+Final logs: `/tmp/nightfall-242-{quality-final,asan,check}.log`. All five remote CI
+workflows on draft PR243 pass, including OCCT/native sanitizers, SMLib and bake-off.
+Human review and #225's full acceptance remain pending. Exact-solid V/A integration
+and the independent Rust surface oracle are unchanged by this tessellation correction.
+
+## Initial Eclipse oracle integration and mesh failure (#225 / #242)
+
+The full private acceptance driver now checks equality of the minimal vane's section
+inputs, parameters, units and twelve-copy pattern contract with the full source. It runs
+#236's independent Rust integration for default/edited/restored waists and binds those
+reference volumes to source/kernel identity before native acceptance. Modified parameters,
+section geometry and pattern counts are rejected in negative binding checks. The original
+invalid fixed-parameter formula remains a diagnostic; numerical budgets are unchanged.
+
+The first run on #239's corrected backend passes independent body volumes, symmetric
+centroids, foundation area, waist edit/restore/state hashes, cache-clear/retained measures
+and both STEP comparisons, then fails bridge tessellation with
+**`cell_vanes: mesh normals disagree with triangle winding`**. Full cold evaluation is
+**13478.297 ms** (Release M3 Pro, uncontrolled host load). Source SHA f4be17d4… retains
+113 features / 32 bodies / 529 solids. This is a new real mesh acceptance failure, not a
+reason to weaken winding checks, reduce the fixture or change deadlines/budgets.
+
+#242 tracks a separate direct-kernel reproduction/correction. Source/executable/kernel-bound
+failure, failed executable/source and the independent Rust receipt are retained in
+`out/kernel-evidence-gh225-verified/`; logs `/tmp/nightfall-225-{oracle-red,oracle-bindings,reference}.log`.
+The private probe additionally records completed checkpoints on failure and checks all
+retained body B-rep digests after edits/export/mesh; that final byte-immutability check
+has not been reached by the failing run. Full acceptance, required final gate and native
+sanitizer/review evidence remain pending the isolated mesh fix.
 
 ## Circular-pattern integration conditioning (#239)
 
@@ -251,6 +308,33 @@ After the precision guard, the final complete local gate passes **891/891 in 264
 including Rust Debug/Release, both doctests, zero-allocation observation, Clippy/format,
 schema/hygiene and unchanged native XPC/Metal/concurrency regressions. Final log:
 `/tmp/nightfall-234-check.log`. Remote CI and human review remain pending.
+
+## Eclipse capability boundary (#225)
+
+The new headless workcell is reproducible with `tools/make_eclipse.py --check` and targets
+**113 features / 32 bodies / 529 solids**. The original 112-feature model correctly fails
+the 64-instance per-feature limit: 21 robot bodies × four instances = 84. Two authored
+batches preserve all geometry and stay within that unchanged bound. The private probe
+requires per-body analytic volume, symmetric centroids, foundation area, edit/restore,
+cache-clear rebuild and retained snapshots, plus complete outward mesh and separate STEP
+integration. Its receipt binds source/executable/artifact digests and reports full f64
+per-body analytic/observed differences; physics/assemblies/interactive deadlines are not run.
+
+The first volume failure exposes #233's offset-circle/chamfer discrepancy (corrected by
+PR #235 below). The next run reaches the twisted vanes and fails at
+**1086259.4812360606 vs 1090379.9332788421 mm³**, keeping the predeclared **0.02 mm³**
+budget. The oracle assumes fixed ellipse-parameter correspondence. Automatic compatible
+wires may introduce a different correspondence; #236 investigates this before treating
+the oracle or solver as correct. One minimal vane has 10 faces / 24 edges and measured
+90521.6234363384 mm³, not the assumed four-sided interpolation. Full cold evaluation is
+**70323.303 ms** (M3 Pro/macOS 27.2, Release, uncontrolled host load).
+
+This is a retained failing acceptance case, not a completed milestone or a passing gate.
+The fixture, numeric budgets, new 120-second headless bound and existing five/seven-second
+service/client deadlines remain unchanged. Logs:
+`/tmp/nightfall-225-{first-failure,volume-failure,loft-failure}.log`.
+Raw source/STEP/build facts are captured separately under `out/kernel-evidence-gh225/`;
+they do not establish agreement with the independent acceptance oracle.
 
 ## Translated circular chamfer regression (#233)
 
