@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Regenerates the vendored SolidCraft sketch solver (RFC 0012) from an upstream checkout.
 
-Usage: vendor.py <solidcraft checkout at PIN> [--check]
+Usage: vendor.py <solidcraft repository containing PIN> [--check]
 
-The output is deterministic: running it on the pinned commit reproduces the committed tree
-byte for byte (`--check` compares instead of writing). Modifications, all mechanical:
+Every input is read from the pinned commit's tree (`git ls-tree`/`git show PIN:<path>`), never
+from the worktree, so local edits, untracked or ignored files and the checked-out branch do
+not matter. The output is deterministic: it reproduces the committed tree byte for byte
+(`--check` compares instead of writing). Modifications, all mechanical:
 
 - `sketch`: drop the `fonts` and `text` modules and every test module; replace `text.rs` with
   a stub that keeps only the `TextAlign` and `TextStyle` data types (no font files, no
@@ -158,14 +160,39 @@ def text_stub(upstream_text):
             + "\n".join(lines[first:last + 1]) + "\n" + "".join(f"\n#[allow(dead_code)]\n{h}\n" for h in helpers))
 
 
+class Pinned:
+    """Reads files of the commit PIN from a repository's object store."""
+
+    def __init__(self, repository):
+        self.repository = str(repository)
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", self.repository, *args], capture_output=True,
+                              check=True).stdout
+
+    def files(self, directory):
+        """Names of the files (blobs) directly in `directory`, sorted."""
+        listing = self.git("ls-tree", "-z", PIN, "--", f"{directory}/").decode()
+        names = []
+        for entry in filter(None, listing.split("\0")):
+            meta, path = entry.split("\t", 1)
+            if meta.split()[1] == "blob":
+                names.append(path.rsplit("/", 1)[-1])
+        return sorted(names)
+
+    def read(self, path):
+        return self.git("show", f"{PIN}:{path}").decode()
+
+
 def generate(upstream):
     files = {}
-    sketch, geom = upstream / "crates/sketch/src", upstream / "crates/geom/src"
-    for path in sorted(sketch.glob("*.rs")):
-        name = path.name
+    sketch, geom = "crates/sketch/src", "crates/geom/src"
+    for name in upstream.files(sketch):
+        if not name.endswith(".rs"):
+            continue
         if name.endswith("_tests.rs") or name in ("tests.rs", "fonts.rs", "profiling.rs"):
             continue
-        text = path.read_text()
+        text = upstream.read(f"{sketch}/{name}")
         if name == "text.rs":
             files["sketch/src/text.rs"] = clean(text_stub(text), ", font and outline code")
             continue
@@ -176,7 +203,7 @@ def generate(upstream):
             text = re.sub(r"^mod (\w+_tests|tests);\n", "", text, flags=re.M)
             text = text.replace("pub use text::", "// text outlines are not vendored: pub use text::")
         files[f"sketch/src/{name}"] = clean(text)
-    lib = (geom / "lib.rs").read_text()
+    lib = upstream.read(f"{geom}/lib.rs")
     keep = []
     for line in lib.split("\n"):
         m = re.match(r"(pub )?mod (\w+);", line)
@@ -190,7 +217,7 @@ def generate(upstream):
         keep.append(line)
     files["geom/src/lib.rs"] = clean("\n".join(keep), ", and modules the sketch solver does not use")
     for module in GEOM_MODULES:
-        text = (geom / f"{module}.rs").read_text()
+        text = upstream.read(f"{geom}/{module}.rs")
         text = re.sub(r"#\[cfg\(test\)\]\s*mod tests \{.*\Z", "", text, flags=re.S)
         files[f"geom/src/{module}.rs"] = clean(text)
     for crate, deps in (("geom", ""), ("sketch", "\n[dependencies]\nsolidcraft-geom = { path = \"../geom\" }\n")):
@@ -208,22 +235,16 @@ def generate(upstream):
     # style it was written in.
     files["rustfmt.toml"] = f"# SolidCraft's rustfmt.toml at {PIN}.\nmax_width = 150\nuse_small_heuristics = \"Max\"\n"
     for name in ("LICENSE-APACHE", "LICENSE-MIT", "NOTICE"):
-        files[f"upstream/{name}"] = (upstream / name).read_text()
+        files[f"upstream/{name}"] = upstream.read(name)
     return files
 
 
 def main():
-    upstream = Path(sys.argv[1]).resolve()
-    head = subprocess.run(["git", "-C", str(upstream), "rev-parse", "HEAD"], capture_output=True,
-                          text=True, check=True).stdout.strip()
-    if head != PIN:
-        sys.exit(f"upstream is at {head}, expected {PIN}")
-    # Files are read from the worktree, so it must be exactly PIN: no edits, no extra files.
-    dirty = subprocess.run(["git", "-C", str(upstream), "status", "--porcelain",
-                            "--untracked-files=all", "--ignored=no"], capture_output=True,
-                           text=True, check=True).stdout.strip()
-    if dirty:
-        sys.exit(f"upstream has local changes or files; vendor from a clean checkout of {PIN}")
+    upstream = Pinned(Path(sys.argv[1]).resolve())
+    try:
+        upstream.git("cat-file", "-e", f"{PIN}^{{commit}}")
+    except subprocess.CalledProcessError:
+        sys.exit(f"{sys.argv[1]} does not contain commit {PIN}; fetch it first")
     files = generate(upstream)
     if "--check" in sys.argv:
         bad = [p for p, t in files.items() if not (HERE / p).exists() or (HERE / p).read_text() != t]
