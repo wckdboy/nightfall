@@ -7,7 +7,7 @@
   },
   "meta": {
     "name": "Strandbeest",
-    "doc": "Theo Jansen's walking linkage: four legs on a two-throw crankshaft. Jansen's eleven holy numbers plus the crank radius and pivot offsets are parameters; every link outline is solved from constraints; the crank angle drives the walk."
+    "doc": "Theo Jansen's walking linkage: four legs on a two-throw crankshaft. Jansen's eleven holy numbers plus the crank radius and pivot offsets are parameters; every link outline is solved from constraints; the crank angle drives the walk. The walker stands with z up: it walks in the x-z plane."
   },
   "params": [
     {
@@ -1820,21 +1820,33 @@
     {
       "id": "frame",
       "component": "frame",
-      "grounded": true
+      "grounded": true,
+      "placement": {
+        "translation": [
+          0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          90.0,
+          -0.0,
+          0.0
+        ]
+      }
     },
     {
       "id": "crank",
       "component": "crankshaft",
       "placement": {
         "translation": [
-          0,
-          0,
-          5.0
+          0.0,
+          -5.0,
+          0.0
         ],
         "rotation": [
-          0,
-          0,
-          30
+          90.0,
+          -30.0,
+          0.0
         ]
       }
     },
@@ -1847,13 +1859,13 @@
       "placement": {
         "translation": [
           13.0,
-          7.5,
-          30.0
+          -30.0,
+          7.5
         ],
         "rotation": [
-          0,
-          0,
-          149
+          -90.0,
+          -31.0,
+          180.0
         ]
       }
     },
@@ -1866,13 +1878,13 @@
       "placement": {
         "translation": [
           13.0,
-          7.5,
-          35.0
+          -35.0,
+          7.5
         ],
         "rotation": [
-          0,
-          0,
-          -124
+          -90.0,
+          56.0,
+          -180.0
         ]
       }
     },
@@ -1885,13 +1897,13 @@
       "placement": {
         "translation": [
           -38.0,
-          -8.0,
-          15.0
+          -15.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          -66
+          90.0,
+          66.0,
+          -0.0
         ]
       }
     },
@@ -1904,13 +1916,13 @@
       "placement": {
         "translation": [
           -77.0,
-          2.5,
-          20.0
+          -20.0,
+          2.5
         ],
         "rotation": [
-          0,
-          0,
-          -59
+          90.0,
+          59.0,
+          -0.0
         ]
       }
     },
@@ -1926,13 +1938,13 @@
       "placement": {
         "translation": [
           -38.0,
-          -8.0,
-          10.0
+          -10.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          79
+          90.0,
+          -79.0,
+          0.0
         ]
       }
     },
@@ -1948,13 +1960,13 @@
       "placement": {
         "translation": [
           -22.0,
-          -43.5,
-          25.0
+          -25.0,
+          -43.5
         ],
         "rotation": [
-          0,
-          0,
-          160
+          -90.0,
+          -20.0,
+          180.0
         ]
       }
     },
@@ -1967,13 +1979,13 @@
       "placement": {
         "translation": [
           13.0,
-          7.5,
-          40.0
+          -40.0,
+          7.5
         ],
         "rotation": [
-          0,
-          0,
-          25
+          90.0,
+          -25.0,
+          0.0
         ]
       }
     },
@@ -1986,13 +1998,13 @@
       "placement": {
         "translation": [
           13.0,
-          7.5,
-          45.0
+          -45.0,
+          7.5
         ],
         "rotation": [
-          0,
-          0,
-          -61
+          90.0,
+          61.0,
+          -0.0
         ]
       }
     },
@@ -2005,13 +2017,13 @@
       "placement": {
         "translation": [
           38.0,
-          -8.0,
-          15.0
+          -15.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          -83
+          90.0,
+          83.0,
+          -0.0
         ]
       }
     },
@@ -2024,13 +2036,13 @@
       "placement": {
         "translation": [
           74.0,
-          -25.5,
-          20.0
+          -20.0,
+          -25.5
         ],
         "rotation": [
-          0,
-          0,
-          -89
+          90.0,
+          89.0,
+          -0.0
         ]
       }
     },
@@ -2046,13 +2058,13 @@
       "placement": {
         "translation": [
           38.0,
-          -8.0,
-          10.0
+          -10.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          60
+          90.0,
+          -60.0,
+          0.0
         ]
       }
     },
@@ -2068,13 +2080,13 @@
       "placement": {
         "translation": [
           42.5,
-          -47.0,
-          25.0
+          -25.0,
+          -47.0
         ],
         "rotation": [
-          0,
-          0,
-          -29
+          90.0,
+          29.0,
+          -0.0
         ]
       }
     },
@@ -2087,13 +2099,13 @@
       "placement": {
         "translation": [
           -13.0,
-          -7.5,
-          -30.0
+          30.0,
+          -7.5
         ],
         "rotation": [
-          0,
-          0,
-          125
+          -90.0,
+          -55.0,
+          180.0
         ]
       }
     },
@@ -2106,13 +2118,13 @@
       "placement": {
         "translation": [
           -13.0,
-          -7.5,
-          -35.0
+          35.0,
+          -7.5
         ],
         "rotation": [
-          0,
-          0,
-          -159
+          -90.0,
+          21.0,
+          -180.0
         ]
       }
     },
@@ -2125,13 +2137,13 @@
       "placement": {
         "translation": [
           -38.0,
-          -8.0,
-          -15.0
+          15.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          -147
+          -90.0,
+          33.0,
+          -180.0
         ]
       }
     },
@@ -2144,13 +2156,13 @@
       "placement": {
         "translation": [
           -78.0,
-          -8.5,
-          -20.0
+          20.0,
+          -8.5
         ],
         "rotation": [
-          0,
-          0,
-          -138
+          -90.0,
+          42.0,
+          -180.0
         ]
       }
     },
@@ -2166,13 +2178,13 @@
       "placement": {
         "translation": [
           -38.0,
-          -8.0,
-          -10.0
+          10.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          95
+          -90.0,
+          -85.0,
+          180.0
         ]
       }
     },
@@ -2188,13 +2200,13 @@
       "placement": {
         "translation": [
           -71.0,
-          -29.0,
-          -25.0
+          25.0,
+          -29.0
         ],
         "rotation": [
-          0,
-          0,
-          -171
+          -90.0,
+          9.0,
+          -180.0
         ]
       }
     },
@@ -2207,13 +2219,13 @@
       "placement": {
         "translation": [
           -13.0,
-          -7.5,
-          -40.0
+          40.0,
+          -7.5
         ],
         "rotation": [
-          0,
-          0,
-          48
+          90.0,
+          -48.0,
+          0.0
         ]
       }
     },
@@ -2226,13 +2238,13 @@
       "placement": {
         "translation": [
           -13.0,
-          -7.5,
-          -45.0
+          45.0,
+          -7.5
         ],
         "rotation": [
-          0,
-          0,
-          -40
+          90.0,
+          40.0,
+          -0.0
         ]
       }
     },
@@ -2245,13 +2257,13 @@
       "placement": {
         "translation": [
           38.0,
-          -8.0,
-          -15.0
+          15.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          -95
+          -90.0,
+          85.0,
+          -180.0
         ]
       }
     },
@@ -2264,13 +2276,13 @@
       "placement": {
         "translation": [
           73.0,
-          11.5,
-          -20.0
+          20.0,
+          11.5
         ],
         "rotation": [
-          0,
-          0,
-          -101
+          -90.0,
+          79.0,
+          -180.0
         ]
       }
     },
@@ -2286,13 +2298,13 @@
       "placement": {
         "translation": [
           38.0,
-          -8.0,
-          -10.0
+          10.0,
+          -8.0
         ],
         "rotation": [
-          0,
-          0,
-          115
+          -90.0,
+          -65.0,
+          180.0
         ]
       }
     },
@@ -2308,13 +2320,13 @@
       "placement": {
         "translation": [
           34.5,
-          -47.0,
-          -25.0
+          25.0,
+          -47.0
         ],
         "rotation": [
-          0,
-          0,
-          33
+          90.0,
+          -33.0,
+          0.0
         ]
       }
     }

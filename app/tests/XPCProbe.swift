@@ -214,6 +214,8 @@ func nativeBenchmark(_ path: String, samples: Int) throws {
         try await visibilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "scalability":
         try await scalabilityIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
+      case "assemblies":
+        try await assemblyIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "render":
         try await rendererIntegration(CommandLine.arguments[2], output: CommandLine.arguments[3])
       case "references": try references(CommandLine.arguments[2])

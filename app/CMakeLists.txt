@@ -9,8 +9,9 @@ add_custom_command(TARGET Nightfall POST_BUILD
   COMMAND "${CMAKE_COMMAND}" -E rm -rf "$<TARGET_BUNDLE_DIR:Nightfall>/Contents/Resources/Examples"
   COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PROJECT_SOURCE_DIR}/examples/parts" "$<TARGET_BUNDLE_DIR:Nightfall>/Contents/Resources/Examples"
   COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PROJECT_SOURCE_DIR}/examples/modeling" "$<TARGET_BUNDLE_DIR:Nightfall>/Contents/Resources/Examples"
+  COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PROJECT_SOURCE_DIR}/examples/assemblies" "$<TARGET_BUNDLE_DIR:Nightfall>/Contents/Resources/Examples"
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/embed_service.py" "$<TARGET_BUNDLE_DIR:Nightfall>" "$<TARGET_BUNDLE_DIR:nf_kernel_service>" "${NF_OCCT_INSTALL_DIR}"
   VERBATIM)
-file(GLOB examples CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/examples/parts/*.nightfall" "${PROJECT_SOURCE_DIR}/examples/modeling/*.nightfall")
+file(GLOB examples CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/examples/parts/*.nightfall" "${PROJECT_SOURCE_DIR}/examples/modeling/*.nightfall" "${PROJECT_SOURCE_DIR}/examples/assemblies/*.nightfall")
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/example-files.txt" CONTENT "${examples}\n")
 set_property(TARGET Nightfall APPEND PROPERTY LINK_DEPENDS "${PROJECT_SOURCE_DIR}/tools/embed_service.py" "$<TARGET_FILE:nf_kernel_service>" "${CMAKE_CURRENT_BINARY_DIR}/example-files.txt" ${examples})
