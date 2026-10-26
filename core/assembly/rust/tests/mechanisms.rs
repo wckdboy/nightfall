@@ -630,6 +630,38 @@ fn a_floating_serial_arm_is_seeded_from_its_first_occurrence() {
 }
 
 #[test]
+fn a_serial_arm_held_by_limits_far_from_its_authored_pose_solves() {
+    // Undriven joints pinned by equal lower and upper limits: the pins demand the same large
+    // moves as drives, so the seed must take them as targets too (#329).
+    let q = [179.0, -179.0, 135.0, -135.0, 170.0, -170.0].map(f64::to_radians);
+    let mut asm = arm(q);
+    for (k, joint) in asm.joints.iter_mut().enumerate() {
+        joint.values = vec![None];
+        joint.limits = vec![Some((q[k], q[k]))];
+    }
+    let s = solve(&asm, &SolveOptions::default()).unwrap();
+    assert_solved(&s);
+    let mut parent = (Placement::IDENTITY.rotation, [0.0; 3]);
+    for (k, j) in asm.joints.iter().enumerate() {
+        let child = compose(
+            &compose(&compose(&parent, &frame_pose(&j.frame_a)), &rz(q[k])),
+            &inverse(&frame_pose(&j.frame_b)),
+        );
+        let got = &s.placements[k + 1];
+        for i in 0..3 {
+            assert!((got.translation[i] - child.1[i]).abs() <= 1e-9, "link {k}");
+            for c in 0..3 {
+                assert!(
+                    (got.rotation[i][c] - child.0[i][c]).abs() <= 1e-9,
+                    "link {k}"
+                );
+            }
+        }
+        parent = child;
+    }
+}
+
+#[test]
 fn a_driven_serial_arm_solves_far_from_its_authored_pose() {
     let poses = [
         [0.0, 0.0, 0.0, -45.0, 0.0, 0.0],

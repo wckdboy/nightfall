@@ -327,9 +327,9 @@ impl Model<'_> {
     }
 
     /// The relative placement a joint puts frame b at in frame a: translation by its offsets,
-    /// then rotation by its angle, with driven coordinates at their targets and the others at
-    /// their values in `start` (a ball keeps its relative rotation).
-    fn motion(&self, joint: usize, start: &[Placement]) -> Placement {
+    /// then rotation by its angle, with driven and pinned coordinates at their targets in
+    /// `rows` and the others at their values in `start` (a ball keeps its relative rotation).
+    fn motion(&self, joint: usize, start: &[Placement], rows: &[Row]) -> Placement {
         let j = &self.asm.joints[joint];
         if j.kind == JointKind::Ball {
             let (a, b) = self.ends(joint, start);
@@ -341,7 +341,13 @@ impl Model<'_> {
         }
         let (mut angle, mut t) = (0.0, [0.0; 3]);
         for (k, &measure) in j.kind.free().iter().enumerate() {
-            let value = j.values[k].unwrap_or_else(|| self.measure(joint, measure, start));
+            let pinned = rows
+                .iter()
+                .find(|r| r.joint == joint && r.measure == measure)
+                .map(|r| r.target);
+            let value = j.values[k]
+                .or(pinned)
+                .unwrap_or_else(|| self.measure(joint, measure, start));
             match measure {
                 Angle => angle = value,
                 Offset(i) => t[i] = value,
@@ -356,11 +362,11 @@ impl Model<'_> {
     /// is then solved by construction; a loop starts with only its cut joints open. A connected
     /// part with no grounded occurrence is rooted at its first occurrence, which keeps its
     /// authored placement.
-    fn seeded(&self, start: &[Placement]) -> Vec<Placement> {
+    fn seeded(&self, start: &[Placement], rows: &[Row]) -> Vec<Placement> {
         let mut x = start.to_vec();
         let mut placed: Vec<bool> = self.asm.occurrences.iter().map(|o| o.grounded).collect();
         loop {
-            self.grow(start, &mut x, &mut placed);
+            self.grow(start, rows, &mut x, &mut placed);
             match placed.iter().position(|p| !p) {
                 Some(root) => placed[root] = true,
                 None => return x,
@@ -369,7 +375,7 @@ impl Model<'_> {
     }
 
     /// One spanning-tree pass from the `placed` occurrences until nothing more is reachable.
-    fn grow(&self, start: &[Placement], x: &mut [Placement], placed: &mut [bool]) {
+    fn grow(&self, start: &[Placement], rows: &[Row], x: &mut [Placement], placed: &mut [bool]) {
         let mut grew = true;
         while grew {
             grew = false;
@@ -379,7 +385,7 @@ impl Model<'_> {
                     continue;
                 }
                 let (fa, fb) = (j.frame_a.placement(), j.frame_b.placement());
-                let m = self.motion(joint, start);
+                let m = self.motion(joint, start, rows);
                 if placed[a] {
                     x[b] = x[a].compose(&fa).compose(&m).compose(&fb.inverse());
                     placed[b] = true;
@@ -744,7 +750,7 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
     // whichever converges, or else the lower cost.
     let (mut x, mut iterations) = m.least_squares(&rows, start.clone(), opt);
     if !m.converged(&rows, &x, opt) {
-        let (y, more) = m.least_squares(&rows, m.seeded(&start), opt);
+        let (y, more) = m.least_squares(&rows, m.seeded(&start, &rows), opt);
         iterations += more;
         if m.converged(&rows, &y, opt) || m.cost(&rows, &y) < m.cost(&rows, &x) {
             x = y;
@@ -781,6 +787,15 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
         }
         let (next, more) = m.least_squares(&rows, x, opt);
         (x, iterations) = (next, iterations + more);
+        // A pin can demand a large move that stalls on a flipped branch, like a far drive: seed
+        // again with the pinned coordinates as targets and keep the better result.
+        if !m.converged(&rows, &x, opt) {
+            let (y, more) = m.least_squares(&rows, m.seeded(&start, &rows), opt);
+            iterations += more;
+            if m.converged(&rows, &y, opt) || m.cost(&rows, &y) < m.cost(&rows, &x) {
+                x = y;
+            }
+        }
     }
     let residuals: Vec<f64> = rows.iter().map(|row| m.residual(row, &x)).collect();
     // The last limit round can push another undriven coordinate past its bound.
