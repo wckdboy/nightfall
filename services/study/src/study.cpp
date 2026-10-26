@@ -186,8 +186,9 @@ Prepared prepare(const Value& study, const FaceResolver& resolve, const std::str
 Object surface_field(const PlainMesh& mesh, const StructuralResult& r) {
   std::map<int, double> number;
   Array points, triangles, stress, displacement;
-  for (const int node : mesh.triangles) {
-    auto [at, fresh] = number.try_emplace(node, static_cast<double>(number.size()));
+  const auto corner = [&](int node) {
+    // Indices count points in the order they are written, corners and midpoints alike.
+    auto [at, fresh] = number.try_emplace(node, static_cast<double>(points.size() / 3));
     if (fresh) {
       const auto n = static_cast<std::size_t>(node);
       for (std::size_t c = 0; c < 3; ++c) {
@@ -196,7 +197,39 @@ Object surface_field(const PlainMesh& mesh, const StructuralResult& r) {
       }
       stress.push_back(r.nodal_von_mises.at(n));
     }
-    triangles.push_back(at->second);
+    return at->second;
+  };
+  // Each P2 surface triangle is drawn as four, through its mid-edge nodes (#335), so the field
+  // holds every surface DOF and its maximum displacement is the reported one when that lies on
+  // the surface. The mesh is straight-sided, so a midpoint is the mean of its ends.
+  std::map<std::pair<int, int>, double> middle;
+  std::map<std::pair<int, int>, const StructuralResult::SurfaceEdge*> edges;
+  for (const auto& e : r.surface_edges) edges[{std::min(e.a, e.b), std::max(e.a, e.b)}] = &e;
+  const auto mid = [&](int a, int b) {
+    const std::pair key{std::min(a, b), std::max(a, b)};
+    const auto known = middle.find(key);
+    if (known != middle.end()) return known->second;
+    const auto found = edges.find(key);
+    if (found == edges.end()) return -1.0;
+    const double index = static_cast<double>(points.size() / 3);
+    middle.emplace(key, index);
+    const auto x = static_cast<std::size_t>(a), y = static_cast<std::size_t>(b);
+    for (std::size_t c = 0; c < 3; ++c) {
+      points.push_back(0.5 * (mesh.points[3 * x + c] + mesh.points[3 * y + c]));
+      displacement.push_back(found->second->displacement[c]);
+    }
+    stress.push_back(found->second->von_mises);
+    return index;
+  };
+  for (std::size_t t = 0; t + 2 < mesh.triangles.size(); t += 3) {
+    const int a = mesh.triangles[t], b = mesh.triangles[t + 1], c = mesh.triangles[t + 2];
+    const double A = corner(a), B = corner(b), C = corner(c);
+    const double ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+    if (ab < 0 || bc < 0 || ca < 0) {  // no edge values (never for a solved mesh): as authored
+      for (const double v : {A, B, C}) triangles.push_back(v);
+      continue;
+    }
+    for (const double v : {A, ab, ca, ab, B, bc, ca, bc, C, ab, bc, ca}) triangles.push_back(v);
   }
   return {{"kind", "static_structural"},
           {"units", Object{{"length", "mm"}, {"stress", "MPa"}, {"displacement", "mm"}}},

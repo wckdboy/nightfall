@@ -246,6 +246,37 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
       result.nodal_displacement[3 * static_cast<std::size_t>(n) + static_cast<std::size_t>(c)] =
           values(n);
   }
+  // Mid-edge values of every boundary edge, so the displayed field holds every surface DOF:
+  // the solution evaluated at the edge's midpoint on a boundary triangle holding it (at P2
+  // that is the mid-edge DOF itself; any order is evaluated where it is drawn).
+  std::vector<bool> seen(static_cast<std::size_t>(mesh->GetNEdges()), false);
+  mfem::Array<int> edges, orientations, ends, corners;
+  mfem::Vector value(3);
+  for (int b = 0; b < mesh->GetNBE(); ++b) {
+    mesh->GetBdrElementEdges(b, edges, orientations);
+    mesh->GetBdrElementVertices(b, corners);
+    auto* T = mesh->GetBdrElementTransformation(b);
+    const auto* reference = mfem::Geometries.GetVertices(mesh->GetBdrElementGeometry(b));
+    for (const int edge : edges) {
+      if (seen[static_cast<std::size_t>(edge)]) continue;
+      seen[static_cast<std::size_t>(edge)] = true;
+      mesh->GetEdgeVertices(edge, ends);
+      mfem::IntegrationPoint mid;
+      mid.Init(0);
+      for (const int end : {ends[0], ends[1]}) {
+        const int k = corners.Find(end);
+        mid.x += 0.5 * reference->IntPoint(k).x;
+        mid.y += 0.5 * reference->IntPoint(k).y;
+      }
+      T->SetIntPoint(&mid);
+      u.GetVectorValue(*T, mid, value);
+      StructuralResult::SurfaceEdge out{ends[0], ends[1], {}, 0};
+      const auto p = static_cast<std::size_t>(ends[0]), q = static_cast<std::size_t>(ends[1]);
+      for (std::size_t c = 0; c < 3; ++c) out.displacement[c] = value(static_cast<int>(c));
+      out.von_mises = 0.5 * (result.nodal_von_mises[p] + result.nodal_von_mises[q]);
+      result.surface_edges.push_back(out);
+    }
+  }
   return result;
 }
 
