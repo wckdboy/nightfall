@@ -163,6 +163,13 @@ std::optional<CircularArc> circular_arc(const math::NurbsCurve2& curve, const Pl
   if (!certified(radius2)) {
     radius2 = (start2 + end2) / 2;
     if (!certified(radius2)) return {};
+    // The circle starts on `a`'s ray at the averaged radius, so the endpoints move radially by
+    // the radius difference. Past half of OCCT's joining tolerance an adjacent edge built from
+    // the authored endpoint could disconnect: keep the exact NURBS instead.
+    const double moved = std::max(std::abs(std::sqrt(radius2) - std::sqrt(start2)),
+                                  std::abs(std::sqrt(radius2) - std::sqrt(end2))) *
+                         scale;
+    if (!(moved <= 0.5 * Precision::Confusion())) return {};
   }
   const double sign = turn > 0 ? 1 : -1;
   const double angle = std::atan2(sign * math::cross(a, c), math::dot(a, c));
