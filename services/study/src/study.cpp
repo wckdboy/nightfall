@@ -313,9 +313,26 @@ Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePt
   // The field is written last, once the whole study is valid: a failed one leaves no field and
   // never replaces an existing file.
   if (!field_path.empty()) {
-    std::ofstream out(field_path, std::ios::binary);
-    out << ir::json::write(Value(std::move(field)));
-    if (!out) fail("", "cannot write the field to " + field_path, "io");
+    // Written beside the destination, closed and checked, then renamed over it: a failed write
+    // never leaves a truncated field in place of a good one.
+    const auto partial = field_path + ".partial";
+    {
+      std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+      out << ir::json::write(Value(std::move(field)));
+      out.close();
+      if (!out) {
+        std::error_code ignored;
+        std::filesystem::remove(partial, ignored);
+        fail("", "cannot write the field to " + field_path, "io");
+      }
+    }
+    std::error_code renamed;
+    std::filesystem::rename(partial, field_path, renamed);
+    if (renamed) {
+      std::error_code ignored;
+      std::filesystem::remove(partial, ignored);
+      fail("", "cannot write the field to " + field_path + ": " + renamed.message(), "io");
+    }
   }
   Object result{{"kind", prepared.kind},
                 {"units", Object{{"length", "mm"},
