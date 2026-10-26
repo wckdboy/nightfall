@@ -489,18 +489,9 @@ impl Model<'_> {
         (x, iterations)
     }
 
-    /// Which joints add rank, taking the `first` joints and then the rest in order. The
-    /// Jacobian's length rows are scaled by the model length and its columns to unit norm; each
-    /// row is orthogonalized against the rows taken before it (Gram-Schmidt, twice for
-    /// stability), so the whole search is one pass of O(rows * rank * columns). Returns the
-    /// total rank and, per joint, whether any of its rows was independent of those before it.
-    fn independent(
-        &self,
-        rows: &[Row],
-        x: &[Placement],
-        first: &[bool],
-        joints: usize,
-    ) -> (usize, Vec<bool>) {
+    /// The Jacobian with length rows scaled by the model length and columns scaled to unit
+    /// norm, so rank decisions compare like with like.
+    fn scaled_jacobian(&self, rows: &[Row], x: &[Placement]) -> Vec<Vec<f64>> {
         let mut j = self.jacobian(rows, x);
         for (line, row) in j.iter_mut().zip(rows) {
             if matches!(row.measure, Offset(_)) {
@@ -513,32 +504,7 @@ impl Model<'_> {
                 j.iter_mut().for_each(|line| line[c] /= norm);
             }
         }
-        let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(p, q)| p * q).sum::<f64>();
-        let mut basis: Vec<Vec<f64>> = Vec::new();
-        let mut adds = vec![false; joints];
-        let order = (0..joints)
-            .filter(|&k| first[k])
-            .chain((0..joints).filter(|&k| !first[k]));
-        for joint in order {
-            for (line, _) in j.iter().zip(rows).filter(|(_, r)| r.joint == joint) {
-                let mut v = line.clone();
-                for _ in 0..2 {
-                    for b in &basis {
-                        let d = dot(&v, b);
-                        v.iter_mut().zip(b).for_each(|(vi, bi)| *vi -= d * bi);
-                    }
-                }
-                // Columns have unit norm, so the tolerance is relative to the largest pivot a
-                // column-pivoted QR of the same matrix would start from.
-                let norm = dot(&v, &v).sqrt();
-                if norm > RANK_TOLERANCE {
-                    v.iter_mut().for_each(|vi| *vi /= norm);
-                    basis.push(v);
-                    adds[joint] = true;
-                }
-            }
-        }
-        (basis.len(), adds)
+        j
     }
 }
 
@@ -577,6 +543,89 @@ fn limited(value: f64, measure: Measure, lo: f64, hi: f64) -> f64 {
     }
     let tau = std::f64::consts::TAU;
     value + tau * ((0.5 * (lo + hi) - value) / tau).round()
+}
+
+/// Rank by Householder QR with column pivoting, relative to the largest diagonal.
+fn qr_rank(mut a: Vec<Vec<f64>>, cols: usize) -> usize {
+    let rows = a.len();
+    let mut rank = 0;
+    let mut first = 0.0;
+    for k in 0..cols.min(rows) {
+        let norm2 = |c: usize, a: &[Vec<f64>]| (k..rows).map(|i| a[i][c] * a[i][c]).sum::<f64>();
+        let norms: Vec<f64> = (k..cols).map(|c| norm2(c, &a)).collect();
+        let Some(p) = (k..cols).max_by(|&i, &j| norms[i - k].total_cmp(&norms[j - k])) else {
+            break;
+        };
+        for line in a.iter_mut() {
+            line.swap(k, p);
+        }
+        let alpha = norm2(k, &a).sqrt();
+        if k == 0 {
+            first = alpha;
+        }
+        if first == 0.0 || alpha.is_nan() || alpha <= RANK_TOLERANCE * first {
+            break;
+        }
+        rank += 1;
+        let sign = if a[k][k] >= 0.0 { 1.0 } else { -1.0 };
+        let mut v: Vec<f64> = (k..rows).map(|i| a[i][k]).collect();
+        v[0] += sign * alpha;
+        let vv: f64 = v.iter().map(|x| x * x).sum();
+        if vv == 0.0 {
+            continue;
+        }
+        let scaled: Vec<f64> = (k..cols)
+            .map(|c| (k..rows).map(|i| v[i - k] * a[i][c]).sum::<f64>() * 2.0 / vv)
+            .collect();
+        for (line, vi) in a.iter_mut().skip(k).zip(&v) {
+            for (cell, s) in line[k..cols].iter_mut().zip(&scaled) {
+                *cell -= s * vi;
+            }
+        }
+    }
+    rank
+}
+
+/// Which joints add rank to the joints taken before them, taking joints in `order` and rows by
+/// Gram-Schmidt (applied twice for stability) until `rank` independent rows are found: one
+/// pass of O(rows * rank * columns) instead of a factorization per joint. `rank` comes from the
+/// pivoted QR, so a near-singular pose gives the same rank in any joint order.
+fn independent(
+    j: &[Vec<f64>],
+    rows: &[Row],
+    order: impl Iterator<Item = usize>,
+    rank: usize,
+    joints: usize,
+) -> Vec<bool> {
+    let mut by_joint: Vec<Vec<usize>> = vec![Vec::new(); joints];
+    for (i, row) in rows.iter().enumerate() {
+        by_joint[row.joint].push(i);
+    }
+    let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(p, q)| p * q).sum::<f64>();
+    let mut basis: Vec<Vec<f64>> = Vec::with_capacity(rank);
+    let mut adds = vec![false; joints];
+    for joint in order {
+        for &i in &by_joint[joint] {
+            if basis.len() == rank {
+                return adds;
+            }
+            let mut v = j[i].clone();
+            for _ in 0..2 {
+                for b in &basis {
+                    let d = dot(&v, b);
+                    v.iter_mut().zip(b).for_each(|(vi, bi)| *vi -= d * bi);
+                }
+            }
+            // Columns have unit norm: the same tolerance as the QR's, relative to its first pivot.
+            let norm = dot(&v, &v).sqrt();
+            if norm > RANK_TOLERANCE {
+                v.iter_mut().for_each(|vi| *vi /= norm);
+                basis.push(v);
+                adds[joint] = true;
+            }
+        }
+    }
+    adds
 }
 
 fn validate(asm: &Assembly) -> Result<Vec<(usize, usize)>, AssemblyError> {
@@ -850,7 +899,13 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
         .iter()
         .map(|j| conflicting.contains(&j.id))
         .collect();
-    let (rank, adds) = m.independent(&rows, &x, &conflicts, asm.joints.len());
+    let j = m.scaled_jacobian(&rows, &x);
+    let rank = qr_rank(j.clone(), m.columns);
+    let joints = asm.joints.len();
+    let order = (0..joints)
+        .filter(|&k| conflicts[k])
+        .chain((0..joints).filter(|&k| !conflicts[k]));
+    let adds = independent(&j, &rows, order, rank, joints);
     let redundant: Vec<String> = asm
         .joints
         .iter()
@@ -876,4 +931,35 @@ pub fn solve(asm: &Assembly, opt: &SolveOptions) -> Result<Solution, AssemblyErr
         placements: if solved { x } else { start },
         report,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_small_early_row_does_not_raise_the_rank_of_a_near_singular_pose() {
+        // Two unit columns; joint 0's row is tiny and nearly parallel to joint 1's. The second
+        // QR pivot is about 2e-15, so the rank is 1 in either joint order, and only the first
+        // joint taken adds rank.
+        let (s, t) = (1e-6_f64, 1e-6_f64 + 2e-15);
+        let j = vec![vec![s, t], vec![(1.0 - s * s).sqrt(), (1.0 - t * t).sqrt()]];
+        let rows: Vec<Row> = (0..2)
+            .map(|joint| Row {
+                joint,
+                measure: Angle,
+                target: 0.0,
+            })
+            .collect();
+        let rank = qr_rank(j.clone(), 2);
+        assert_eq!(rank, 1);
+        assert_eq!(
+            independent(&j, &rows, [0, 1].into_iter(), rank, 2),
+            [true, false]
+        );
+        assert_eq!(
+            independent(&j, &rows, [1, 0].into_iter(), rank, 2),
+            [false, true]
+        );
+    }
 }
