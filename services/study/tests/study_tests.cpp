@@ -247,11 +247,10 @@ TEST_CASE("a STEP study writes its surface field for display", "[study][step][fi
   }
   const double max_displacement = number(*r.find("quantities"), "max_displacement");
   const double max_von_mises = number(*r.find("quantities"), "max_von_mises");
-  // The tip moves most and lies on the surface. The field holds the mesh's corner nodes, the
-  // reported maximum all of its P2 nodes (mid-edge ones too): here they differ by 1.4e-7
-  // relative, so the field is checked to 1e-6 until it carries mid-edge nodes (#335).
+  // The tip moves most and lies on the surface. The field holds every surface P2 node, corners
+  // and mid-edge ones (#335), so its maximum is the reported one.
   CHECK(most_moved <= max_displacement * (1 + 1e-9));
-  CHECK_THAT(most_moved, WithinRel(max_displacement, 1e-6));
+  CHECK_THAT(most_moved, WithinRel(max_displacement, 1e-9));
   // Nodal averaging smooths the quadrature peak, never past it.
   CHECK(most_stress > 0.5 * max_von_mises);
   CHECK(most_stress <= max_von_mises * (1 + 1e-9));

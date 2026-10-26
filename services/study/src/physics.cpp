@@ -246,6 +246,26 @@ std::expected<StructuralResult, std::string> solve_structural(const PlainMesh& p
       result.nodal_displacement[3 * static_cast<std::size_t>(n) + static_cast<std::size_t>(c)] =
           values(n);
   }
+  // Mid-edge values of every boundary edge, so the displayed field holds every surface DOF.
+  std::vector<bool> seen(static_cast<std::size_t>(mesh->GetNEdges()), false);
+  mfem::Array<int> edges, orientations, ends, dofs;
+  for (int b = 0; b < mesh->GetNBE(); ++b) {
+    mesh->GetBdrElementEdges(b, edges, orientations);
+    for (const int edge : edges) {
+      if (seen[static_cast<std::size_t>(edge)]) continue;
+      seen[static_cast<std::size_t>(edge)] = true;
+      mesh->GetEdgeVertices(edge, ends);
+      StructuralResult::SurfaceEdge out{ends[0], ends[1], {}, 0};
+      const auto p = static_cast<std::size_t>(ends[0]), q = static_cast<std::size_t>(ends[1]);
+      space.GetEdgeInteriorDofs(edge, dofs);  // GetEdgeDofs lists the end vertices first
+      for (std::size_t c = 0; c < 3; ++c)
+        out.displacement[c] = dofs.Size() > 0 ? u(space.DofToVDof(dofs[0], static_cast<int>(c)))
+                                              : 0.5 * (result.nodal_displacement[3 * p + c] +
+                                                       result.nodal_displacement[3 * q + c]);
+      out.von_mises = 0.5 * (result.nodal_von_mises[p] + result.nodal_von_mises[q]);
+      result.surface_edges.push_back(out);
+    }
+  }
   return result;
 }
 
