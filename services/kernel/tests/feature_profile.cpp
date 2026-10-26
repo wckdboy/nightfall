@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Private per-feature wall profile through the existing evaluator observer.
 #include "evaluator.hpp"
+#include "profiled_kernel.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -18,7 +19,8 @@ int main(int argc, char** argv) {
     const std::string source{std::istreambuf_iterator<char>{file}, {}};
     const auto document = ir::read_document(source).value();
     auto backend = kernel::make_occt_kernel().value();
-    kernel_service::Evaluator evaluator(*backend, {96, 64 * 1024 * 1024});
+    kernel_service::test::ProfiledKernel traced(*backend);
+    kernel_service::Evaluator evaluator(traced, {96, 64 * 1024 * 1024});
     using Clock = std::chrono::steady_clock;
     const auto start = Clock::now();
     auto previous = start;
@@ -30,6 +32,7 @@ int main(int argc, char** argv) {
         times.at(*active) = std::chrono::duration<double, std::milli>(now - previous).count();
       active = index;
       previous = now;
+      traced.feature = document.features.at(index).id;
     };
     const auto result = evaluator.evaluate(source, observe).value();
     const auto end = Clock::now();
@@ -38,9 +41,11 @@ int main(int argc, char** argv) {
     if (!result.ok()) throw std::runtime_error("feature build failed");
     ir::json::Array features;
     for (std::size_t i = 0; i < document.features.size(); ++i)
-      features.push_back(ir::json::Object{{"id", document.features[i].id},
-                                          {"type", document.features[i].type},
-                                          {"observer_interval_ms", times[i]}});
+      features.push_back(
+          ir::json::Object{{"id", document.features[i].id},
+                           {"type", document.features[i].type},
+                           {"observer_interval_ms", times[i]},
+                           {"native_calls_wall_ms", traced.native_ms[document.features[i].id]}});
     std::size_t bodies = 0, solids = 0;
     for (const auto& [id, body] : result.bodies) {
       (void)id;
@@ -65,6 +70,10 @@ int main(int argc, char** argv) {
                 {"scope",
                  "wall intervals between feature-start callbacks; includes preparation/naming; not "
                  "pure solver CPU"},
+                {"native_calls", std::move(traced.calls)},
+                {"attribution_scope",
+                 "native call wall time excludes trace construction; residual includes evaluator "
+                 "and profiler overhead; IDs are transient diagnostics"},
                 {"features", std::move(features)}})
             .c_str());
   } catch (const std::exception& error) {

@@ -160,3 +160,30 @@ TEST_CASE("planar mass integration retains adaptive treatment of curved trims", 
   CHECK_THAT(m.centroid.y, WithinAbs(0, 1e-7));
   CHECK_THAT(m.centroid.z, WithinAbs(1.5, 1e-7));
 }
+
+TEST_CASE("exterior shell references preserve asymmetric curved trims under rigid placement",
+          "[planar-mass][mass-reference]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source =
+      kernel->extrude(extrusion({{make_circle(Vec2{}, 40)}, {make_circle(Vec2{11, -7}, 5)}}, 7))
+          .value()
+          .shape;
+  const auto& geometry = std::dynamic_pointer_cast<const detail::Snapshot>(source)->geometry;
+  for (const double angle : {pi / 2, pi, -pi / 2, 0.731}) {
+    gp_Trsf placement;
+    placement.SetRotation(gp_Ax1({}, gp_Dir(1, 2, 3)), angle);
+    placement.SetTranslationPart(gp_Vec(1e6, -2e6, 3e6));
+    // Deep copies force fresh mass integration rather than the rigid snapshot shortcut.
+    const auto result =
+        detail::snapshot(BRepBuilderAPI_Transform(geometry, placement, true).Shape());
+    REQUIRE(result);
+    const auto& m = (*result)->measures();
+    CHECK_THAT(m.volume, WithinAbs(11025 * pi, 1e-5));
+    CHECK_THAT(m.area, WithinAbs(3780 * pi, 1e-5));
+    const auto center = gp_Pnt(-275. / 1575, 175. / 1575, 3.5).Transformed(placement);
+    CHECK_THAT(m.centroid.x, WithinAbs(center.X(), 1e-7));
+    CHECK_THAT(m.centroid.y, WithinAbs(center.Y(), 1e-7));
+    CHECK_THAT(m.centroid.z, WithinAbs(center.Z(), 1e-7));
+    CHECK(m.solids == 1);
+  }
+}
