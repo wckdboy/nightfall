@@ -60,7 +60,11 @@ std::expected<double, std::string> parse_value(std::string_view text, Dimension 
   const double value = std::strtod(copy.c_str(), &end);
   if (copy.empty() || end != copy.c_str() + copy.size() || !std::isfinite(value)) return expected();
   for (const auto& u : kUnits)
-    if (u.dimension == dimension && u.name == unit) return value * u.scale + u.offset;
+    if (u.dimension == dimension && u.name == unit) {
+      const double si = value * u.scale + u.offset;  // can overflow: "1e306 GPa"
+      if (!std::isfinite(si)) return expected();
+      return si;
+    }
   return expected();
 }
 }  // namespace nf::study

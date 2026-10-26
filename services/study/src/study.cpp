@@ -168,11 +168,13 @@ Prepared prepare(const Value& study, const kernel_service::BodyState& body,
 }
 
 /// Quantities of one run, by name.
-std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mesh, Object& out) {
+/// Solver errors point at the study (`base`): the study's own boundaries can cause them.
+std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mesh, Object& out,
+                                         const std::string& base) {
   std::map<std::string, double> q;
   if (p.kind == "static_structural") {
     auto r = solve_structural(mesh, p.structural);
-    if (!r) fail("", r.error(), "solver");
+    if (!r) fail(base, r.error(), "solver");
     q = {{"max_displacement", r->max_displacement}, {"max_von_mises", r->max_von_mises}};
     out.push_back({"applied_force", vec(r->applied)});
     out.push_back({"reaction_force", vec(r->reaction)});
@@ -181,7 +183,7 @@ std::map<std::string, double> quantities(const Prepared& p, const PlainMesh& mes
                                     {"relative_residual", r->solver.relative_residual}}});
   } else {
     auto r = solve_thermal(mesh, p.thermal);
-    if (!r) fail("", r.error(), "solver");
+    if (!r) fail(base, r.error(), "solver");
     q = {{"max_temperature", r->max_temperature}, {"min_temperature", r->min_temperature}};
     Array heat;
     for (const double h : r->heat_in) heat.push_back(h);
@@ -248,7 +250,7 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
                  {"nodes", static_cast<double>(mesh.node_count())},
                  {"tetrahedra", static_cast<double>(mesh.tet_count())},
                  {"mesh_sha256", mesh_digest(mesh)}};
-      const auto q = quantities(prepared, mesh, run);
+      const auto q = quantities(prepared, mesh, run, base);
       Object listed;
       for (const auto& [name, v] : q) listed.push_back({name, v});
       run.insert(run.begin() + 1, {"quantities", std::move(listed)});
@@ -323,6 +325,9 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
     return result;
   } catch (Failure& f) {
     return std::unexpected(std::move(f.errors));
+  } catch (const std::exception& e) {
+    // A scratch folder that cannot be made, or another system failure, is still an error.
+    return std::unexpected(ir::Errors{{"io", e.what(), "/studies", {}}});
   }
 }
 }  // namespace nf::study

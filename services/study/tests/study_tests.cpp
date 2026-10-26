@@ -117,6 +117,10 @@ TEST_CASE("study errors carry pointers", "[study][run]") {
   auto e = runner.error(source, "missing");
   CHECK(e.code == "unknown_id");
   CHECK(e.pointer == "/studies");
+  // A finite number whose SI value overflows is refused like a wrong unit.
+  e = runner.error(replaced(source, R"("69 GPa")", R"("1e306 GPa")"), "tip_load");
+  CHECK(e.code == "unit");
+  CHECK(e.pointer == "/studies/0/material/youngs_modulus");
   e = runner.error(replaced(source, R"("69 GPa")", R"("69 GPascal")"), "tip_load");
   CHECK(e.code == "unit");
   CHECK(e.pointer == "/studies/0/material/youngs_modulus");
