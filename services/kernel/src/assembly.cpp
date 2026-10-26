@@ -242,6 +242,11 @@ std::pair<Vec3, double> axis_angle(const std::array<double, 9>& r) {
 }
 }  // namespace
 
+bool instances_root(const ir::Document& document) {
+  return std::ranges::any_of(document.occurrences,
+                             [](const ir::Occurrence& o) { return o.component == "root"; });
+}
+
 std::expected<AssemblyResult, ir::Errors> evaluate_assembly(Evaluator& evaluator,
                                                             kernel::IKernel& kernel,
                                                             const ir::Document& document) {
