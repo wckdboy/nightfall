@@ -167,9 +167,11 @@ class IKernel {
   [[nodiscard]] virtual std::expected<std::string, KernelError> export_step(
       const std::vector<ShapePtr>&) = 0;
   /// RFC 0015: decode STEP text into validated closed solids in millimetres, one snapshot per
-  /// solid in file order, each with faces() in the file's ADVANCED_FACE order. No files are
-  /// opened. Reject text without solids, shells or faces outside a solid, and invalid solids.
-  /// Backends without the query report it as unsupported.
+  /// solid in OCCT's transfer order. For STEP written by export_step that is file order, with
+  /// faces() in its ADVANCED_FACE order (tested); other writers' files need not keep it, so
+  /// clients map their faces by sample points, never by position. No files are opened.
+  /// Reject text without solids, shells or faces outside a solid, and invalid solids. Backends
+  /// without the query report it as unsupported.
   [[nodiscard]] virtual std::expected<std::vector<ShapePtr>, KernelError> import_step(
       std::string_view) {
     return std::unexpected(KernelError{"kernel", "STEP import is not supported by this backend"});
