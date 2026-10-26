@@ -503,6 +503,10 @@ TEST_CASE("C bridge builds a root occurrence whose override fixes the root's def
   REQUIRE(bodies.size() == 1);
   CHECK(*bodies.front().find("id")->if_string() == "part/body");
   CHECK_THAT(*bodies.front().find("volume")->if_number(), WithinAbs(1000.0, 1e-9));
-  // When the occurrence keeps an invalid depth, the occurrence's failure is reported.
-  failed(build(s.get(), document("0 mm")));
+  // When the occurrence keeps an invalid depth, only the occurrence's failure is reported:
+  // the root's own default errors are not reported alongside it.
+  const auto bad = build(s.get(), document("0 mm"));
+  failed(bad);
+  for (const auto& error : *manifest(bad).find("errors")->if_array())
+    CHECK(error.find("pointer")->if_string()->starts_with("/occurrences/0"));
 }

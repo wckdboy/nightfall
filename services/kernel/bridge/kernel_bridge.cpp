@@ -86,13 +86,13 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
   auto document = ir::read_document(source);
   if (!document) throw document.error();
   // An occurrence of the root evaluates it with its own overrides: then the assembly, not the
-  // bare root build, decides whether the document builds (#330).
+  // bare root build, decides whether the document builds and which errors it reports (#330).
   if (!document->occurrences.empty() && (errors.empty() || instances_root(*document))) {
+    errors.clear();  // the root's default-parameter errors do not apply to its occurrences
     const auto assembly = evaluate_assembly(s.evaluator, *s.kernel, *document);
     if (!assembly) {
       for (const auto& error : assembly.error()) errors.emplace_back(diagnostic(error));
     } else {
-      errors.clear();  // the root's default-parameter errors do not apply to its occurrences
       // The components' evaluations are this request's work too.
       component_calls = assembly->kernel_calls;
       component_hits = assembly->cache_hits;
