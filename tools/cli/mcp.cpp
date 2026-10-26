@@ -339,13 +339,18 @@ struct Server {
   }
   Object list_studies() {
     Array list;
-    if (auto current = ir::json::parse(session.source()); current && current->find("studies"))
-      for (const auto& study : *current->find("studies")->if_array()) {
-        Object entry{{"id", *study.find("id")},
-                     {"kind", *study.find("kind")},
-                     {"body", *study.find("body")}};
+    // An adopted invalid document may hold anything here: list only well-formed entries.
+    const auto current = ir::json::parse(session.source());
+    const auto* section = current && current->if_object() ? current->find("studies") : nullptr;
+    if (section && section->if_array())
+      for (const auto& study : *section->if_array()) {
+        const auto* id = study.if_object() ? study.find("id") : nullptr;
+        if (!id || !id->if_string()) continue;
+        Object entry{{"id", *id}};
+        for (const char* key : {"kind", "body"})
+          entry.push_back({key, study.find(key) ? *study.find(key) : Value()});
         if (const auto* criteria = study.find("criteria")) entry.push_back({"criteria", *criteria});
-        const auto found = studies.find(*study.find("id")->if_string());
+        const auto found = studies.find(*id->if_string());
         if (found != studies.end() && found->second.first == session.source())
           entry.push_back({"last_result", found->second.second});
         list.push_back(std::move(entry));
