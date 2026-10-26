@@ -404,6 +404,8 @@ std::expected<Session::Build, ir::Errors> Session::commit(std::string source, bo
     ir::Errors errors;
     for (const auto& f : state->evaluation.features)
       errors.insert(errors.end(), f.errors.begin(), f.errors.end());
+    // A root occurrence owns the build: the root's default-parameter errors do not apply.
+    if (kernel_service::instances_root(state->document)) errors.clear();
     errors.insert(errors.end(), state->assembly_errors.begin(), state->assembly_errors.end());
     return std::unexpected(std::move(errors));
   }
@@ -828,7 +830,9 @@ std::expected<Object, ir::Errors> Session::sweep(const std::string& joint, doubl
     auto state = evaluate(ir::json::write(*patched), false);
     if (!state || !state->build.ok || !state->build.assembly) {
       ir::Errors errors = state ? state->assembly_errors : state.error();
-      if (state)  // a failed feature fails the build before the assembly is solved
+      // A failed feature fails the build before the assembly is solved, unless a root
+      // occurrence owns the build (#330).
+      if (state && !kernel_service::instances_root(state->document))
         for (const auto& f : state->evaluation.features)
           errors.insert(errors.end(), f.errors.begin(), f.errors.end());
       entry.push_back({"solved", false});
