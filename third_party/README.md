@@ -15,6 +15,8 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
 | OpenUSD | 25.11 (`363a7c8d`), C++-only | TOST-1.0 (Apache-2.0 with a trademark section; RFC 0002) | `NF_WITH_USD=ON` only | Only route for external geometry into SMLib; later exact-solid storage | `third_party/build-usd.sh` (`build_usd.py`; also fetches oneTBB, Apache-2.0) |
 | usd-brep USD modules | 1.0.0 (`c9c5979f`) | Apache-2.0 | `NF_WITH_USD=ON` only | `.brep` → USD → SMLib (`BREP_USD_DATA`, `BREP_STAGING`, `OCCT_BREP_IMPORT`, `BREP_SM_USD`, `SM_API_USD`) | `third_party/usd-brep-usd/CMakeLists.txt` |
 | usd-brep (SMLib + SM_API) | 1.0.0 (`c9c5979f`) | Apache-2.0 | `NF_WITH_SMLIB=ON` only | Kernel candidate under evaluation (RFC 0001) | `third_party/fetch-smlib.sh`, built by `third_party/smlib/CMakeLists.txt` |
+| Netgen | 6.2.2604 (`3ee489c7`) | LGPL-2.1 (dynamic linking only) | `NF_WITH_STUDIES=ON` only | Tetrahedral meshing of OCCT shapes for engineering studies (RFC 0014); built without GUI, Python or MPI against the pinned OCCT | `third_party/build-studies.sh`, used via `third_party/studies/CMakeLists.txt` |
+| MFEM | 4.10 (`d964264c`) | BSD-3-Clause | `NF_WITH_STUDIES=ON` only | Finite-element physics for engineering studies (RFC 0014): high-order H1 elasticity, heat and Stokes; serial, no external solvers | `third_party/build-studies.sh`, used via `third_party/studies/CMakeLists.txt` |
 
 ## Planned (pending RFCs)
 
@@ -39,3 +41,12 @@ Adding a row needs an accepted RFC (build-only test tools excepted).
   The install receipt includes its SHA256, verified at configure time and included in the
   backend's cache identity. A checkout must be clean upstream or contain exactly this patch;
   unrelated source edits are rejected. The script preserves those edits on failure.
+- **Netgen and MFEM** (RFC 0014) are built by `third_party/build-studies.sh` after OCCT, as
+  shared libraries in the git-ignored `third_party/install/`. Netgen links the pinned OCCT, and
+  its receipt records both commits. Two integration rules follow from the RFC 0014 spike:
+  - OCCT and MFEM headers never share a translation unit, because OCCT's `Handle` macro
+    breaks MFEM's headers. Netgen code is compiled as C++17, because its headers reject
+    C++23.
+  - Netgen's geometry is built inside the library through nglib (`Ng_OCC_Load_BREP`). An
+    `OCCGeometry` constructed in client code fails a `dynamic_cast` across the library
+    boundary.
