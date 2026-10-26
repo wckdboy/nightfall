@@ -15,7 +15,9 @@ if(NF_WITH_STUDIES)
       PASS_REGULAR_EXPRESSION "\"passed\":true")
     add_test(NAME cli.study_unknown COMMAND nf study run
       "${PROJECT_SOURCE_DIR}/examples/studies/thermal_slab.nightfall" missing)
-    set_tests_properties(cli.study_unknown PROPERTIES LABELS "occt" WILL_FAIL TRUE)
+    # The unknown study itself must be the failure, not an unreadable fixture.
+    set_tests_properties(cli.study_unknown PROPERTIES LABELS "occt"
+      PASS_REGULAR_EXPRESSION "\"code\":\"unknown_id\"")
   endif()
 endif()
 if(NF_BUILD_TESTS)

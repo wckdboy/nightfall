@@ -31,6 +31,16 @@ int usage(const char* message) {
                message);
   return 2;
 }
+/// An operational failure (not a usage error): a JSON error on stdout, exit status 1.
+int failure(const char* code, const std::string& message) {
+  std::printf(
+      "%s\n",
+      ir::json::canonical(
+          ir::json::Object{{"errors", ir::json::Array{ir::json::Object{
+                                          {"code", code}, {"message", message}, {"pointer", ""}}}}})
+          .c_str());
+  return 1;
+}
 }  // namespace
 
 int run_study_command(int argc, char** argv) {
@@ -57,10 +67,10 @@ int run_study_command(int argc, char** argv) {
     }
   }
   std::ifstream stream(argv[3], std::ios::binary);
-  if (!stream) return usage("cannot read the document");
+  if (!stream) return failure("io", std::string("cannot read the document ") + argv[3]);
   const std::string source{std::istreambuf_iterator<char>{stream}, {}};
   auto kernel = kernel::make_occt_kernel();
-  if (!kernel) return usage("the kernel is unavailable");
+  if (!kernel) return failure("kernel", "the kernel is unavailable: " + kernel.error().message);
   kernel_service::Evaluator evaluator(**kernel, {64, 64 * 1024 * 1024});
   const auto result = run_study(evaluator, **kernel, source, argv[4], options);
   if (!result) {
