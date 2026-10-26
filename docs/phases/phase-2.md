@@ -21,6 +21,37 @@ and puts the agent loop first: `nf mcp`, a permissive sketch solver, IR v2 assem
 studies. It proposes [Phase 3](phase-3.md) and supersedes the direction of RFC 0009 (#229)
 and RFC 0010 (#247). This gate and its recorded failures are unchanged.
 
+## Factual headless build evidence (#228)
+
+The existing `nf build` JSON records now carry additive evidence version 1 under the
+Accepted RFC 0007 evaluator/measurement contract. Canonical JSON preserves f64 round-trip
+precision. Reports bind original/effective source and override-request digests to the
+configured solver, units, comparison tolerances, per-body state hashes, V/A, centroid,
+bounds, topology/name-record counts, feature-status totals, cache activity, stage timings
+and exported STEP bytes/SHA-256. These are geometric facts; kernel admission, independent
+round-trip and physics checks have separate scope. Measurement error bounds are explicitly
+unavailable, rather than inferred from comparison tolerance. This adds no modeling operation,
+IR schema, query/tool API, service boundary or dependency; Rust engine cutover is separate.
+
+Error records retain available request identity and feature/cache context while omitting
+success-only geometry/artifact/check claims, including partial evaluation and failed file
+publication. Existing stdout output/body IDs, stderr diagnostics and atomic output behavior
+remain compatible. Three new end-to-end cases fail before implementation and pass with
+**159 assertions** afterward. All CLI cases plus naming pass **26/26 in 10.49 s**.
+
+Actual Nocturne output: **21 bodies / 106 solids / 763 faces / 1647 edges**, computed
+**2408145.026752167 mm³ / 390313.091946063 mm²**, a **9077-byte** factual JSON record
+and **2636290-byte** STEP. A separate OCCT reader checks validity, closed shells, topology
+and independent BRepGProp integration after file reload. Absolute differences are
+**0.001392492 mm³ / 0.006991307 mm²**, within pre-set **0.05 mm³/mm²** aggregate budgets.
+Python independently verifies source/artifact SHA-256. Engine stage times in this sample
+are **1658.404 ms** evaluation and **90.061 ms** export; these exclude startup/I/O/hashing.
+Files: `out/kernel-evidence-gh228/{nocturne.json,nocturne.step,verification.json}`.
+The complete local gate passes **888/888 in 259.76 s**, plus Rust math/schema/hygiene,
+native XPC/Metal/CLI and ThreadSanitizer. This includes the corrected #227 naming corpus;
+the earlier intermittent #185 failure remains recorded. Logs:
+`/tmp/nightfall-228-{red,evidence,cli,check}.log`.
+
 ## Topological Naming regression corpus (#227)
 
 The first kernel-only corpus slice keeps an authored top-cap reference while a subtracting
@@ -38,8 +69,9 @@ readers. The focused case passes **950 assertions in 0.23 s**. The first full ga
 detects project-format violations from formatting the new test outside the repository;
 formatting is corrected with the pinned formatter and repository configuration. A scoped recheck
 passes naming plus unchanged Nocturne **2/2 in 6.20 s** (cold build 2725.291 ms). This is
-not a latency fix; deadlines, fixture and tolerances are unchanged. Final complete checks
-remain required. Logs: `/tmp/nightfall-227-{naming,check,recheck}.log`.
+not a latency fix; deadlines, fixture and tolerances are unchanged. The subsequent complete
+gate including #228 passes **888/888 in 259.76 s**. Logs:
+`/tmp/nightfall-227-{naming,check,recheck}.log` and `/tmp/nightfall-228-check.log`.
 
 ## Consolidated integration review (#223)
 
