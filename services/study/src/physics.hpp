@@ -78,4 +78,6 @@ struct ThermalResult {
 };
 std::expected<ThermalResult, std::string> solve_thermal(const PlainMesh& mesh,
                                                         const ThermalInput& input);
+/// The solver and its pinned build, for result provenance.
+const char* solver_identity();
 }  // namespace nf::study

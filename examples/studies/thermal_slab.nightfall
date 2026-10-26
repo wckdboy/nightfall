@@ -1,0 +1,106 @@
+{
+  "format": "nightfall.part",
+  "version": 2,
+  "units": {
+    "length": "mm",
+    "angle": "deg"
+  },
+  "meta": {
+    "name": "Thermal slab",
+    "doc": "An aluminium plate, 100 x 100 x 10 mm, held at 300 K below and 400 K on top: the RFC 0014 thermal gate case. Conduction carries kA dT / t = 16.7 kW through it."
+  },
+  "params": [
+    {
+      "name": "side",
+      "value": "100 mm",
+      "doc": "Plate side"
+    },
+    {
+      "name": "thickness",
+      "value": "10 mm",
+      "doc": "Plate thickness"
+    }
+  ],
+  "references": [],
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "inputs": {
+        "plane": {
+          "datum": "xy"
+        },
+        "entities": [
+          {
+            "id": "square",
+            "type": "rect",
+            "corner": [
+              0,
+              0
+            ],
+            "size": [
+              "side",
+              "side"
+            ]
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "id": "plate",
+      "type": "extrude",
+      "inputs": {
+        "profile": {
+          "sketch": "outline"
+        },
+        "distance": "thickness",
+        "result": {
+          "new": "plate",
+          "body_type": "brep"
+        }
+      }
+    }
+  ],
+  "studies": [
+    {
+      "id": "conduction",
+      "kind": "steady_thermal",
+      "body": "plate",
+      "material": {
+        "conductivity": "167 W/m/K"
+      },
+      "boundaries": [
+        {
+          "id": "cold",
+          "type": "temperature",
+          "faces": {
+            "created_by": "plate",
+            "role": "cap_start"
+          },
+          "value": "300 K"
+        },
+        {
+          "id": "hot",
+          "type": "temperature",
+          "faces": {
+            "created_by": "plate",
+            "role": "cap_end"
+          },
+          "value": "400 K"
+        }
+      ],
+      "mesh": {
+        "size": "10 mm"
+      },
+      "criteria": [
+        {
+          "quantity": "max_temperature",
+          "below": "401 K"
+        }
+      ]
+    }
+  ],
+  "history_end": null,
+  "ui": {}
+}
