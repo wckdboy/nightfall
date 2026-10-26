@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "nf/kernel/kernel.hpp"
 #include "nf/math/constructors.hpp"
+#include "nf/math/refine.hpp"
 #include "snapshot.hpp"
 
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Poly_Triangulation.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 
 #include <algorithm>
+#include <cstdio>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <sstream>
 
@@ -101,7 +106,188 @@ Approximation inspect(IKernel& kernel, const ShapePtr& source, const Mesh& mesh)
   }
   return result;
 }
+void closed(const Mesh& mesh) {
+  using Position = std::array<double, 3>;
+  std::map<Position, std::size_t> vertices;
+  std::map<std::pair<std::size_t, std::size_t>, std::pair<int, int>> edges;
+  const auto vertex = [&](std::uint32_t index) {
+    const auto p = mesh.vertices.at(index).position;
+    return vertices.try_emplace({p.x, p.y, p.z}, vertices.size()).first->second;
+  };
+  for (std::size_t i = 0; i < mesh.indices.size(); i += 3) {
+    std::array<std::size_t, 3> ids{vertex(mesh.indices[i]), vertex(mesh.indices[i + 1]),
+                                   vertex(mesh.indices[i + 2])};
+    for (std::size_t j = 0; j < 3; ++j) {
+      const auto a = ids[j], b = ids[(j + 1) % 3];
+      REQUIRE(a != b);
+      auto& [count, balance] = edges[{std::min(a, b), std::max(a, b)}];
+      ++count;
+      balance += a < b ? 1 : -1;
+    }
+  }
+  for (const auto& [edge, counts] : edges) {
+    (void)edge;
+    CHECK(counts.first == 2);
+    CHECK(counts.second == 0);
+  }
+  // Exact position welding: no tolerance can conceal a crack or duplicate boundary.
+  CHECK(static_cast<std::int64_t>(vertices.size()) - static_cast<std::int64_t>(edges.size()) +
+            static_cast<std::int64_t>(mesh.indices.size() / 3) ==
+        2);
+}
+void finite_difference_normals(const Mesh& mesh) {
+  for (const auto& range : mesh.faces) {
+    const auto& face = static_cast<const detail::Subshape&>(*range.face).geometry;
+    const auto boundary = TopoDS::Face(face);
+    BRepAdaptor_Surface surface(boundary, true);
+    TopLoc_Location location;
+    const auto geometry = BRep_Tool::Surface(boundary, location);
+    const double u0 = surface.FirstUParameter(), u1 = surface.LastUParameter(),
+                 v0 = surface.FirstVParameter(), v1 = surface.LastVParameter();
+    // Sample all three vertices of each face's first and last triangles.
+    for (const std::size_t offset :
+         {range.first_index, range.first_index + range.index_count - 3}) {
+      for (std::size_t k = 0; k < 3; ++k) {
+        const auto& vertex = mesh.vertices[mesh.indices[offset + k]];
+        const auto p = vertex.position;
+        const gp_Pnt local =
+            gp_Pnt(p.x, p.y, p.z).Transformed(location.Transformation().Inverted());
+        GeomAPI_ProjectPointOnSurf projection(local, geometry, u0, u1, v0, v1, 1e-9);
+        REQUIRE(projection.NbPoints() > 0);
+        REQUIRE(projection.LowerDistance() <= 1e-6);
+        double u, v;
+        projection.LowerDistanceParameters(u, v);
+        u = std::clamp(u, u0, u1);
+        v = std::clamp(v, v0, v1);
+        const double hu = 1e-5 * (u1 - u0), hv = 1e-5 * (v1 - v0);
+        const gp_Vec du(surface.Value(std::max(u0, u - hu), v),
+                        surface.Value(std::min(u1, u + hu), v));
+        const gp_Vec dv(surface.Value(u, std::max(v0, v - hv)),
+                        surface.Value(u, std::min(v1, v + hv)));
+        auto normal = du.Crossed(dv);
+        REQUIRE(normal.Magnitude() > 0);
+        normal.Normalize();
+        if (boundary.Orientation() == TopAbs_REVERSED) normal.Reverse();
+        CHECK(dot(vertex.normal, {normal.X(), normal.Y(), normal.Z()}) > 1 - 1e-6);
+      }
+    }
+  }
+}
 }  // namespace
+
+TEST_CASE("automatically matched offset ellipse lofts retain complete outward meshes",
+          "[loft-mesh][mesh-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  for (const double waist : {1., 1.05}) {
+    INFO("waist " << waist);
+    Loft input;
+    input.sections.push_back({{{600, 0, 52}}, {{{make_arc({}, 28, 8, 0, 0, 2 * kPi)}}, {}}});
+    input.sections.push_back({{{612.047395849532, 30.023009231892406, 117},
+                               {0.9659258262890683, 0.25881904510252074, 0}},
+                              {{{make_arc({}, 36 * waist, 7 * waist, 0, 0, 2 * kPi)}}, {}}});
+    input.sections.push_back({{{586.6025403784439, 49.99999999999999, 182},
+                               {0.8660254037844387, 0.49999999999999994, 0}},
+                              {{{make_arc({}, 22, 5, 0, 0, 2 * kPi)}}, {}}});
+    const auto result = kernel->loft(input);
+    REQUIRE(result);
+    const auto source = result->shape;
+    const auto saved = serialized(source);
+    const auto mesh = kernel->tessellate(source, {});
+    INFO((mesh ? "success" : mesh.error().message));
+    REQUIRE(mesh);
+    const auto measured = inspect(*kernel, source, *mesh);
+    CHECK_THAT(measured.volume,
+               WithinAbs(source->measures().volume, source->measures().volume * .01));
+    CHECK_THAT(measured.area, WithinAbs(source->measures().area, source->measures().area * .01));
+    closed(*mesh);
+    finite_difference_normals(*mesh);
+    const auto fine = kernel->tessellate(source, {.05, .1}).value();
+    const auto refined = inspect(*kernel, source, fine);
+    CHECK(std::abs(refined.volume - source->measures().volume) <
+          std::abs(measured.volume - source->measures().volume));
+    CHECK(std::abs(refined.area - source->measures().area) <
+          std::abs(measured.area - source->measures().area));
+    std::printf(
+        "vane-mesh waist=%.17g triangles=%zu refined_triangles=%zu "
+        "volume_error_mm3=%.17g refined_volume_error_mm3=%.17g "
+        "area_error_mm2=%.17g refined_area_error_mm2=%.17g\n",
+        waist, mesh->indices.size() / 3, fine.indices.size() / 3,
+        measured.volume - source->measures().volume, refined.volume - source->measures().volume,
+        measured.area - source->measures().area, refined.area - source->measures().area);
+    closed(fine);
+    RigidTransform placement;
+    placement.translation = {17, -31, 9};
+    placement.axis_direction = normalized(Vec3{1, 2, 3}).value();
+    placement.angle = .731;
+    const auto moved = kernel->transform(source, placement).value().shape;
+    const auto reflected = kernel->mirror(source, {{}, {1, 0, 0}, {0, 1, 0}}).value().shape;
+    for (const auto& shape : {moved, reflected}) {
+      const auto placed = kernel->tessellate(shape, {}).value();
+      const auto actual = inspect(*kernel, shape, placed);
+      CHECK_THAT(actual.volume,
+                 WithinAbs(shape->measures().volume, shape->measures().volume * .01));
+      CHECK_THAT(actual.area, WithinAbs(shape->measures().area, shape->measures().area * .01));
+      finite_difference_normals(placed);
+      closed(placed);
+    }
+    CHECK(serialized(source) == saved);
+  }
+}
+
+TEST_CASE("patterned oblique ellipse lofts retain every triangulated face",
+          "[loft-mesh][mesh-kernel][forearm-mesh]") {
+  auto kernel = make_occt_kernel().value();
+  Loft input;
+  for (const auto& section :
+       std::array{std::array{174., 292., 24., 27.}, std::array{238., 244., 18., 20.},
+                  std::array{302., 196., 16., 17.}}) {
+    const std::vector<std::vector<NurbsCurve2>> paths{
+        decompose(make_arc({}, section[2], section[3], 0, 0, 2 * kPi))};
+    input.sections.push_back({{{section[0], 0, section[1]}, {.6, 0, .8}, {.8, 0, -.6}},
+                              regions(paths, FillRule::kEvenOdd).value().front()});
+  }
+  const auto source = kernel->loft(input).value().shape;
+  const auto saved = serialized(source);
+  CHECK_THAT(source->measures().volume, WithinAbs(62848 * kPi, 1e-6));
+  std::vector<ShapePtr> copies;
+  for (int i = 0; i < 4; ++i) {
+    INFO("instance " << i);
+    RigidTransform placement;
+    placement.axis_origin = {500, 0, 0};
+    placement.angle = i * kPi / 2;
+    const auto shape = i == 0 ? source : kernel->transform(source, placement).value().shape;
+    const auto mesh = kernel->tessellate(shape, {});
+    INFO((mesh ? "success" : mesh.error().message));
+    REQUIRE(mesh);
+    const auto measured = inspect(*kernel, shape, *mesh);
+    CHECK_THAT(measured.volume, WithinAbs(62848 * kPi, 62848 * kPi * .01));
+    CHECK_THAT(measured.area, WithinAbs(shape->measures().area, shape->measures().area * .01));
+    closed(*mesh);
+    copies.push_back(shape);
+  }
+  const auto patterned =
+      kernel->boolean_operation(source, {copies[1], copies[2], copies[3]}, BooleanOp::kUnion)
+          .value()
+          .shape;
+  const auto saved_patterned = serialized(patterned);
+  REQUIRE(patterned->measures().solids == 4);
+  const auto mesh = kernel->tessellate(patterned, {});
+  INFO((mesh ? "success" : mesh.error().message));
+  REQUIRE(mesh);
+  const auto measured = inspect(*kernel, patterned, *mesh);
+  CHECK_THAT(measured.volume, WithinAbs(4 * 62848 * kPi, 4 * 62848 * kPi * .01));
+  CHECK_THAT(measured.area,
+             WithinAbs(patterned->measures().area, patterned->measures().area * .01));
+  const auto bounded = kernel->tessellate(patterned, {.1, .2, 134});
+  REQUIRE_FALSE(bounded);
+  CHECK(bounded.error().message == "mesh boundary exceeds vertex budget");
+  const auto recovered = kernel->tessellate(patterned, {});
+  REQUIRE(recovered);
+  CHECK(recovered->indices.size() == mesh->indices.size());
+  CHECK(recovered->faces.size() == patterned->measures().faces);
+  CHECK(serialized(patterned) == saved_patterned);
+  CHECK(serialized(source) == saved);
+}
 
 TEST_CASE("indexed box meshes cover original faces with outward normals and exact winding",
           "[mesh-kernel]") {
