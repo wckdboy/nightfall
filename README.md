@@ -1,5 +1,17 @@
 # Nightfall
 
+> [!IMPORTANT]
+> **Archived.** Nightfall is no longer developed. It is superseded by
+> [Polykrom](https://github.com/wckdboy/polykrom) ([cad.polykrom.app](https://cad.polykrom.app)), the app, and
+> [PolyCore](https://github.com/wckdboy/polycore), the Rust geometry kernel. What carries over:
+>
+> - the Rust NURBS math ([`core/math/rust`](core/math/rust));
+> - the study and FEA pipeline ([RFC 0014](docs/rfcs/0014-engineering-studies.md), [`services/study`](services/study));
+> - the kernel bake-off rubric ([RFC 0001](docs/rfcs/0001-kernel-selection.md), [`tools/bakeoff`](tools/bakeoff));
+> - the agent evaluation harness ([`agent/evals`](agent/evals)).
+>
+> The rest of this README describes Nightfall as it was when development stopped.
+
 Open-source, AI-native parametric CAD for macOS.
 
 Nightfall pairs fluid direct modeling with a full parametric history, on exact NURBS
