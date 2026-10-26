@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <stdexcept>
@@ -67,6 +68,13 @@ const std::string& text(const Value& v, const std::string& pointer) {
   if (!v.if_string()) fail(pointer, "expected a string");
   return *v.if_string();
 }
+/// The member `key` of `object`, failing at `pointer` when it is missing (specs from files are
+/// not schema-checked as documents are).
+const Value& required(const Value& object, const char* key, const std::string& pointer) {
+  const auto* v = object.if_object() ? object.find(key) : nullptr;
+  if (!v) fail(pointer, std::string("expected ") + key);
+  return *v;
+}
 double value(const Value& v, Dimension d, const std::string& pointer) {
   auto parsed = parse_value(text(v, pointer), d);
   if (!parsed) fail(pointer, parsed.error(), "unit");
@@ -106,8 +114,13 @@ struct Prepared {
   StructuralInput structural;
   ThermalInput thermal;
 };
-Prepared prepare(const Value& study, const kernel_service::BodyState& body,
-                 const std::string& base) {
+/// A boundary's `faces` as mesher face numbers; `pointer` locates it for errors.
+using FaceResolver =
+    std::function<std::vector<int>(const Value& faces, const std::string& pointer)>;
+/// A length value (a criterion's limit, a mesh size) in mm.
+using LengthReader = std::function<double(const Value& length, const std::string& pointer)>;
+
+Prepared prepare(const Value& study, const FaceResolver& resolve, const std::string& base) {
   Prepared p;
   p.kind = text(*study.find("kind"), base + "/kind");
   const auto& material = *study.find("material");
@@ -128,8 +141,8 @@ Prepared prepare(const Value& study, const kernel_service::BodyState& body,
   for (std::size_t i = 0; i < boundaries.size(); ++i) {
     const auto& b = boundaries[i];
     const auto at = base + "/boundaries/" + std::to_string(i);
-    const auto type = text(*b.find("type"), at + "/type");
-    const auto selected = faces(body, *b.find("faces"), at + "/faces");
+    const auto type = text(required(b, "type", at), at + "/type");
+    const auto selected = resolve(required(b, "faces", at), at + "/faces");
     const auto* v = b.find("value");
     const auto need = [&](const Value* field, const char* name) -> const Value& {
       if (!field) fail(at, type + " needs " + name);
@@ -198,6 +211,102 @@ const std::map<std::string, std::pair<const char*, Dimension>> kQuantities{
     {"max_von_mises", {"MPa", Dimension::kStress}},
     {"max_temperature", {"K", Dimension::kTemperature}},
     {"min_temperature", {"K", Dimension::kTemperature}}};
+/// Meshes `shape` at each size, solves the prepared study, checks its criteria and reports
+/// quantities, runs and the observed convergence order.
+Object solve(const Value& study, const Prepared& prepared, const kernel::ShapePtr& shape,
+             const std::vector<double>& sizes, const LengthReader& length,
+             const std::string& base) {
+  const ScratchDirectory scratch;
+  const auto path = scratch.path / "body.brep";
+  if (auto written = write_brep(shape, path.string()); !written)
+    fail(base + "/body", written.error().message);
+  Array runs;
+  std::vector<std::map<std::string, double>> values;
+  for (const double h : sizes) {
+    PlainMesh mesh;
+    try {
+      mesh = mesh_brep(path.string(), h);
+    } catch (const std::exception& e) {
+      fail(base + "/mesh", e.what(), "mesher");
+    }
+    Object run{{"mesh_size", h},
+               {"nodes", static_cast<double>(mesh.node_count())},
+               {"tetrahedra", static_cast<double>(mesh.tet_count())},
+               {"mesh_sha256", mesh_digest(mesh)}};
+    const auto q = quantities(prepared, mesh, run, base);
+    Object listed;
+    for (const auto& [name, v] : q) listed.push_back({name, v});
+    run.insert(run.begin() + 1, {"quantities", std::move(listed)});
+    values.push_back(q);
+    runs.push_back(std::move(run));
+  }
+  const auto& final = values.back();
+  Array criteria;
+  bool passed = true;
+  if (const auto* list = study.find("criteria")) {
+    if (!list->if_array()) fail(base + "/criteria", "expected an array");
+    for (std::size_t i = 0; i < list->if_array()->size(); ++i) {
+      const auto& c = (*list->if_array())[i];
+      const auto at = base + "/criteria/" + std::to_string(i);
+      const auto name = text(required(c, "quantity", at), at + "/quantity");
+      if (!final.contains(name)) fail(at + "/quantity", name + " is not reported by this study");
+      const auto* below = c.find("below");
+      const auto* above = c.find("above");
+      if (!below && !above) fail(at, "a criterion needs below or above");
+      const auto limit = [&](const Value& v, const std::string& p) {
+        if (name == "max_displacement") return length(v, p);
+        return value(v, kQuantities.at(name).second, p);
+      };
+      const double actual = final.at(name);
+      Object entry{{"quantity", name}, {"value", actual}};
+      bool ok = true;
+      if (below) {
+        const double l = limit(*below, at + "/below");
+        entry.push_back({"below", l});
+        ok = ok && actual < l;
+      }
+      if (above) {
+        const double l = limit(*above, at + "/above");
+        entry.push_back({"above", l});
+        ok = ok && actual > l;
+      }
+      entry.push_back({"passed", ok});
+      passed = passed && ok;
+      criteria.push_back(std::move(entry));
+    }
+  }
+  Object result{{"kind", prepared.kind},
+                {"units", Object{{"length", "mm"},
+                                 {"displacement", "mm"},
+                                 {"stress", "MPa"},
+                                 {"force", "N"},
+                                 {"temperature", "K"},
+                                 {"heat", "W"}}},
+                {"quantities", *runs.back().find("quantities")},
+                {"criteria", std::move(criteria)},
+                {"passed", passed},
+                {"runs", runs}};
+  // Observed order of convergence for three sizes in a constant ratio.
+  if (values.size() == 3 && sizes[0] / sizes[1] > 1 &&
+      std::abs(sizes[0] / sizes[1] - sizes[1] / sizes[2]) < 1e-9 * sizes[0] / sizes[1]) {
+    Object orders;
+    for (const auto& [name, v] : values[2]) {
+      const double d1 = values[0].at(name) - values[1].at(name), d2 = values[1].at(name) - v;
+      if (d1 != 0 && d2 != 0 && d1 / d2 > 0)
+        orders.push_back({name, std::log(d1 / d2) / std::log(sizes[0] / sizes[1])});
+    }
+    result.push_back({"convergence_order", std::move(orders)});
+  }
+  return result;
+}
+std::vector<double> sizes(const RunOptions& options, double study_size,
+                          const std::string& pointer) {
+  if (!(study_size > 0)) fail(pointer, "the mesh size must be positive");
+  std::vector<double> result = options.refine;
+  if (result.empty()) result.push_back(options.size.value_or(study_size));
+  return result;
+}
+ir::Errors errors_of(Failure& f) { return std::move(f.errors); }
 }  // namespace
 
 std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator, kernel::IKernel&,
@@ -221,113 +330,106 @@ std::expected<Object, ir::Errors> run_study(kernel_service::Evaluator& evaluator
     if (found == evaluated->bodies.end() || !found->second.shape)
       fail(base + "/body", "no live body " + body_id, "unknown_id");
     const auto& body = found->second;
-    const auto prepared = prepare(study, body, base);
+    const auto prepared = prepare(
+        study, [&](const Value& v, const std::string& p) { return faces(body, v, p); }, base);
     auto parameters = ir::evaluate_parameters(document->params);
     if (!parameters) return std::unexpected(parameters.error());
-    const auto size = ir::evaluate_input(*study.find("mesh")->find("size"), ir::kLength,
-                                         document->units, parameters->values);
-    if (!size) {
-      auto error = size.error();
-      error.pointer = base + "/mesh/size";
-      return std::unexpected(ir::Errors{std::move(error)});
-    }
-    std::vector<double> sizes = options.refine;
-    if (sizes.empty()) sizes.push_back(options.size.value_or(*size));
-    const ScratchDirectory scratch;
-    const auto path = scratch.path / "body.brep";
-    if (auto written = write_brep(body.shape, path.string()); !written)
-      fail(base + "/body", written.error().message);
-    Array runs;
-    std::vector<std::map<std::string, double>> values;
-    for (const double h : sizes) {
-      PlainMesh mesh;
-      try {
-        mesh = mesh_brep(path.string(), h);
-      } catch (const std::exception& e) {
-        fail(base + "/mesh", e.what(), "mesher");
-      }
-      Object run{{"mesh_size", h},
-                 {"nodes", static_cast<double>(mesh.node_count())},
-                 {"tetrahedra", static_cast<double>(mesh.tet_count())},
-                 {"mesh_sha256", mesh_digest(mesh)}};
-      const auto q = quantities(prepared, mesh, run, base);
-      Object listed;
-      for (const auto& [name, v] : q) listed.push_back({name, v});
-      run.insert(run.begin() + 1, {"quantities", std::move(listed)});
-      values.push_back(q);
-      runs.push_back(std::move(run));
-    }
-    const auto& final = values.back();
-    Array criteria;
-    bool passed = true;
-    if (const auto* list = study.find("criteria"))
-      for (std::size_t i = 0; i < list->if_array()->size(); ++i) {
-        const auto& c = (*list->if_array())[i];
-        const auto at = base + "/criteria/" + std::to_string(i);
-        const auto name = text(*c.find("quantity"), at + "/quantity");
-        if (!final.contains(name)) fail(at + "/quantity", name + " is not reported by this study");
-        const auto* below = c.find("below");
-        const auto* above = c.find("above");
-        if (!below && !above) fail(at, "a criterion needs below or above");
-        const auto limit = [&](const Value& v, const std::string& p) {
-          if (name == "max_displacement") {
-            auto mm = ir::evaluate_input(v, ir::kLength, document->units, parameters->values);
-            if (!mm) fail(p, mm.error().message, "unit");
-            return *mm;
-          }
-          return value(v, kQuantities.at(name).second, p);
-        };
-        const double actual = final.at(name);
-        Object entry{{"quantity", name}, {"value", actual}};
-        bool ok = true;
-        if (below) {
-          const double l = limit(*below, at + "/below");
-          entry.push_back({"below", l});
-          ok = ok && actual < l;
-        }
-        if (above) {
-          const double l = limit(*above, at + "/above");
-          entry.push_back({"above", l});
-          ok = ok && actual > l;
-        }
-        entry.push_back({"passed", ok});
-        passed = passed && ok;
-        criteria.push_back(std::move(entry));
-      }
-    Object result{{"study", id},
-                  {"kind", prepared.kind},
-                  {"body", body_id},
-                  {"units", Object{{"length", "mm"},
-                                   {"displacement", "mm"},
-                                   {"stress", "MPa"},
-                                   {"force", "N"},
-                                   {"temperature", "K"},
-                                   {"heat", "W"}}},
-                  {"quantities", *runs.back().find("quantities")},
-                  {"criteria", std::move(criteria)},
-                  {"passed", passed},
-                  {"runs", runs},
-                  {"provenance", Object{{"document_sha256", ir::sha256(source).hex()},
-                                        {"body_hash", body.hash ? body.hash->hex() : std::string()},
-                                        {"mesher", mesher_identity()},
-                                        {"solver", solver_identity()}}}};
-    // Observed order of convergence for three sizes in a constant ratio.
-    if (values.size() == 3 && sizes[0] / sizes[1] > 1 &&
-        std::abs(sizes[0] / sizes[1] - sizes[1] / sizes[2]) < 1e-9 * sizes[0] / sizes[1]) {
-      Object orders;
-      for (const auto& [name, v] : values[2]) {
-        const double d1 = values[0].at(name) - values[1].at(name), d2 = values[1].at(name) - v;
-        if (d1 != 0 && d2 != 0 && d1 / d2 > 0)
-          orders.push_back({name, std::log(d1 / d2) / std::log(sizes[0] / sizes[1])});
-      }
-      result.push_back({"convergence_order", std::move(orders)});
-    }
+    const LengthReader length = [&](const Value& v, const std::string& p) {
+      auto mm = ir::evaluate_input(v, ir::kLength, document->units, parameters->values);
+      if (!mm) fail(p, mm.error().message, "unit");
+      return *mm;
+    };
+    const double size = length(*study.find("mesh")->find("size"), base + "/mesh/size");
+    auto result =
+        solve(study, prepared, body.shape, sizes(options, size, base + "/mesh/size"), length, base);
+    result.insert(result.begin(), {"body", body_id});
+    result.insert(result.begin(), {"study", id});
+    result.push_back(
+        {"provenance", Object{{"document_sha256", ir::sha256(source).hex()},
+                              {"body_hash", body.hash ? body.hash->hex() : std::string()},
+                              {"mesher", mesher_identity()},
+                              {"solver", solver_identity()}}});
     return result;
   } catch (Failure& f) {
-    return std::unexpected(std::move(f.errors));
+    return std::unexpected(errors_of(f));
   } catch (const std::exception& e) {
     // A scratch folder that cannot be made, or another system failure, is still an error.
-    return std::unexpected(ir::Errors{{"io", e.what(), "/studies", {}}});
+    return std::unexpected(ir::Errors{{"io", e.what(), "", {}}});
+  }
+}
+
+std::expected<Object, ir::Errors> run_step_study(kernel::IKernel& kernel, const std::string& step,
+                                                 const std::string& spec,
+                                                 const RunOptions& options) {
+  try {
+    const auto parsed = ir::json::parse(spec);
+    if (!parsed || !parsed->if_object()) fail("", "the study is not a JSON object");
+    const auto& study = *parsed;
+    for (const char* key : {"kind", "material", "boundaries", "mesh"})
+      if (!study.find(key)) fail("", std::string("the study needs ") + key);
+    if (!study.find("boundaries")->if_array()) fail("/boundaries", "expected an array");
+    // Unlike a document's study, this spec has no schema check: the kind is validated here.
+    if (const auto* kind = study.find("kind")->if_string();
+        !kind || (*kind != "static_structural" && *kind != "steady_thermal"))
+      fail("/kind", "kind must be static_structural or steady_thermal", "unsupported");
+    auto solids = kernel.import_step(step);
+    if (!solids) fail("", solids.error().message, "step_read");
+    if (solids->size() != 1) fail("", "a STEP study is of exactly one solid", "step_read");
+    const auto shape = solids->front();
+    std::vector<kernel::EntityPtr> faces;
+    auto listed = kernel.faces(shape);
+    if (!listed) fail("", listed.error().message, "step_read");
+    for (auto& f : *listed) faces.push_back(std::move(f.entity));
+    const auto& m = shape->measures();
+    const double size =
+        std::max({m.maximum.x - m.minimum.x, m.maximum.y - m.minimum.y, m.maximum.z - m.minimum.z});
+    // Points picked on the part's own faces lie on them to within its export's precision.
+    const double tolerance = 1e-4 + 1e-7 * size;
+    const FaceResolver resolve = [&](const Value& selector, const std::string& pointer) {
+      const auto* points = selector.find("points");
+      if (!selector.if_object() || !points || !points->if_array() || points->if_array()->empty())
+        fail(pointer, "a STEP study picks faces by {\"points\": [[x, y, z], ...]}");
+      std::vector<int> numbers;
+      for (std::size_t i = 0; i < points->if_array()->size(); ++i) {
+        const auto at = pointer + "/points/" + std::to_string(i);
+        const auto* xyz = (*points->if_array())[i].if_array();
+        if (!xyz || xyz->size() != 3 || !(*xyz)[0].if_number() || !(*xyz)[1].if_number() ||
+            !(*xyz)[2].if_number())
+          fail(at, "a point is three numbers in mm");
+        const math::Vec3 p{*(*xyz)[0].if_number(), *(*xyz)[1].if_number(), *(*xyz)[2].if_number()};
+        std::vector<int> near;
+        for (const auto& face : faces) {
+          auto d = kernel.face_distance(face, p);
+          if (!d) fail(at, d.error().message);
+          if (*d <= tolerance) {
+            auto n = face_number(face);
+            if (!n) fail(at, n.error().message);
+            near.push_back(*n);
+          }
+        }
+        if (near.empty()) fail(at, "the point lies on no face of the part");
+        if (near.size() > 1) fail(at, "the point lies on several faces: pick one inside a face");
+        if (std::ranges::find(numbers, near.front()) == numbers.end())
+          numbers.push_back(near.front());
+      }
+      return numbers;
+    };
+    const auto prepared = prepare(study, resolve, "");
+    const LengthReader length = [](const Value& v, const std::string& p) {
+      return value(v, Dimension::kLength, p);
+    };
+    const auto& mesh = required(*study.find("mesh"), "size", "/mesh");
+    auto result = solve(study, prepared, shape,
+                        sizes(options, length(mesh, "/mesh/size"), "/mesh/size"), length, "");
+    result.push_back({"provenance", Object{{"step_sha256", ir::sha256(step).hex()},
+                                           {"mesher", mesher_identity()},
+                                           {"solver", solver_identity()}}});
+    return result;
+  } catch (Failure& f) {
+    return std::unexpected(errors_of(f));
+  } catch (const std::exception& e) {
+    // A scratch folder that cannot be made, or another system failure, is still an error.
+    return std::unexpected(ir::Errors{{"io", e.what(), "", {}}});
   }
 }
 }  // namespace nf::study

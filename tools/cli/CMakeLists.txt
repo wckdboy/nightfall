@@ -18,6 +18,12 @@ if(NF_WITH_STUDIES)
     # The unknown study itself must be the failure, not an unreadable fixture.
     set_tests_properties(cli.study_unknown PROPERTIES LABELS "occt"
       PASS_REGULAR_EXPRESSION "\"code\":\"unknown_id\"")
+    # #317: the same study object on a STEP part, faces picked by points.
+    add_test(NAME cli.study_solve COMMAND nf study solve
+      "${PROJECT_SOURCE_DIR}/examples/studies/cantilever.step"
+      "${PROJECT_SOURCE_DIR}/examples/studies/cantilever.study.json")
+    set_tests_properties(cli.study_solve PROPERTIES LABELS "occt"
+      PASS_REGULAR_EXPRESSION "\"passed\":true")
   endif()
 endif()
 if(NF_BUILD_TESTS)
