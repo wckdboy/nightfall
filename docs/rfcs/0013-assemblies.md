@@ -171,7 +171,9 @@ Pointers into `/joints/…`, and like feature failures they do not stop independ
   mass and inertia from mass properties, and joints mapped to `revolute`, `prismatic`,
   `fixed`; `cylindrical`, `pin_slot`, `planar` and `ball` become short chains of massless
   links. URDF is a tree: a closed loop exports its spanning tree, and the loop-closing
-  joints it cuts are named in the reply. Units are converted to metres and kilograms. URDF
+  joints it cuts are named in the reply. A revolute without limits exports as `continuous`;
+  a slider needs limits, since URDF reads an unbounded prismatic joint as locked at 0, and
+  is refused with its pointer otherwise. Units are converted to metres and kilograms. URDF
   requires effort and velocity limits; v2 has no joint fields for them, so the export
   writes defaults (10 N m and π rad/s rotary, 100 N and 0.1 m/s linear) with a warning per
   joint.
