@@ -82,6 +82,7 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
   // fails the build with its pointer and no geometry, like a failed feature.
   const auto* live = &evaluated->bodies;
   std::map<std::string, BodyState> placed;
+  std::size_t component_calls = 0, component_hits = 0, component_misses = 0;
   if (errors.empty()) {
     auto document = ir::read_document(source);
     if (!document) throw document.error();
@@ -90,8 +91,14 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
       if (!assembly) {
         for (const auto& error : assembly.error()) errors.emplace_back(diagnostic(error));
       } else {
+        // The components' evaluations are this request's work too.
+        component_calls = assembly->kernel_calls;
+        component_hits = assembly->cache_hits;
+        component_misses = assembly->binding_misses;
         for (const auto& o : assembly->occurrences)
-          for (const auto& [id, shape] : o.bodies) {
+          for (std::size_t k = 0; k < o.bodies.size(); ++k) {
+            const auto& [id, shape] = o.bodies[k];
+            const auto& component_hash = o.source_hashes[k];
             Array placement;
             for (const double r : o.placement.rotation) placement.push_back(r);
             for (const double t :
@@ -99,11 +106,15 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
               placement.push_back(t);
             BodyState body;
             body.shape = shape;
-            body.hash = ir::sha256(ir::json::canonical(Object{{"occurrence", o.id},
-                                                              {"body", id},
-                                                              {"placement", std::move(placement)},
-                                                              {"volume", shape->measures().volume},
-                                                              {"area", shape->measures().area}}));
+            // The component body's state is part of the identity: an edit that keeps volume,
+            // area and placement still changes it.
+            body.hash = ir::sha256(ir::json::canonical(
+                Object{{"occurrence", o.id},
+                       {"body", id},
+                       {"source", component_hash ? Value(component_hash->hex()) : Value()},
+                       {"placement", std::move(placement)},
+                       {"volume", shape->measures().volume},
+                       {"area", shape->measures().area}}));
             placed.emplace(o.id + "/" + id, std::move(body));
           }
       }
@@ -169,16 +180,16 @@ nf_result* build(nf_session& s, std::string_view source, const nf_mesh_options* 
     }
   }
   const auto usage = s.evaluator.cache_usage();
-  result->json = ir::json::canonical(
-      Object{{"errors", std::move(errors)},
-             {"features", std::move(features)},
-             {"bodies", std::move(bodies)},
-             {"face_names", std::move(face_names)},
-             {"cache", Object{{"hits", numeric(evaluated->cache_hits)},
-                              {"kernel_calls", numeric(evaluated->kernel_calls)},
-                              {"binding_misses", numeric(evaluated->binding_misses)},
-                              {"entries", numeric(usage.entries)},
-                              {"estimated_bytes", numeric(usage.estimated_bytes)}}}});
+  result->json = ir::json::canonical(Object{
+      {"errors", std::move(errors)},
+      {"features", std::move(features)},
+      {"bodies", std::move(bodies)},
+      {"face_names", std::move(face_names)},
+      {"cache", Object{{"hits", numeric(evaluated->cache_hits + component_hits)},
+                       {"kernel_calls", numeric(evaluated->kernel_calls + component_calls)},
+                       {"binding_misses", numeric(evaluated->binding_misses + component_misses)},
+                       {"entries", numeric(usage.entries)},
+                       {"estimated_bytes", numeric(usage.estimated_bytes)}}}});
   if (result->json.size() > ir::kMaxDocumentBytes) fail("bounds", "result manifest exceeds 16 MiB");
   return result.release();
 }
