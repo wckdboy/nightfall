@@ -163,13 +163,15 @@ v2["angle3"] = array(numeric("angle"), 3, 3)
 v2["overrides"] = {"type": "object", "patternProperties": {"^x-": {}, defs["id"]["pattern"]: ref("value")},
                    "additionalProperties": False}
 v2["placement"] = obj({"translation": ref("point3"), "rotation": ref("angle3")}, [])
-v2["component"] = {"oneOf": [obj({"id": ref("id"), "features": array(ref("feature")), "params": ref("overrides")},
-                                 ["id", "features"]),
-                             obj({"id": ref("id"), "reference": link("reference"), "params": ref("overrides")},
-                                 ["id", "reference"])]}
+v2["density"] = {"$comment": "kg/m^3", "type": "number", "exclusiveMinimum": 0}
+v2["component"] = {"oneOf": [obj({"id": ref("id"), "features": array(ref("feature")), "params": ref("overrides"),
+                                  "density": ref("density")}, ["id", "features"]),
+                             obj({"id": ref("id"), "reference": link("reference"), "params": ref("overrides"),
+                                  "density": ref("density")}, ["id", "reference"])]}
 v2["occurrence_path"] = {"type": "string", "pattern": r"^[a-z_][a-z0-9_]{0,63}(/[a-z_][a-z0-9_]{0,63})*(?![\s\S])"}
 v2["occurrence"] = obj({"id": ref("id"), "component": link("component"), "params": ref("overrides"),
-                        "grounded": {"type": "boolean"}, "placement": ref("placement")}, ["id", "component"])
+                        "grounded": {"type": "boolean"}, "placement": ref("placement"),
+                        "density": ref("density")}, ["id", "component"])
 v2["joint_end"] = obj({"occurrence": ref("occurrence_path"), "frame": ref("selector"),
                        "rule": {"enum": ["plane_centroid", "cylinder_axis", "circle_center", "edge_midpoint", "point"]},
                        "offset": ref("placement"), "flip": {"type": "boolean"}}, ["occurrence", "frame"])
