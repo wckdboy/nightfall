@@ -20,6 +20,7 @@
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -530,6 +531,112 @@ class OcctKernel final : public IKernel {
       for (int i = 1; i <= all.Extent(); ++i)
         result.push_back({detail::entity(source, all(i)), planar_frame(TopoDS::Face(all(i))),
                           cylinder_frame(TopoDS::Face(all(i)))});
+      return result;
+    });
+  }
+  std::expected<OperationResult, KernelError> shell(const ShapePtr& input,
+                                                    const std::vector<EntityPtr>& open,
+                                                    double thickness) override {
+    return guarded([&] {
+      const auto source = std::dynamic_pointer_cast<const detail::Snapshot>(input);
+      if (!source || source->geometry.IsNull() || open.empty() || !std::isfinite(thickness) ||
+          thickness <= tolerance_.linear)
+        fail("shell requires a solid, an open face and a thickness above linear tolerance");
+      BRepBuilderAPI_Copy copy(source->geometry, true, false);
+      if (!copy.IsDone()) fail("shell input copy failed");
+      TopTools_IndexedMapOfShape originals;
+      TopExp::MapShapes(source->geometry, TopAbs_FACE, originals);
+      TopTools_ListOfShape removed;
+      TopTools_MapOfShape selected;
+      for (const auto& face : open) {
+        const auto entity = std::dynamic_pointer_cast<const detail::Subshape>(face);
+        if (!entity || entity->owner() != input || entity->kind() != EntityKind::kFace ||
+            !originals.Contains(entity->geometry))
+          fail("shell face is absent from its target snapshot");
+        const auto f = copy.ModifiedShape(entity->geometry);
+        if (selected.Add(f)) removed.Append(f);
+      }
+      // A thin wall's volume is close to the kept area times the thickness: less at outer
+      // edges and corners, a little more where arc joins round inner ones. OCCT can report a
+      // thick solid built when it returned its input or a wrong wall, so a wall above 1.25 of
+      // that estimate, or not smaller than the source, is refused, and the first build is
+      // retried with offset self-intersections handled.
+      double kept = 0;
+      TopTools_MapOfShape opened;
+      for (const auto& f : removed) opened.Add(f);
+      TopTools_IndexedMapOfShape copied;
+      TopExp::MapShapes(copy.Shape(), TopAbs_FACE, copied);
+      for (int i = 1; i <= copied.Extent(); ++i)
+        if (!opened.Contains(copied(i))) {
+          GProp_GProps properties;
+          BRepGProp::SurfaceProperties(copied(i), properties);
+          kept += properties.Mass();
+        }
+      const double estimate = kept * thickness;
+      const double source_volume = source->measures().volume;
+      std::optional<BRepOffsetAPI_MakeThickSolid> operation;
+      detail::SnapshotPtr shape;
+      std::string why = "the thick solid was not built";
+      for (const bool intersection : {false, true}) {
+        operation.emplace();
+        operation->MakeThickSolidByJoin(copy.Shape(), removed, -thickness, tolerance_.linear,
+                                        BRepOffset_Skin, intersection, false, GeomAbs_Arc);
+        operation->Build();
+        if (!operation->IsDone()) continue;
+        auto made = detail::snapshot(operation->Shape());
+        if (!made) {
+          why = made.error().message;
+          continue;
+        }
+        const double wall = (*made)->measures().volume;  // the shell is its wall
+        why = "a wall of " + std::to_string(wall) + " mm^3 where about " +
+              std::to_string(estimate) + " was expected";
+        // The wall lies inside the source, so it is less than its volume (OCCT returning its
+        // input is not a shell). A thick wall can be far below kept area times thickness, so
+        // that estimate bounds the wall from above only.
+        if (wall > 0 && wall < source_volume * (1 - 1e-9) && wall <= 1.25 * estimate) {
+          shape = *made;
+          break;
+        }
+      }
+      if (!shape) fail("solid shell failed: " + why);
+      OperationResult result{shape, {}, {}, source->estimated_bytes() + shape->estimated_bytes()};
+      TopTools_IndexedMapOfShape members;
+      TopExp::MapShapes(shape->geometry, members);
+      auto member = [&](const TopoDS_Shape& geometry) {
+        return detail::entity(shape, members(members.FindIndex(geometry)));
+      };
+      TopTools_MapOfShape generated, inherited;
+      for (const auto& before : detail::entities(source)) {
+        const auto geometry =
+            copy.ModifiedShape(static_cast<const detail::Subshape&>(*before).geometry);
+        History h{before, {}, {}, false};
+        for (const auto& after : operation->Modified(geometry))
+          if (members.Contains(after)) h.modified.push_back(member(after));
+        if (h.modified.empty() && members.Contains(geometry))
+          h.modified.push_back(member(geometry));
+        h.deleted = h.modified.empty();
+        for (const auto& after : h.modified)
+          inherited.Add(static_cast<const detail::Subshape&>(*after).geometry);
+        for (const auto& after : operation->Generated(geometry)) {
+          if ((after.ShapeType() != TopAbs_FACE && after.ShapeType() != TopAbs_EDGE) ||
+              !members.Contains(after))
+            continue;
+          h.generated.push_back(member(after));
+          if (after.ShapeType() == TopAbs_FACE && generated.Add(after))
+            result.generated.push_back({"inner", member(after), {}});
+        }
+        result.estimated_bytes +=
+            sizeof(History) + sizeof(detail::Subshape) + 64 +
+            (h.modified.size() + h.generated.size()) * (sizeof(detail::Subshape) + 64);
+        result.history.push_back(std::move(h));
+      }
+      for (int i = 1; i <= members.Extent(); ++i)
+        if (members(i).ShapeType() == TopAbs_FACE && !inherited.Contains(members(i)) &&
+            !generated.Contains(members(i)))
+          fail("shell output face has no provenance");
+      result.estimated_bytes +=
+          result.generated.size() * (sizeof(Generated) + sizeof(detail::Subshape) + 64);
       return result;
     });
   }

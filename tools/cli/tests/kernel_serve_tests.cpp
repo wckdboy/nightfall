@@ -230,6 +230,31 @@ TEST_CASE("Kernel serve fillets and chamfers the client's edges", "[kernel-serve
         }) == 1);
 }
 
+TEST_CASE("Kernel serve shells with inner walls named by the faces they line", "[kernel-serve]") {
+  auto kernel = kernel::make_occt_kernel().value();
+  // Client face 0 is the block's top (z = 10): open it, walls 2 mm thick.
+  const auto replies = serve({Object{{"id", 11.},
+                                     {"op", "shell"},
+                                     {"operands", Array{block(*kernel)}},
+                                     {"faces", Array{0.}},
+                                     {"thickness", 2.}}});
+  REQUIRE(replies.size() == 1);
+  const auto r = result(*kernel, replies[0]);
+  CHECK_THAT(r.shape->measures().volume, WithinRel(12000.0 - 36 * 26 * 8, 1e-9));
+  std::vector<std::string> inner;
+  for (const auto& e : *r.entries)
+    if (e.find("role")) {
+      CHECK(*e.find("role")->if_string() == "inner");
+      REQUIRE(e.find("offset"));
+      REQUIRE(e.find("offset")->if_array()->size() == 1);
+      inner.push_back(
+          std::to_string(*(*e.find("offset")->if_array())[0].find("face")->if_integer()));
+    }
+  std::ranges::sort(inner);
+  // The floor and four walls, each lining its own client face; the open top has none.
+  CHECK(inner == std::vector<std::string>{"1", "2", "3", "4", "5"});
+}
+
 TEST_CASE("Kernel serve takes a body in several pieces as one operand", "[kernel-serve]") {
   auto kernel = kernel::make_occt_kernel().value();
   using math::make_line;

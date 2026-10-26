@@ -18,6 +18,9 @@ if(NF_BUILD_TESTS)
   target_sources(nf_kernel_tests PRIVATE tests/surface_mass_tests.cpp)
   target_sources(nf_kernel_tests PRIVATE tests/loft_tests.cpp)
   target_sources(nf_kernel_tests PRIVATE tests/sweep_tests.cpp)
+  target_sources(nf_kernel_tests PRIVATE tests/shell_tests.cpp)
+  target_compile_definitions(nf_kernel_tests PRIVATE
+    NF_KERNEL_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/data")
   target_link_libraries(nf_kernel_tests PRIVATE nf::kernel nf::warnings Catch2::Catch2WithMain)
   set_target_properties(nf_kernel_tests PROPERTIES BUILD_RPATH "${NF_OCCT_INSTALL_DIR}/lib")
   catch_discover_tests(nf_kernel_tests TEST_PREFIX "kernel." EXTRA_ARGS --rng-seed=20261016
