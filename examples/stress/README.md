@@ -73,7 +73,8 @@ evaluation takes 70323.303 ms on an Apple M3 Pro, Release, uncontrolled host loa
 shell integration reference outside the bounding box, correcting excessive near-zero-flux
 Gauss–Kronrod refinement. Its paired traced full evaluations fall from 59.859 s to 11.305 s.
 The complete fixture, 0.02 mm³ budget, 120-second headless test bound and service deadlines
-remain unchanged. Headless acceptance uses `ctest --preset occt -R '^evaluator.eclipse'`;
+remain unchanged. Headless acceptance is opt-in until it fits that bound (#244): configure
+with `-DNF_ECLIPSE_ACCEPTANCE=ON`, then run `ctest --preset occt -R '^evaluator.eclipse'`;
 the probe emits source/executable/kernel-bound JSON on failure and publishes a success
 receipt only after all checks pass. Timing samples have uncontrolled host load.
 

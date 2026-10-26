@@ -24,6 +24,12 @@ robot_bodies = ['pedestal', 'cooling_fins', 'shoulder_housing', 'shoulder_covers
                 'cable_harness', 'harness_base_anchor', 'harness_wrist_anchor', 'tool_neck',
                 'tool_flange', 'gripper_palm', 'gripper_jaws', 'palm_fasteners']
 
+def fixed(value):
+    # sin and cos differ in their last bit between platform libms: round to 1e-12 mm so the
+    # fixture is the same bytes everywhere.
+    return round(value, 12) + 0.0
+
+
 def feature(name, kind, **inputs):
     features.append({'id': name, 'type': kind, 'inputs': inputs})
     return name
@@ -71,7 +77,7 @@ extrude('cell_stand', p, 52, 'cell_stand')
 
 for label, height, outer, bore, bolt_radius, hole in [('lower',44,150,20,142,3.2), ('upper',182,130,45,120,2.5)]:
     entities = ring(outer, bore)
-    entities += [circle(f'hole_{i}', [bolt_radius * math.cos(i * math.tau / 24), bolt_radius * math.sin(i * math.tau / 24)], hole) for i in range(24)]
+    entities += [circle(f'hole_{i}', [fixed(bolt_radius * math.cos(i * math.tau / 24)), fixed(bolt_radius * math.sin(i * math.tau / 24))], hole) for i in range(24)]
     p = sketch(f'cell_{label}_flange_section', ['cell_radius', 0, height], entities)
     extrude(f'cell_{label}_flange', p, 8, f'cell_{label}_flange')
 
@@ -81,7 +87,7 @@ feature('cell_turned_rotor', 'revolve', profile={'sketch': p}, axis={'origin': [
 sections = []
 for label, z, radius, angle, a, b in [('root',52,100,0,28,8), ('waist',117,116,15,'36 mm * rotor_waist','7 mm * rotor_waist'), ('tip',182,100,30,22,5)]:
     c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
-    origin = [f'cell_radius + ({radius*c:.15g} mm)', radius*s, z]
+    origin = [f'cell_radius + ({fixed(radius*c):.15g} mm)', fixed(radius*s), z]
     p = sketch(f'cell_vane_{label}', origin, [{'id': 'rim', 'type': 'ellipse', 'center': [0,0], 'radii': [a,b]}], x=[c,s,0])
     sections.append({'sketch': p})
 feature('cell_twisted_vane', 'loft', profiles=sections, result={'new': 'cell_vanes', 'body_type': 'brep'})
