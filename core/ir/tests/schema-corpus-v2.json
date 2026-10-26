@@ -10887,7 +10887,7 @@
     {
      "id": "tip_load",
      "kind": "static_structural",
-     "body": "plate",
+     "body": "body",
      "material": {
       "youngs_modulus": "69 GPa",
       "poisson_ratio": 0.33
@@ -11232,7 +11232,7 @@
     {
      "id": "tip_load",
      "kind": "static_structural",
-     "body": "plate",
+     "body": "body",
      "material": {
       "youngs_modulus": "69 GPa",
       "poisson_ratio": 0.5
@@ -11577,7 +11577,7 @@
     {
      "id": "tip_load",
      "kind": "transient_magic",
-     "body": "plate",
+     "body": "body",
      "material": {
       "youngs_modulus": "69 GPa",
       "poisson_ratio": 0.33
@@ -11926,7 +11926,7 @@
     {
      "id": "tip_load",
      "kind": "static_structural",
-     "body": "plate",
+     "body": "body",
      "material": {
       "youngs_modulus": "69 GPa",
       "poisson_ratio": 0.33
@@ -11967,7 +11967,7 @@
     {
      "id": "tip_load",
      "kind": "static_structural",
-     "body": "plate",
+     "body": "body",
      "material": {
       "youngs_modulus": "69 GPa",
       "poisson_ratio": 0.33

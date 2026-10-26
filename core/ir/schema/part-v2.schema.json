@@ -2880,8 +2880,7 @@
           "type": "object",
           "properties": {
             "size": {
-              "$ref": "#/$defs/value",
-              "x-nf-value": "length"
+              "$ref": "#/$defs/study_value"
             }
           },
           "required": [

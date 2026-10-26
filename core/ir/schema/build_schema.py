@@ -202,7 +202,7 @@ v2["study_criterion"] = obj({"quantity": {"enum": ["max_displacement", "max_von_
 v2["study"] = obj({"id": ref("id"), "kind": {"enum": ["static_structural", "steady_thermal"]},
                    "body": ref("id"), "material": ref("study_material"),
                    "boundaries": array(ref("study_boundary"), 1),
-                   "mesh": obj({"size": numeric("length")}, ["size"]),
+                   "mesh": obj({"size": ref("study_value")}, ["size"]),
                    "criteria": array(ref("study_criterion"))},
                   ["id", "kind", "body", "material", "boundaries", "mesh"])
 assembly = {"components": array(ref("component")), "occurrences": array(ref("occurrence")),
