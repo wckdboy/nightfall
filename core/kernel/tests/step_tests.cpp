@@ -4,9 +4,20 @@
 #include "nf/math/constructors.hpp"
 #include "snapshot.hpp"
 
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepGProp.hxx>
 #include <BRepTools.hxx>
+#include <GProp_GProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <Interface_InterfaceModel.hxx>
 #include <STEPControl_Reader.hxx>
+#include <STEPControl_Writer.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopoDS.hxx>
+#include <XSControl_TransferReader.hxx>
+#include <XSControl_WorkSession.hxx>
+#include <gp_Pln.hxx>
 
 #include <numbers>
 #include <sstream>
@@ -166,4 +177,119 @@ TEST_CASE("STEP export accepts retained geometry after its producing facade ends
   REQUIRE(text);
   measures(reload(*text), 60, 94, {3.5, 1, 9.5}, 1);
   CHECK(serialized(retained) == before);
+}
+
+namespace {
+ShapePtr drilled(IKernel& kernel) {
+  const auto block = box(kernel);
+  const auto bore = std::vector<std::vector<NurbsCurve2>>{{make_circle({3.5, 1}, 0.75)}};
+  const auto tool =
+      kernel.extrude({{{0, 0, 6}}, regions(bore, FillRule::kEvenOdd).value(), {0, 0, 8}})
+          .value()
+          .shape;
+  return kernel.boolean_operation(block, {tool}, BooleanOp::kSubtract).value().shape;
+}
+std::string face_text() {
+  STEPControl_Writer writer;
+  const auto face = BRepBuilderAPI_MakeFace(gp_Pln(), 0, 1, 0, 1).Face();
+  REQUIRE(writer.Transfer(face, STEPControl_AsIs) == IFSelect_RetDone);
+  std::ostringstream stream;
+  REQUIRE(writer.WriteStream(stream) == IFSelect_RetDone);
+  return stream.str();
+}
+}  // namespace
+
+TEST_CASE("STEP import round trips exported solids in file order", "[step-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = drilled(*kernel);
+  const auto moved = kernel->transform(source, {{20, 0, 0}, {}, {0, 0, 1}, 0}).value().shape;
+  const auto text = kernel->export_step({source, moved}).value();
+  const auto imported = kernel->import_step(text);
+  REQUIRE(imported);
+  REQUIRE(imported->size() == 2);
+  const auto& m = source->measures();
+  measures((*imported)[0], m.volume, m.area, m.centroid, 1);
+  measures((*imported)[1], m.volume, m.area, m.centroid + Vec3{20, 0, 0}, 1);
+  CHECK((*imported)[0]->measures().faces == m.faces);
+  CHECK((*imported)[0]->measures().edges == m.edges);
+}
+
+TEST_CASE("STEP import keeps the exported face order, which is the file's face order",
+          "[step-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = drilled(*kernel);
+  const auto text = kernel->export_step({source}).value();
+  const auto imported = kernel->import_step(text).value();
+  REQUIRE(imported.size() == 1);
+  const auto before = kernel->faces(source).value();
+  const auto after = kernel->faces(imported[0]).value();
+  REQUIRE(after.size() == before.size());
+  for (std::size_t i = 0; i < after.size(); ++i) {
+    const auto a = kernel->face_mass(before[i].entity).value();
+    const auto b = kernel->face_mass(after[i].entity).value();
+    CHECK_THAT(b.area, WithinAbs(a.area, 1e-9));
+    CHECK_THAT(b.centroid.x, WithinAbs(a.centroid.x, 1e-9));
+    CHECK_THAT(b.centroid.y, WithinAbs(a.centroid.y, 1e-9));
+    CHECK_THAT(b.centroid.z, WithinAbs(a.centroid.z, 1e-9));
+  }
+  // Clients number faces by their ADVANCED_FACE entities in file order.
+  std::istringstream stream(text);
+  STEPControl_Reader reader;
+  REQUIRE(reader.ReadStream("order.step", stream) == IFSelect_RetDone);
+  REQUIRE(reader.TransferRoots() > 0);
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(reader.OneShape(), TopAbs_FACE, faces);
+  REQUIRE(static_cast<std::size_t>(faces.Extent()) == after.size());
+  const auto& transfer = reader.WS()->TransferReader();
+  Standard_Integer previous = 0;
+  for (int i = 1; i <= faces.Extent(); ++i) {
+    const auto entity = transfer->EntityFromShapeResult(faces(i), 1);
+    REQUIRE_FALSE(entity.IsNull());
+    const auto number = reader.WS()->Model()->Number(entity);
+    CHECK(number > previous);
+    previous = number;
+    GProp_GProps props;
+    BRepGProp::SurfaceProperties(faces(i), props);
+    CHECK_THAT(
+        props.Mass(),
+        WithinAbs(kernel->face_mass(after[static_cast<std::size_t>(i - 1)].entity).value().area,
+                  1e-9));
+  }
+}
+
+TEST_CASE("STEP import rejects text without closed solids", "[step-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  for (const auto& text :
+       {std::string{}, std::string{"not a step file"},
+        std::string{"ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"},
+        face_text()}) {
+    const auto imported = kernel->import_step(text);
+    REQUIRE_FALSE(imported);
+    CHECK(imported.error().code == "kernel");
+    CHECK_FALSE(imported.error().message.empty());
+  }
+}
+
+TEST_CASE("Edge distance measures to the trimmed edge and rejects faces", "[step-kernel]") {
+  auto kernel = make_occt_kernel().value();
+  const auto source = box(*kernel);
+  std::vector<EntityPtr> edges;
+  for (const auto& face : kernel->faces(source).value())
+    for (const auto& edge : kernel->edges(face.entity).value())
+      if (std::ranges::none_of(edges, [&](const auto& e) { return e->same_as(*edge); }))
+        edges.push_back(edge);
+  REQUIRE(edges.size() == 12);
+  // The box spans x 2..5, y -1..3, z 7..12.
+  for (const auto& [p, expected] :
+       {std::pair{Vec3{3.5, -3, 12}, 2.0}, std::pair{Vec3{2, -4, 9.5}, 3.0},
+        std::pair{Vec3{2, -1, 9.5}, 0.0}}) {
+    std::vector<double> d;
+    for (const auto& edge : edges) d.push_back(kernel->edge_distance(edge, p).value());
+    CHECK_THAT(std::ranges::min(d), WithinAbs(expected, 1e-9));
+    CHECK(std::ranges::count_if(d, [&](double x) { return x < expected + 1e-6; }) == 1);
+  }
+  const auto face = kernel->faces(source).value().front().entity;
+  REQUIRE_FALSE(kernel->edge_distance(face, {}));
+  REQUIRE_FALSE(
+      kernel->edge_distance(edges.front(), {std::numeric_limits<double>::infinity(), 0, 0}));
 }
